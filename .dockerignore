@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+sample_ledger.xlsx
+telegram_report.md
+npm-debug.log
+.git
+.gitignore
+README.md

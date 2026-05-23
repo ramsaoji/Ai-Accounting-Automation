@@ -1,0 +1,29 @@
+{
+  "name": "ai-accounting-automation",
+  "version": "1.0.0",
+  "description": "Production-ready AI Accounting Automation Service",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test-flow": "tsx src/scripts/test-flow.ts",
+    "generate-sample": "tsx src/scripts/generate-sample.ts"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "googleapis": "^137.0.0",
+    "node-cron": "^3.0.3",
+    "pino": "^9.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/node-cron": "^3.0.11",
+    "pino-pretty": "^11.1.0",
+    "tsx": "^4.10.5",
+    "typescript": "^5.4.5"
+  }
+}
