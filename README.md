@@ -143,11 +143,13 @@ You can add **multiple API keys** in your `.env` configuration file at the same 
 GEMINI_API_KEY=AIzaSy...
 OPENAI_API_KEY=sk-proj-...
 CLAUDE_API_KEY=sk-ant-...
+GROQ_API_KEY=gsk_y2b...
 
 # 2. Tell the system which key to prioritize!
 AI_PROVIDER=gemini       # Uses GEMINI_API_KEY and Gemini models
 # AI_PROVIDER=openai     # (Uncomment this to switch to OPENAI_API_KEY)
 # AI_PROVIDER=claude     # (Uncomment this to switch to CLAUDE_API_KEY)
+# AI_PROVIDER=groq       # (Uncomment this to switch to GROQ_API_KEY)
 ```
 
 ### 3️⃣ Step 3: Run the Audit Script
@@ -169,13 +171,14 @@ Define the following environment variables in your `.env` configuration file:
 
 | Variable Name | Required | Default Value | Description |
 | :--- | :--- | :--- | :--- |
-| **`AI_PROVIDER`** | Yes | `gemini` | Core provider: `openai`, `gemini`, `claude`, `openrouter`, `deepseek`, `ollama` |
+| **`AI_PROVIDER`** | Yes | `gemini` | Core provider: `openai`, `gemini`, `claude`, `openrouter`, `deepseek`, `ollama`, `groq` |
 | **`AI_MODEL`** | Yes | `gemini-1.5-flash` | The specific model ID to call (e.g. `gpt-4o-mini`, `claude-3-5-sonnet-20240620`, etc.) |
 | **`GEMINI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=gemini` |
 | **`OPENAI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=openai` |
 | **`CLAUDE_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=claude` |
 | **`OPENROUTER_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=openrouter` |
 | **`DEEPSEEK_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=deepseek` |
+| **`GROQ_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=groq` |
 | **`OLLAMA_BASE_URL`** | No | `http://localhost:11434` | Endpoint for local model serving |
 | **`GOOGLE_CLIENT_EMAIL`** | Yes | - | Google Service Account email (IAM credentials) |
 | **`GOOGLE_PRIVATE_KEY`** | Yes | - | Raw Private Key PEM string (supports multi-line or escaped `\n`) |
@@ -184,6 +187,20 @@ Define the following environment variables in your `.env` configuration file:
 | **`TELEGRAM_CHAT_ID`** | Yes | - | Recipient Chat or Group channel ID (typically negative for groups) |
 | **`CRON_SCHEDULE`** | No | `0 * * * *` | Chron task schedule (Defaults to hourly: `0 * * * *`) |
 | **`PORT`** | No | `8080` | Bind port for cloud environment container health checks |
+
+### 💡 Swappable AI Providers & Model Cheat-Sheet
+
+Here is the exact combination of parameters to configure in your `.env` for each supported AI provider:
+
+| AI Provider | `AI_PROVIDER` Value | Recommended `AI_MODEL` | Active Key Needed in `.env` |
+| :--- | :--- | :--- | :--- |
+| **Groq (Fastest ⚡)** | `groq` | `llama-3.3-70b-versatile` | `GROQ_API_KEY` |
+| **Google Gemini** | `gemini` | `gemini-flash-latest` (or `gemini-2.5-flash`) | `GEMINI_API_KEY` |
+| **OpenAI** | `openai` | `gpt-4o-mini` (or `gpt-4o`) | `OPENAI_API_KEY` |
+| **Anthropic Claude** | `claude` | `claude-3-5-sonnet-20241022` | `CLAUDE_API_KEY` |
+| **DeepSeek** | `deepseek` | `deepseek-chat` | `DEEPSEEK_API_KEY` |
+| **OpenRouter** | `openrouter` | `meta-llama/llama-3.3-70b-instruct` | `OPENROUTER_API_KEY` |
+| **Ollama (Local)** | `ollama` | `llama3` (or any local model tag) | `OLLAMA_BASE_URL` (no key required) |
 
 ---
 

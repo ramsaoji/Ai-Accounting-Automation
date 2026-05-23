@@ -7,7 +7,7 @@ export class OpenAiProvider implements AiProvider {
   constructor(
     readonly id: string = 'openai',
     private readonly baseUrl: string = 'https://api.openai.com/v1/chat/completions',
-    private readonly apiKeyName: 'OPENAI_API_KEY' | 'DEEPSEEK_API_KEY' | 'OPENROUTER_API_KEY' = 'OPENAI_API_KEY'
+    private readonly apiKeyName: 'OPENAI_API_KEY' | 'DEEPSEEK_API_KEY' | 'OPENROUTER_API_KEY' | 'GROQ_API_KEY' = 'OPENAI_API_KEY'
   ) {}
 
   async generateText(prompt: string, options?: AiOptions): Promise<string> {

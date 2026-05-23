@@ -77,6 +77,7 @@ async function runLocalTest() {
     (activeProvider === 'claude' && config.CLAUDE_API_KEY && config.CLAUDE_API_KEY !== 'your_claude_api_key_here') ||
     (activeProvider === 'openrouter' && config.OPENROUTER_API_KEY && config.OPENROUTER_API_KEY !== 'your_openrouter_api_key_here') ||
     (activeProvider === 'deepseek' && config.DEEPSEEK_API_KEY && config.DEEPSEEK_API_KEY !== 'your_deepseek_api_key_here') ||
+    (activeProvider === 'groq' && config.GROQ_API_KEY && config.GROQ_API_KEY !== 'your_groq_api_key_here') ||
     (activeProvider === 'ollama');
 
   let reportText = '';

@@ -34,6 +34,12 @@ export class AiProviderFactory {
           'https://openrouter.ai/api/v1/chat/completions', 
           'OPENROUTER_API_KEY'
         );
+      case 'groq':
+        return new OpenAiProvider(
+          'groq',
+          'https://api.groq.com/openai/v1/chat/completions',
+          'GROQ_API_KEY'
+        );
       case 'gemini':
         return new GeminiProvider();
       case 'claude':

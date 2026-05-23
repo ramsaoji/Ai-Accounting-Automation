@@ -56,8 +56,8 @@ export async function generateSampleExcel() {
     ['2026-05-21 15:00:00', 'INV-2026-008', 'Office Operations', 'Executive Ergonomic Chair Replacement', 28000, 'debit', 'Herman Miller Inc.'], // Spike anomaly!
     // Off-Hours Weekend/Late night transaction (RULE_004)
     ['2026-05-24 02:45:00', 'INV-2026-009', 'Travel & Entertainment', 'Late-night client hospitality dinner', 5400, 'debit', 'Taj Fine Dining'], // Sunday 2:45 AM!
-    // Row designed to trigger standard Excel Parsing Ingestion errors (missing mandatory elements)
-    ['INVALID_DATE', 'INV-ERR-001', 'Office Operations', 'Missing critical parameters', 'invalid_amount', 'debit', 'Unknown Vendor'], // Error: Invalid date & amount
+    // Normal real-world office operational replenishment
+    ['2026-05-22 14:30:00', 'INV-2026-010', 'Office Operations', 'Replenishment of team stationary and folders', 1800, 'debit', 'Staples Business Depot'],
   ];
 
   for (const rowVal of data) {

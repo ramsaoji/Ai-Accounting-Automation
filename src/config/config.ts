@@ -9,7 +9,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(8080),
   
   // AI Config
-  AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'ollama']).default('gemini'),
+  AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'ollama', 'groq']).default('gemini'),
   AI_MODEL: z.string().min(1, 'AI_MODEL is required'),
   
   // API Keys (Conditional checks can be added at runtime depending on chosen provider)
@@ -18,6 +18,7 @@ const envSchema = z.object({
   CLAUDE_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
   
   // Google Config
