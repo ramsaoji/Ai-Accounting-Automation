@@ -62,10 +62,10 @@ export function App() {
   // Active Navigation View: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor'
   const [activeView, setActiveView] = useState<'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor'>('portal');
 
-  // Dynamic Rule Threshold States
-  const [highExpenseLimit, setHighExpenseLimit] = useState(120000);
-  const [suspiciousSpikeMultiplier, setSuspiciousSpikeMultiplier] = useState(3.5);
-  const [maxOutstandingDuesLimit, setMaxOutstandingDuesLimit] = useState(15000);
+  // Dynamic Rule Threshold Constants aligned with backend auditing policies
+  const highExpenseLimit = 50000;
+  const suspiciousSpikeMultiplier = 3.0;
+  const maxOutstandingDuesLimit = 15000;
 
   // Real Database States
   const [salesData, setSalesData] = useState<MasterSummary>(mockSalesSummary);
@@ -223,7 +223,7 @@ export function App() {
       });
     }
     return list;
-  }, [activeWorkspace, salesData, debitorsData, highExpenseLimit, suspiciousSpikeMultiplier, maxOutstandingDuesLimit, averageMonthlyExpense]);
+  }, [activeWorkspace, salesData, debitorsData, averageMonthlyExpense]);
 
   // Launch workspace callback from portal
   const handleLaunchWorkspace = (workspace: 'sales' | 'debitors') => {
@@ -507,12 +507,6 @@ export function App() {
                   )}
                   {activeView === 'auditor' && (
                     <AuditorSection
-                      highExpenseLimit={highExpenseLimit}
-                      setHighExpenseLimit={setHighExpenseLimit}
-                      suspiciousSpikeMultiplier={suspiciousSpikeMultiplier}
-                      setSuspiciousSpikeMultiplier={setSuspiciousSpikeMultiplier}
-                      maxOutstandingDuesLimit={maxOutstandingDuesLimit}
-                      setMaxOutstandingDuesLimit={setMaxOutstandingDuesLimit}
                       alerts={activeAlerts}
                       totalTransactions={activeSummary.totalTransactions || 0}
                     />

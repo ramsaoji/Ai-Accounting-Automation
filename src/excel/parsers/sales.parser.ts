@@ -9,6 +9,21 @@ export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: st
   const transactions: Transaction[] = [];
   const errors: ParsingError[] = [];
 
+  let sumLiquor = 0;
+  let sumFood = 0;
+  let sumUdhariJama = 0;
+  let sumUdhariGiven = 0;
+  let sumExpenses = 0;
+
+  const getNum = (values: ExcelJS.CellValue[], idx: number): number => {
+    const val = values[idx];
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'object' && 'result' in val) {
+      return Number(val.result) || 0;
+    }
+    return Number(val) || 0;
+  };
+
   for (let r = 4; r <= worksheet.rowCount; r++) {
     const row = worksheet.getRow(r);
     const values = row.values as ExcelJS.CellValue[];
@@ -21,28 +36,66 @@ export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: st
 
     const dateStr = extractStringValue(rawDate);
     if (!dateStr || dateStr.toLowerCase().includes('total') || dateStr.toLowerCase().includes('grand')) {
+      const sheetTotalLiquor = getNum(values, 4);
+      const sheetTotalFood = getNum(values, 5);
+      const sheetTotalUdhariJama = getNum(values, 6);
+      const sheetTotalUdhariGiven = getNum(values, 8);
+      const sheetTotalExpenses = getNum(values, 10);
+
+      if (Math.abs(sumLiquor - sheetTotalLiquor) > 1.0) {
+        errors.push({
+          row: r,
+          invoiceNumber: `ERR-TOTAL-LIQ`,
+          error: `Spreadsheet Total Mismatch: Sheet Liquor total ₹${sheetTotalLiquor.toLocaleString()} does not match sum of entries ₹${sumLiquor.toLocaleString()}`
+        });
+      }
+      if (Math.abs(sumFood - sheetTotalFood) > 1.0) {
+        errors.push({
+          row: r,
+          invoiceNumber: `ERR-TOTAL-FOOD`,
+          error: `Spreadsheet Total Mismatch: Sheet Food total ₹${sheetTotalFood.toLocaleString()} does not match sum of entries ₹${sumFood.toLocaleString()}`
+        });
+      }
+      if (Math.abs(sumUdhariJama - sheetTotalUdhariJama) > 1.0) {
+        errors.push({
+          row: r,
+          invoiceNumber: `ERR-TOTAL-REC`,
+          error: `Spreadsheet Total Mismatch: Sheet Credit Recovery total ₹${sheetTotalUdhariJama.toLocaleString()} does not match sum of entries ₹${sumUdhariJama.toLocaleString()}`
+        });
+      }
+      if (Math.abs(sumUdhariGiven - sheetTotalUdhariGiven) > 1.0) {
+        errors.push({
+          row: r,
+          invoiceNumber: `ERR-TOTAL-EXT`,
+          error: `Spreadsheet Total Mismatch: Sheet Credit Extended total ₹${sheetTotalUdhariGiven.toLocaleString()} does not match sum of entries ₹${sumUdhariGiven.toLocaleString()}`
+        });
+      }
+      if (Math.abs(sumExpenses - sheetTotalExpenses) > 1.0) {
+        errors.push({
+          row: r,
+          invoiceNumber: `ERR-TOTAL-EXP`,
+          error: `Spreadsheet Total Mismatch: Sheet Expenses total ₹${sheetTotalExpenses.toLocaleString()} does not match sum of entries ₹${sumExpenses.toLocaleString()}`
+        });
+      }
       continue;
     }
 
-    const getNum = (idx: number): number => {
-      const val = values[idx];
-      if (val === null || val === undefined) return 0;
-      if (typeof val === 'object' && 'result' in val) {
-        return Number(val.result) || 0;
-      }
-      return Number(val) || 0;
-    };
-
     try {
-      const liquorSale = getNum(4);
-      const foodSale = getNum(5);
-      const udhariJama = getNum(6); // Credit Recovery
-      const udhariGiven = getNum(8); // Credit Extended
-      const expenses = getNum(10); // Operational Expenses
+      const liquorSale = getNum(values, 4);
+      const foodSale = getNum(values, 5);
+      const udhariJama = getNum(values, 6); // Credit Recovery
+      const udhariGiven = getNum(values, 8); // Credit Extended
+      const expenses = getNum(values, 10); // Operational Expenses
 
       if (liquorSale === 0 && foodSale === 0 && udhariJama === 0 && udhariGiven === 0 && expenses === 0) {
         continue;
       }
+
+      sumLiquor += liquorSale;
+      sumFood += foodSale;
+      sumUdhariJama += udhariJama;
+      sumUdhariGiven += udhariGiven;
+      sumExpenses += expenses;
 
       const dateObj = new Date(dateStr);
       const formattedDate = isNaN(dateObj.getTime()) ? dateStr : dateObj.toISOString().split('T')[0];

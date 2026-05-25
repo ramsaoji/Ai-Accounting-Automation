@@ -92,6 +92,7 @@ data/input/*
 !data/input/.gitkeep
 data/output/*
 !data/output/.gitkeep
+!data/output/theme.css
 
 # Ignore dynamically generated static sync data in frontend public folder (avoids Git history bloat)
 web/public/data/*.json

@@ -21,28 +21,15 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 interface AuditorSectionProps {
-  highExpenseLimit: number;
-  setHighExpenseLimit: (limit: number) => void;
-  suspiciousSpikeMultiplier: number;
-  setSuspiciousSpikeMultiplier: (mult: number) => void;
-  maxOutstandingDuesLimit: number;
-  setMaxOutstandingDuesLimit: (limit: number) => void;
   alerts: Alert[];
   totalTransactions: number;
 }
 
 export const AuditorSection: React.FC<AuditorSectionProps> = ({
-  highExpenseLimit,
-  setHighExpenseLimit,
-  suspiciousSpikeMultiplier,
-  setSuspiciousSpikeMultiplier,
-  maxOutstandingDuesLimit,
-  setMaxOutstandingDuesLimit,
   alerts,
   totalTransactions,
 }) => {
@@ -367,82 +354,77 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                 </div>
               </div>
             ) : (
-              // Tab 2: Policy Configurator
+              // Tab 2: Policy Configurator (Static Rules Display)
               <div className="flex-1 flex flex-col gap-5 overflow-y-auto pr-1">
                 <div className="flex flex-col gap-1 select-none">
-                  <h4 className="text-xs font-bold text-foreground">Ingestion Auditing Rules</h4>
+                  <h4 className="text-xs font-bold text-foreground">Active Auditing Policies</h4>
                   <p className="text-[0.7rem] text-muted-foreground leading-normal">
-                    Adjust numeric ceilings of audit triggers. Active transactions are audited live against these constants.
+                    These rules are enforced deterministically by the backend accounting worker during daily batch execution.
                   </p>
                 </div>
 
-                {/* Slider 1 */}
-                <div className="flex flex-col gap-2.5">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-muted-foreground flex items-center gap-1.5">
-                      <Sliders className="size-3.5 text-destructive" />
+                {/* Policy 1 */}
+                <div className="flex flex-col gap-2 p-3 border rounded-xl bg-background/50">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-foreground flex items-center gap-1.5">
+                      <Sliders className="size-3.5 text-primary" />
                       High Outflow Ceiling
                     </span>
-                    <span className="font-mono font-bold text-primary">
-                      ₹{highExpenseLimit.toLocaleString('en-IN')}
+                    <span className="font-mono text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded text-[0.65rem]">
+                      ₹50,000
                     </span>
                   </div>
-                  <Slider
-                    min={10000}
-                    max={200000}
-                    step={5000}
-                    value={[highExpenseLimit]}
-                    onValueChange={(val) => setHighExpenseLimit(Array.isArray(val) ? val[0] : val)}
-                  />
-                  <span className="text-[0.6rem] text-muted-foreground leading-normal">
-                    Flags single supplier payments or wage logs exceeding this balance threshold.
-                  </span>
+                  <p className="text-[0.65rem] text-muted-foreground leading-normal mt-1">
+                    Flags individual supplier invoices, bills, or operational expense logs exceeding ₹50,000.
+                  </p>
                 </div>
 
-                {/* Slider 2 */}
-                <div className="flex flex-col gap-2.5 border-t pt-4">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-muted-foreground flex items-center gap-1.5">
+                {/* Policy 2 */}
+                <div className="flex flex-col gap-2 p-3 border rounded-xl bg-background/50">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-foreground flex items-center gap-1.5">
                       <Sparkles className="size-3.5 text-amber-500" />
                       Category Spike Threshold
                     </span>
-                    <span className="font-mono font-bold text-primary">
-                      {suspiciousSpikeMultiplier.toFixed(1)}x Avg
+                    <span className="font-mono text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-[0.65rem]">
+                      3.0x Average
                     </span>
                   </div>
-                  <Slider
-                    min={2.0}
-                    max={6.0}
-                    step={0.5}
-                    value={[suspiciousSpikeMultiplier]}
-                    onValueChange={(val) => setSuspiciousSpikeMultiplier(Array.isArray(val) ? val[0] : val)}
-                  />
-                  <span className="text-[0.6rem] text-muted-foreground leading-normal">
-                    Identifies monthly category spikes deviating from cumulative dataset averages.
-                  </span>
+                  <p className="text-[0.65rem] text-muted-foreground leading-normal mt-1">
+                    Triggers when a category debit exceeds 3x the historical monthly average for that operational account.
+                  </p>
                 </div>
 
-                {/* Slider 3 */}
-                <div className="flex flex-col gap-2.5 border-t pt-4">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-muted-foreground flex items-center gap-1.5">
+                {/* Policy 3 */}
+                <div className="flex flex-col gap-2 p-3 border rounded-xl bg-background/50">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-foreground flex items-center gap-1.5">
                       <Ban className="size-3.5 text-destructive" />
-                      Outstanding Customer Dues Cap
+                      Outstanding Credit Cap
                     </span>
-                    <span className="font-mono font-bold text-primary">
-                      ₹{maxOutstandingDuesLimit.toLocaleString('en-IN')}
+                    <span className="font-mono text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded text-[0.65rem]">
+                      ₹15,000
                     </span>
                   </div>
-                  <Slider
-                    min={5000}
-                    max={50000}
-                    step={2500}
-                    value={[maxOutstandingDuesLimit]}
-                    onValueChange={(val) => setMaxOutstandingDuesLimit(Array.isArray(val) ? val[0] : val)}
-                  />
-                  <span className="text-[0.6rem] text-muted-foreground leading-normal">
-                    Applies to Debitor Ledger. Restricts customer balances from stacking past credit limits.
-                  </span>
+                  <p className="text-[0.65rem] text-muted-foreground leading-normal mt-1">
+                    Flags customer debit accounts in the Debitor Outstanding list carrying pending balances over ₹15,000.
+                  </p>
+                </div>
+
+                {/* Policy 4 */}
+                <div className="flex flex-col gap-2 p-3 border rounded-xl bg-background/50">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-foreground flex items-center gap-1.5">
+                      <Info className="size-3.5 text-info" />
+                      Off-Hours Banking Window
+                    </span>
+                    <span className="font-mono text-info bg-info/10 border border-info/20 px-2 py-0.5 rounded text-[0.65rem]">
+                      11 PM - 5 AM (IST)
+                    </span>
+                  </div>
+                  <p className="text-[0.65rem] text-muted-foreground leading-normal mt-1">
+                    Audits booking lag times, flagging journal ledger entries finalized during late-nights or weekends.
+                  </p>
                 </div>
               </div>
             )}
