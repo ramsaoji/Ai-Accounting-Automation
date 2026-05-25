@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test-flow": "tsx src/scripts/test-flow.ts",
+    "chat": "tsx src/scripts/chat-ledger.ts",
     "generate-sample": "tsx src/scripts/generate-sample.ts"
   },
   "dependencies": {

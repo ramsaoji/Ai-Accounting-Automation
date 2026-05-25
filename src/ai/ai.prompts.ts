@@ -1,12 +1,19 @@
 import { Transaction, ParsingError } from '../types/accounting.types.js';
 import { RuleAlert } from '../rules/rules.types.js';
 
+export interface SheetSummaryData {
+  sheetName: string;
+  transactions: Transaction[];
+  errors: ParsingError[];
+}
+
 export interface PromptInputData {
   fileName: string;
   runTimestamp: string;
   transactions: Transaction[];
   alerts: RuleAlert[];
   parsingErrors: ParsingError[];
+  sheets?: SheetSummaryData[];
 }
 
 export const ACCOUNTING_SYSTEM_PROMPT = `

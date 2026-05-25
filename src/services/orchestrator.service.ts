@@ -27,23 +27,41 @@ export class OrchestratorService {
       config.TELEGRAM_CHAT_ID === '-1001234567890';
 
     try {
-      let fileName: string;
-      let buffer: Buffer;
+      const inputDir = path.resolve(process.cwd(), 'data', 'input');
+      const outputDir = path.resolve(process.cwd(), 'data', 'output');
+
+      // Ensure local directories exist
+      if (!fs.existsSync(inputDir)) {
+        fs.mkdirSync(inputDir, { recursive: true });
+      }
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      // Sweep and clear outdated reports from data/output
+      const outputFiles = fs.readdirSync(outputDir);
+      let deletedStaleCount = 0;
+      for (const file of outputFiles) {
+        if ((file.endsWith('.md') || file.endsWith('.html') || file.endsWith('.json')) && file !== '.gitkeep') {
+          fs.unlinkSync(path.join(outputDir, file));
+          deletedStaleCount++;
+        }
+      }
+      if (deletedStaleCount > 0) {
+        logger.info({ count: deletedStaleCount }, 'Swept and cleared outdated reports from data/output');
+      }
+
+      interface FileToProcess {
+        name: string;
+        buffer: Buffer;
+        path?: string;
+      }
+
+      const filesToProcess: FileToProcess[] = [];
 
       if (isMockDrive) {
-        logger.info('⚠️ Google Drive credentials are at mock defaults. Operating in LOCAL FILE MODE.');
+        logger.info('⚠️ Google Drive credentials are at mock defaults. Operating in BATCH LOCAL FILE MODE.');
         
-        const inputDir = path.resolve(process.cwd(), 'data', 'input');
-        const outputDir = path.resolve(process.cwd(), 'data', 'output');
-
-        // Ensure local directories exist
-        if (!fs.existsSync(inputDir)) {
-          fs.mkdirSync(inputDir, { recursive: true });
-        }
-        if (!fs.existsSync(outputDir)) {
-          fs.mkdirSync(outputDir, { recursive: true });
-        }
-
         // Scan for .xlsx files in data/input
         let files = fs.readdirSync(inputDir)
           .filter(f => f.endsWith('.xlsx'))
@@ -57,7 +75,6 @@ export class OrchestratorService {
         if (files.length === 0) {
           logger.info(`No Excel spreadsheets found in '${inputDir}'. Automatically seeding a 'sample_ledger.xlsx' template...`);
           
-          // Dynamically import the generator to create the file
           const { generateSampleExcel } = await import('../scripts/generate-sample.js');
           await generateSampleExcel();
 
@@ -65,6 +82,7 @@ export class OrchestratorService {
           const sampleDest = path.join(inputDir, 'sample_ledger.xlsx');
           
           fs.copyFileSync(sampleSource, sampleDest);
+          fs.unlinkSync(sampleSource);
           
           files = [{
             name: 'sample_ledger.xlsx',
@@ -73,10 +91,14 @@ export class OrchestratorService {
           }];
         }
 
-        const latestLocalFile = files[0];
-        fileName = latestLocalFile.name;
-        buffer = fs.readFileSync(latestLocalFile.path);
-        logger.info({ fileName, path: latestLocalFile.path }, 'Ingested latest local Excel spreadsheet');
+        for (const fileInfo of files) {
+          filesToProcess.push({
+            name: fileInfo.name,
+            path: fileInfo.path,
+            buffer: fs.readFileSync(fileInfo.path),
+          });
+        }
+        logger.info(`Loaded ${filesToProcess.length} local file(s) for batch processing.`);
       } else {
         // 1. Google Drive: Fetch latest Excel workbook
         const fileInfo = await driveService.getLatestExcelFile();
@@ -88,86 +110,99 @@ export class OrchestratorService {
         logger.info({ fileId: fileInfo.id, fileName: fileInfo.name }, 'Processing target Excel sheet from Google Drive');
 
         // 2. Google Drive: Download file contents as a buffer
-        fileName = fileInfo.name;
-        buffer = await driveService.downloadFile(fileInfo.id, fileInfo.name);
+        const buffer = await driveService.downloadFile(fileInfo.id, fileInfo.name);
+        filesToProcess.push({
+          name: fileInfo.name,
+          buffer,
+        });
       }
 
-      // 3. Excel: Parse sheet rows into typed JSON and capture ingestion errors
-      const parseResult = await excelParser.parseBuffer(buffer, fileName);
-      const { transactions, errors: parsingErrors } = parseResult;
-      
-      if (transactions.length === 0) {
-        logger.error({ fileName }, '❌ Ingested spreadsheet contains zero valid transactions. Aborting pipeline.');
-        
-        const errorAlert = `⚠️ *Accounting System Alert*\n\nThe spreadsheet *${fileName}* was ingested but contains *zero valid transactions*.\n\nErrors encountered:\n${parsingErrors.map(e => `Row ${e.row}: ${e.error}`).slice(0, 10).join('\n')}\n\nPlease inspect the source file immediately.`;
-        
-        if (isMockTelegram) {
-          const alertPath = path.resolve(process.cwd(), 'data', 'output', `${fileName}_error_alert.md`);
-          fs.writeFileSync(alertPath, errorAlert);
-          logger.warn({ alertPath }, 'Mock Telegram: Written spreadsheet error alert to local output directory');
-        } else {
-          await telegramService.sendReport(errorAlert);
+      // Process loaded files sequentially
+      for (const fileItem of filesToProcess) {
+        const { name: fileName, buffer } = fileItem;
+        logger.info(`\n🚀 Ingesting file: "${fileName}"`);
+
+        try {
+          // 3. Excel: Parse sheet rows into typed JSON and capture ingestion errors
+          const parseResult = await excelParser.parseBuffer(buffer, fileName);
+          
+          // Consolidate all sheets to avoid manual multi-file tracking
+          const allTransactions = parseResult.sheets.flatMap(s => s.transactions);
+          const allErrors = parseResult.sheets.flatMap(s => s.errors);
+
+          if (allTransactions.length === 0) {
+            logger.info(`Workbook "${fileName}" contains zero valid transactions. Skipping.`);
+            continue;
+          }
+
+          logger.info(
+            { sheets: parseResult.sheets.length, transactions: allTransactions.length }, 
+            'Auditing and generating unified Master Summary report'
+          );
+
+          // 4. Rules Engine: Run modular business validations globally
+          const alerts = rulesEngine.evaluate(allTransactions);
+
+          // 5. AI Service: Request swappable LLM provider to compile all three report layouts
+          const timestamp = new Date().toLocaleString();
+          const reports = await aiService.generateFinancialSummary({
+            fileName,
+            runTimestamp: timestamp,
+            transactions: allTransactions,
+            alerts,
+            parsingErrors: allErrors,
+            sheets: parseResult.sheets,
+          });
+
+          // 6. Telegram/Local Output: Save MD, HTML, and JSON locally
+          if (isMockTelegram) {
+            const cleanFileName = fileName.replace(/\.[^/.]+$/, ""); // Strip extension
+            
+            const mdPath = path.resolve(outputDir, `${cleanFileName}_summary.md`);
+            const htmlPath = path.resolve(outputDir, `${cleanFileName}_summary.html`);
+            const jsonPath = path.resolve(outputDir, `${cleanFileName}_summary.json`);
+            
+            fs.writeFileSync(mdPath, reports.markdownReport);
+            fs.writeFileSync(htmlPath, reports.htmlReport);
+            fs.writeFileSync(jsonPath, reports.jsonSummary);
+            
+            logger.info({ mdPath, htmlPath, jsonPath }, `✅ Unified reports package successfully compiled and written locally.`);
+          } else {
+            await telegramService.sendReport(reports.markdownReport);
+          }
+        } catch (fileError) {
+          const fileErrMessage = fileError instanceof Error ? fileError.message : String(fileError);
+          logger.error({ fileName, error: fileErrMessage }, `❌ Error processing spreadsheet in batch list`);
+          
+          if (isMockTelegram) {
+            const crashPath = path.resolve(outputDir, `${fileName}_crash_alert.md`);
+            const crashAlert = `🚨 *FILE PROCESSING CRASH*\n\nSpreadsheet *${fileName}* failed during processing:\n\n\`\`\`\n${fileErrMessage}\n\`\`\``;
+            fs.writeFileSync(crashPath, crashAlert);
+          } else {
+            try {
+              const crashAlert = `🚨 *FILE PROCESSING CRASH*\n\nSpreadsheet *${fileName}* failed during processing:\n\n\`\`\`\n${fileErrMessage}\n\`\`\``;
+              await telegramService.sendReport(crashAlert);
+            } catch (tgError) {
+              logger.error({ tgError }, 'Failed to dispatch file crash notification to Telegram');
+            }
+          }
         }
-        return;
-      }
-
-      // 4. Rules Engine: Run modular business validations and risk evaluations
-      const alerts = rulesEngine.evaluate(transactions);
-
-      // 5. AI Service: Request swappable LLM provider to draft executive financial analysis and summaries
-      const timestamp = new Date().toLocaleString();
-      const aiSummary = await aiService.generateFinancialSummary({
-        fileName,
-        runTimestamp: timestamp,
-        transactions,
-        alerts,
-        parsingErrors,
-      });
-
-      // 6. Telegram/Local Output: Dispatch or Save final executive summary
-      if (isMockTelegram) {
-        const cleanFileName = fileName.replace(/\.[^/.]+$/, ""); // Strip extension
-        const summaryPath = path.resolve(process.cwd(), 'data', 'output', `${cleanFileName}_summary.md`);
-        
-        fs.writeFileSync(summaryPath, aiSummary);
-        logger.info({ summaryPath }, '✅ In Mock Telegram Mode. AI summary successfully generated and written locally.');
-      } else {
-        await telegramService.sendReport(aiSummary);
       }
 
       const durationMs = Date.now() - startTime;
       logger.info(
         { 
-          fileName, 
-          transactions: transactions.length, 
-          alerts: alerts.length, 
-          errors: parsingErrors.length,
+          processedCount: filesToProcess.length,
           durationSec: Number((durationMs / 1000).toFixed(2)) 
         }, 
-        '🎉 AI Accounting Automation Pipeline executed successfully!'
+        '🎉 AI Accounting Automation Pipeline completed batch execution!'
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error({ error }, '❌ Critical failure in accounting worker pipeline');
-
-      if (isMockTelegram) {
-        const crashPath = path.resolve(process.cwd(), 'data', 'output', 'pipeline_crash_alert.md');
-        const crashAlert = `🚨 *SYSTEM PIPELINE CRASH*\n\nAn unexpected critical error aborted the AI Accounting Automation pipeline:\n\n\`\`\`\n${errorMessage}\n\`\`\`\n\nPlease check system logs for additional stack trace context.`;
-        fs.writeFileSync(crashPath, crashAlert);
-        logger.error({ crashPath }, 'Mock Telegram: Written crash notification to local output directory');
-      } else {
-        try {
-          const crashAlert = `🚨 *SYSTEM PIPELINE CRASH*\n\nAn unexpected critical error aborted the AI Accounting Automation pipeline:\n\n\`\`\`\n${errorMessage}\n\`\`\`\n\nPlease check system logs for additional stack trace context.`;
-          await telegramService.sendReport(crashAlert);
-        } catch (tgError) {
-          logger.error({ tgError }, 'Failed to dispatch crash notification to Telegram');
-        }
-      }
-
+      logger.error({ error }, '❌ Critical failure in orchestrator runPipeline');
       throw error;
     }
   }
 }
 
 export const orchestratorService = new OrchestratorService();
-

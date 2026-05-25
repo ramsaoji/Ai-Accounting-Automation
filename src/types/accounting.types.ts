@@ -27,8 +27,13 @@ export interface ParsingError {
   error: string;
 }
 
-export interface ExcelParsingResult {
+export interface SheetParsingResult {
+  sheetName: string;
   transactions: Transaction[];
   errors: ParsingError[];
+}
+
+export interface ExcelParsingResult {
   fileName: string;
+  sheets: SheetParsingResult[];
 }

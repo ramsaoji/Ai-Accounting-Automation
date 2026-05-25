@@ -1,30 +1,32 @@
 # AI Accounting Automation Service 📊💼
 
-A production-ready, stateless, and fully modular background worker built with **Node.js** and **TypeScript**. This service connects to Google Drive, automatically downloads the latest Excel financial ledger, parses the transaction records, runs an extensible business rules validation engine to detect anomalies, generates high-quality executive financial reports using **swappable AI LLM Providers**, and posts clean, formatted message updates to **Telegram** on a customizable scheduler.
+A production-ready, stateless, and fully modular financial audit background worker built with **Node.js** and **TypeScript**. This service automatically downloads or reads multi-page Excel financial ledgers, processes and aggregates transaction records across years of data, executes an extensible business rules validation engine to detect anomalies, generates high-quality executive summaries using **swappable AI LLM Providers**, and produces three distinct reports: a Telegram-compatible executive brief, a markdown report, and an interactive **SaaS Financial Command Center HTML Dashboard** featuring custom SVG chart integrations!
 
 ---
 
 ## 🛠️ System Architecture
 
-The service executes an automated ETL and Auditing pipeline based on a strict unidirectional data flow:
+The service executes an automated ETL, Auditing, and visual reporting pipeline based on a strict unidirectional data flow:
 
 ```
-      Google Drive Ingestion
-                 │
-                 ▼
-     [drive.service.ts] (JWT Auth) ──► Downloads latest .xlsx workbook
-                 │
-                 ▼
-     [excel.parser.ts] ──────────────► Scans columns, parses rows into JSON
-                 │
-                 ▼
-     [rules.engine.ts] ──────────────► Runs modular auditors & validates inputs
-                 │
-                 ▼
-     [ai.service.ts] (Factory) ──────► Compiles context prompt & query LLM API
-                 │
-                 ▼
-     [telegram.service.ts] ──────────► Delivers formatted markdown report
+            Google Drive Ingestion / Local Ingestion
+                              │
+                              ▼
+           [drive.service.ts] (JWT Auth) or Local Loader
+                              │
+                              ▼
+           [excel.parser.ts] (25-Month Sheet Consolidation)
+                              │
+                              ▼
+           [rules.engine.ts] (Modular Auditors & Flags)
+                              │
+                              ▼
+           [ai.service.ts] (Groq / Gemini / OpenAI Factory)
+                              │
+                              ▼
+     ┌────────────────────────┴────────────────────────┐
+     ▼                                                 ▼
+[telegram.service.ts] (Markdown)             [report-template.ts] (HTML/SVG Dashboard)
 ```
 
 ---
@@ -41,7 +43,7 @@ ai-accounting-automation/
 │   │   └── drive.service.ts      # Excel spreadsheet searcher and downloader
 │   ├── excel/
 │   │   ├── excel.mapper.ts       # Dynamic column finder & row converter
-│   │   └── excel.parser.ts       # Spreadsheet workbook reader & error logger
+│   │   └── excel.parser.ts       # Workbook sheet reader (consolidates 25+ sheets)
 │   ├── rules/
 │   │   ├── rules.types.ts        # Modular Rules Engine interfaces & Alert contracts
 │   │   └── rules.engine.ts       # Concrete Rule implementations (Spikes, Duplicates)
@@ -53,10 +55,11 @@ ai-accounting-automation/
 │   │   │   └── ollama.provider.ts # Local LLM client
 │   │   ├── ai.types.ts           # Swappable AI provider contract
 │   │   ├── ai.factory.ts         # Env-driven runtime provider factory
-│   │   ├── ai.prompts.ts         # High-fidelity prompt templates & math summaries
-│   │   └── ai.service.ts         # Central execution and retry service
+│   │   ├── ai.prompts.ts         # High-fidelity prompts & mathematical contexts
+│   │   ├── report-template.ts    # SaaS HTML Command Center UI & SVG Chart Generator
+│   │   └── ai.service.ts         # Central orchestrator with retry and fallback engine
 │   ├── telegram/
-│   │   ├── telegram.client.ts    # Telegram client with Markdown parsing safety recovery
+│   │   ├── telegram.client.ts    # Telegram client with markdown recovery safety
 │   │   └── telegram.service.ts   # Chunking and interval delivery manager
 │   ├── scheduler/
 │   │   └── scheduler.job.ts      # Cron job coordinator with overlapping guard
@@ -69,13 +72,61 @@ ai-accounting-automation/
 │   ├── scripts/
 │   │   ├── generate-sample.ts    # Seed script generating sample test workbook
 │   │   └── test-flow.ts          # Integrations tester simulating full workflow
-│   └── index.ts                  # App entrypoint (runs scheduler + web healthchecks)
+│   └── index.ts                  # App entrypoint (runs scheduler + health check server)
 ├── Dockerfile                    # Multi-stage, low footprint production container
 ├── .dockerignore                 # Container build context filtering rules
 ├── .env.example                  # Template listing all environmental configs
 ├── tsconfig.json                 # Type-check configurations
 └── package.json                  # Scripts and package manifests
 ```
+
+---
+
+## 📊 Interactive SaaS Financial Command Center HTML Dashboard
+
+The output generation pipeline produces a fully responsive, highly interactive **SaaS Executive Dashboard** saved at `data/output/<ledger_name>_summary.html` built with pure CSS and vanilla JavaScript:
+
+### 🎨 Visual Design & Aesthetics
+* **Palette & Surfaces:** Modern dark-theme using a dark-blue backdrop (`#060913`), deep glassmorphism card containers, border highlights, and color-coded status elements.
+* **Modern Typography:** Styled with standard pair fonts `Outfit` (headings, KPIs, and SVG charts) and `Inter` (readable tables, list items, and descriptions).
+* **Elegant Scrollbars:** Overridden custom scrollbars for horizontal container elements to ensure a premium look across desktop and mobile devices.
+
+### 🧭 Dynamic Navigation System
+* **Collapsible Left Sidebar:** Smooth collapse action reducing the sidebar to compact icon badges to maximize workspace area on smaller laptops.
+* **Sticky Mobile Drawer:** Smooth slide-out menu drawer with automatic overlay backdrop integration.
+* **Top-Scroll Logo Action:** Logo containers on both desktop and mobile layouts scroll directly to the absolute top of the page upon click and restore the active link highlight to the first navigation item.
+* **Precision ScrollSpy:** Tracks vertical scroll positions using a recursive offset solver (`getAbsoluteOffsetTop()`) that maps elements across nested coordinate grids to highlight the correct menu tab.
+* **Smooth-Scroll Lock:** Utilizes a state-locked scroll flag to prevent active menu indicators from flickering or jumping as the viewport smooth-scrolls across intermediate sections.
+
+### 📈 Neon SVG Dual Line Chart
+* An inline vector graphic rendering cumulative business **Inflows** (Liquor sales, Food sales, and Credit Recovered) vs. **Outflows** (Operational expenses and credit extended) across the **25-month historical span**.
+* Interactive data nodes with hoverable checkpoints.
+
+### 📋 Weekly Operational Action Checklist
+* Aggregates recommended staff procedures in a beautiful checklist format, complete with tick checkboxes and text line-through completed states.
+
+---
+
+## 💬 Hotel Gaurav CLI Financial Chat Advisor
+
+The system includes an interactive, conversational terminal advisory utility (`src/scripts/chat-ledger.ts`). It loads the consolidated multi-month JSON ledger summary compiled by the pipeline and launches a warm, responsive financial advisory terminal session:
+
+### 🌟 Key Capabilities
+* **Automatic Context Loading:** Loads pre-calculated monthly statistics, segment receipts (liquor vs. food), outstanding credit balances, and rules alerts from the master JSON summary.
+* **Warm Consulting Voice:** Communicates in an encouraging consulting tone using simple financial metrics and direct actionable suggestions without dry corporate jargon.
+* **Swappable LLM Providers:** Automatically routes and query-optimizes prompts through the active model configured in your `.env` settings (Groq/Gemini/OpenAI/Claude).
+
+### 🚀 Running the Chat Session
+Launch the interactive terminal interface directly via:
+```bash
+npm run chat
+```
+
+### 💡 Example Owner Queries
+* *"What is my credit collections success rate and unrecovered balance?"*
+* *"Compare my sales in June 2024 vs June 2025."*
+* *"What was my highest profit month and what were its liquor sales?"*
+* *"Is there any warning or late-night logging anomaly I should know?"*
 
 ---
 
@@ -102,11 +153,11 @@ npx tsx src/scripts/generate-sample.ts
 This generates a realistic financial spreadsheet loaded with real-world transactions (including duplicate payments, expense breaches, off-hours activity, and data errors) inside your **`data/input/`** directory.
 
 ### 4. Execute Pipeline Integration Test
-Verify all subsystems (parsing, rules engine, live AI analysis, and logs) with a single command:
+Verify all subsystems (parsing, rules engine, live AI analysis, and HTML outputs) with a single command:
 ```bash
 npx tsx src/scripts/test-flow.ts
 ```
-* **Active API Keys?** The script calls the live provider (configured in `.env`), performs semantic business auditing, and saves the executive brief inside **`data/output/sample_ledger_summary.md`**.
+* **Active API Keys?** The script calls the live provider (configured in `.env`), performs semantic business auditing, and saves the executive brief inside **`data/output/sample_ledger_summary.html`** (and the companion `.md` and `.json` formats).
 * **Offline Fallback?** If no key is set or the API rate limits, our fail-safe hybrid engine compiles the complete multi-page audit report with perfect mathematical cashflow calculations and skipped row lists seamlessly!
 * **System Logging**: The complete historical trace of every validation warn, rules flag, and API metric is appended persistently to **`data/output/system.log`**.
 
@@ -120,7 +171,7 @@ npm run dev
 
 ## 👨‍💼 Simple Usage Steps Guide (For Non-Programmers)
 
-If you are not a developer and just want to run this service to audit your own real business accounting ledgers, follow these four simple steps:
+If you want to run this service to audit your own business accounting ledgers, follow these four simple steps:
 
 ### 1️⃣ Step 1: Format & Place Your Excel File
 Make sure your business spreadsheet has columns containing these words (the order does not matter):
@@ -135,6 +186,8 @@ Make sure your business spreadsheet has columns containing these words (the orde
 Name your file **`sample_ledger.xlsx`** and save it inside this folder:
 📂 **`data/input/`**
 
+*Note: The parser supports multi-page workbooks, consolidating up to 25+ sheets/months automatically.*
+
 ### 2️⃣ Step 2: Set Your AI Provider in the `.env` File
 You can add **multiple API keys** in your `.env` configuration file at the same time! The application is smart and uses the **`AI_PROVIDER`** variable as the selector switch to decide which key to run:
 
@@ -146,10 +199,8 @@ CLAUDE_API_KEY=sk-ant-...
 GROQ_API_KEY=gsk_y2b...
 
 # 2. Tell the system which key to prioritize!
-AI_PROVIDER=gemini       # Uses GEMINI_API_KEY and Gemini models
-# AI_PROVIDER=openai     # (Uncomment this to switch to OPENAI_API_KEY)
-# AI_PROVIDER=claude     # (Uncomment this to switch to CLAUDE_API_KEY)
-# AI_PROVIDER=groq       # (Uncomment this to switch to GROQ_API_KEY)
+AI_PROVIDER=groq         # prioritized for elite performance speeds!
+# AI_PROVIDER=gemini       # (Uncomment this to switch to GEMINI_API_KEY)
 ```
 
 ### 3️⃣ Step 3: Run the Audit Script
@@ -160,8 +211,9 @@ npx tsx src/scripts/test-flow.ts
 
 ### 4️⃣ Step 4: Open Your Audit Results!
 Go to the **`data/output/`** folder:
-* 📄 **`sample_ledger_summary.md`**: Open this file to see your stunning, executive-ready Financial Dashboard (complete with total revenue, expenses, net deficit/surplus, unparseable skipped row logs, and live auditor insights!).
-* ⚙️ **`system.log`**: Open this file to inspect the historical, technical logs of everything the pipeline evaluated.
+* 🖥️ **`Hotel Gaurav Daily Sales Register_summary.html`**: Double-click this to open the gorgeous interactive SaaS dashboard containing neon line charts, collapsible navigation control menus, checklist items, and live statistics!
+* 📄 **`Hotel Gaurav Daily Sales Register_summary.md`**: Open this file to see a clean markdown summary format.
+* ⚙️ **`system.log`**: Open this file to inspect the technical validation logs.
 
 ---
 
@@ -188,20 +240,6 @@ Define the following environment variables in your `.env` configuration file:
 | **`CRON_SCHEDULE`** | No | `0 * * * *` | Chron task schedule (Defaults to hourly: `0 * * * *`) |
 | **`PORT`** | No | `8080` | Bind port for cloud environment container health checks |
 
-### 💡 Swappable AI Providers & Model Cheat-Sheet
-
-Here is the exact combination of parameters to configure in your `.env` for each supported AI provider:
-
-| AI Provider | `AI_PROVIDER` Value | Recommended `AI_MODEL` | Active Key Needed in `.env` |
-| :--- | :--- | :--- | :--- |
-| **Groq (Fastest ⚡)** | `groq` | `llama-3.3-70b-versatile` | `GROQ_API_KEY` |
-| **Google Gemini** | `gemini` | `gemini-flash-latest` (or `gemini-2.5-flash`) | `GEMINI_API_KEY` |
-| **OpenAI** | `openai` | `gpt-4o-mini` (or `gpt-4o`) | `OPENAI_API_KEY` |
-| **Anthropic Claude** | `claude` | `claude-3-5-sonnet-20241022` | `CLAUDE_API_KEY` |
-| **DeepSeek** | `deepseek` | `deepseek-chat` | `DEEPSEEK_API_KEY` |
-| **OpenRouter** | `openrouter` | `meta-llama/llama-3.3-70b-instruct` | `OPENROUTER_API_KEY` |
-| **Ollama (Local)** | `ollama` | `llama3` (or any local model tag) | `OLLAMA_BASE_URL` (no key required) |
-
 ---
 
 ## 🕵️ Rules Engine Specification
@@ -213,60 +251,6 @@ The service features an automated, extensible audit rules runner (`src/rules/rul
 3. **`SuspiciousSpikeRule` (Medium Severity)**: Calculates the historical spending averages of each category. If any single payment in that category is `> 3x category average`, it flags a suspicious spending spike.
 4. **`OffHoursTransactionRule` (Low Severity)**: Flags records posted outside standard operational windows (e.g., weekends or late-night between 11 PM and 5 AM) to audit delay lags or unauthorized logs.
 5. **`NegativeOrZeroTransactionRule` (Critical Severity)**: Flags records that contain erroneous zero or negative values.
-
----
-
-## 📈 Integration Demonstrations
-
-### 1. Ingestion Input Ledger Format (`sample_ledger.xlsx`)
-Our parser maps fields regardless of column order by scanning for column header keywords. Standard formatting:
-
-| Transaction Date | Invoice Number | Category | Particulars (Description) | Invoiced Amount | Type (credit/debit) | Vendor / Payee |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 2026-05-15 10:00:00 | INV-2026-001 | Revenue | SaaS Client Subscription Tier A | 120000 | credit | Stripe Inflow |
-| 2026-05-16 11:30:00 | INV-2026-002 | Infrastructure | AWS Monthly Invoice | 18500 | debit | Amazon Web Services |
-| 2026-05-19 09:30:00 | INV-2026-005 | Marketing | Q2 Google AdWords Campaign | 24000 | debit | Google LLC |
-| 2026-05-19 17:45:00 | INV-2026-005 | Marketing | Google Ads Retargeting Retainer | 24000 | debit | Google LLC |
-
-### 2. Formatted Telegram Output Report
-Below is a visual example of the synthesized, Telegram-compatible markdown summary generated by our AI auditor:
-
-```markdown
-📊 *FINANCIAL AUDIT EXECUTIVE SUMMARY*
-📅 Ingestion Timestamp: 5/23/2026, 5:40:12 PM
-📁 Source Ledger: `sample_ledger.xlsx`
-
-*-----------------------------------*
-💰 *KEY PERFORMANCE METRICS*
-*-----------------------------------*
-• *Total Revenue (Inflow)*: ₹120,000
-• *Total Expenses (Outflow)*: ₹184,300
-• *Net Operating Cashflow*: 🔴 *-₹64,300* (Deficit)
-
-*-----------------------------------*
-🔍 *CRITICAL RULES AUDIT ALERTS*
-*-----------------------------------*
-🚨 *[CRITICAL]* Invalid transaction amount detected: ₹-10,000 from invoice INV-ERR-001.
-🟠 *[HIGH]* Duplicate invoice number detected: *INV-2026-005* found twice for vendor *Google LLC* totaling *₹48,000*.
-🟠 *[HIGH]* Large transaction breach: Outflow of *₹75,000* to *SecOps Consulting Group* exceeded audit limit (₹50,000).
-⚠️ *[MEDIUM]* Suspicious category spike: *Office Operations* recorded a single charge of *₹28,000* (Herman Miller Chair), which is *30.0x* the category average (₹933).
-⚠️ *[LOW]* Off-Hours booking: Transaction *₹5,400* (Taj Fine Dining) was logged during the weekend late-night (Sunday 2:45 AM).
-
-*-----------------------------------*
-🛠️ *INGESTION INTEGRITY STATS*
-*-----------------------------------*
-• Successfully Processed Rows: 10
-• Format Failures (Skipped Rows): 1 (Row 12: invalid Date & Amount variables)
-
-*-----------------------------------*
-💡 *FINANCIAL INSIGHTS & RISKS*
-*-----------------------------------*
-1. *Operating Deficit*: We registered a net loss of ₹64,300. This is driven by heavy outlays for consulting (₹75k) and office equipment (₹28k).
-2. *Duplicate Payment Risk*: Action required to audit double charges on invoice **INV-2026-005** to Google.
-3. *Inventory Waste*: Verify authorization for Herman Miller equipment purchase. Category averages indicate a dramatic cost overrun.
-
-_Audit completed by Antigravity AI Engine_
-```
 
 ---
 
@@ -300,7 +284,7 @@ Our background worker features a built-in health check HTTP server that binds au
 
 ### B. Render Deployment
 
-Render supports deploying stateless automated workers as a **Web Service** (using the HTTP health check endpoint) or a **Background Worker** (if you do not need port bindings, but Web Service is recommended to prevent Render from declaring the container dead due to a missing web server).
+Render supports deploying stateless automated workers as a **Web Service** (using the HTTP health check endpoint) or a **Background Worker**.
 
 1. **Deploy Service**: Go to the Render Dashboard, click **New +**, and select **Web Service**.
 2. **Connect Repo**: Link your repository.
