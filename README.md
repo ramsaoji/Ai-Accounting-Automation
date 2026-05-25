@@ -70,6 +70,7 @@ ai-accounting-automation/
 │   │   ├── debitors-template.ts  # Customer outstanding Udhari HTML console UI shell
 │   │   └── ai.service.ts         # Lean central orchestrator for LLM prompt connections
 │   ├── telegram/
+│   │   ├── telegram.bot.ts       # Telegram long polling bot interactive listener
 │   │   ├── telegram.client.ts    # Telegram client with markdown recovery safety
 │   │   └── telegram.service.ts   # Chunking and interval delivery manager
 │   ├── scheduler/
@@ -279,13 +280,15 @@ Define the following environment variables in your `.env` configuration file:
 
 ## 🕵️ Rules Engine Specification
 
-The service features an automated, extensible audit rules runner (`src/rules/rules.engine.ts`). Five validation modules are enabled out-of-the-box:
+The service features an automated, extensible audit rules runner (`src/rules/rules.engine.ts`). Seven validation modules are enabled out-of-the-box:
 
 1. **`DuplicateInvoiceRule` (High Severity)**: Groups transaction data on invoice codes. Alerts if a ledger records duplicate payments to avoid vendor billing issues.
 2. **`HighExpenseRule` (High/Critical Severity)**: Triggers an alert when a single outflow transaction breaches a spending limit (configured to `₹50,000` by default).
-3. **`SuspiciousSpikeRule` (Medium Severity)**: Calculates the historical spending averages of each category. If any single payment in that category is `> 3x category average`, it flags a suspicious spending spike.
-4. **`OffHoursTransactionRule` (Low Severity)**: Flags records posted outside standard operational windows (e.g., weekends or late-night between 11 PM and 5 AM) to audit delay lags or unauthorized logs.
+3. **`SuspiciousSpikeRule` (Medium Severity)**: Calculates the historical spending averages of each category. If any single payment in that category is `> 3x category average` and exceeds ₹5,000, it flags a suspicious spending spike.
+4. **`OffHoursTransactionRule` (Low Severity)**: Flags records posted outside standard operational windows (e.g., weekends or late-night between 11 PM and 5 AM IST) to audit delay lags or unauthorized logs.
 5. **`NegativeOrZeroTransactionRule` (Critical Severity)**: Flags records that contain erroneous zero or negative values.
+6. **`DuplicateDateRule` (High Severity)**: Detects duplicate transaction entries for the same date and category in daily registers.
+7. **`CrossWorkbookReconciliationRule` (High Severity)**: Reconciles credit extended and credit recovery between the Daily Sales Register and the Debitors Ledger, flagging any variance mismatches.
 
 ---
 

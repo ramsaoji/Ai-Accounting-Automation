@@ -27,7 +27,7 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     ▼
 [LOAD] Resilient Outputs Dispatch
         ├── Isolated Folder-wise HTML Dashboards
-        └── Rate-Throttled Telegram Bulletins Queue
+        └── Interactive Telegram Bot & Rate-Throttled Queue
 ```
 
 ---
@@ -70,10 +70,10 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     * `report-helper.ts`: Decoupled utility module that performs SVG chart coordinate math, maps tabular transaction trends, and formats operational compliance anomalies.
     * `report-template.ts` & `debitors-template.ts`: Elegant HTML/CSS shells compiling the Master Dashboard and outstanding debtors command interfaces using modern glassmorphic grids.
 
-### 6. Throttled Messaging Dispatch (`src/telegram/`)
-* **Role:** Secure alert notification delivery.
-* **Technique:** Throttling client queues.
-* **Rationale:** To comply with Telegram API's rate limits (maximum 30 messages/second), a throttled queue buffers notifications and distributes them across safe delivery intervals.
+### 6. Throttled Messaging Dispatch & Polling Bot (`src/telegram/`)
+* **Role:** Secure alert notification delivery and interactive query handling.
+* **Technique:** Throttling client queues and long polling.
+* **Rationale:** To comply with Telegram API's rate limits (maximum 30 messages/second), a throttled queue in `telegram.client.ts` buffers notifications and distributes them across safe delivery intervals. In addition, `telegram.bot.ts` runs a persistent background long-polling loop to respond to interactive user queries (e.g., fetching summaries, triggering a sync, or asking natural language questions to the AI advisor).
 
 ---
 

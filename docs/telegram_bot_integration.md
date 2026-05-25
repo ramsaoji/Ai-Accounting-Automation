@@ -49,7 +49,7 @@ Open your project's `.env` file at the root directory (`/ai-accounting-automatio
 # Paste the API Token from @BotFather
 TELEGRAM_BOT_TOKEN="your_copied_bot_token_here"
 
-# Paste your personal numeric Chat ID from @RawDataBot (e.g. 987654321)
+# Paste your personal numeric Chat ID from @userinfobot (e.g. 987654321)
 TELEGRAM_CHAT_ID="your_personal_chat_id_here"
 ```
 

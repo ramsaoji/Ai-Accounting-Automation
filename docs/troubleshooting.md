@@ -9,10 +9,9 @@ This guide describes the operational parameters, diagnostic steps, and error res
 The service uses **Pino** for high-efficiency, structured JSON logging. In local development modes, output is prettified via `pino-pretty`.
 
 ### Setting Log Levels
-You can adjust the logging threshold via the `LOG_LEVEL` parameter inside your `.env` file:
-* `LOG_LEVEL=info` (Default - Logs pipeline status, parser metrics, and summaries).
-* `LOG_LEVEL=debug` (Logs row-by-row header mapping matches and raw LLM prompt structures).
-* `LOG_LEVEL=error` (Logs runtime exceptions and parsing failure rows only).
+The logging threshold is dynamically determined by the `NODE_ENV` configuration parameter inside your `.env` file:
+* `NODE_ENV=development` (Default - Enables `debug` logging to output verbose detail, including row-by-row header mapping matches and raw LLM prompt structures).
+* `NODE_ENV=production` or `NODE_ENV=test` (Enables `info` logging to output standard workflow status messages, parser metrics, and summary outcomes, keeping logs clean and efficient).
 
 ### Redirecting Output
 Logs are continuously piped to standard output (`stdout`) and appended inside **`data/output/system.log`**.

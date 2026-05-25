@@ -60,11 +60,11 @@ If the backend server is offline or unreachable, the application falls back thro
 ---
 
 ## 💻 Tech Stack
-- **Core**: React 19, Vite, TypeScript
-- **Styling**: Tailwind CSS, shadcn/ui components
-- **Feedback**: Sonner (Toast notifications positioned top-right)
-- **Charts**: Recharts (fully responsive canvas elements)
-- **Icons**: Lucide React
+- **Core**: React 19 (v19.2.4), Vite 7 (v7.3.1), TypeScript (v5.9.3)
+- **Styling**: Tailwind CSS v4 (v4.2.1), shadcn/ui components (v4.8.0)
+- **Feedback**: Sonner (Toast notifications positioned top-right) (v2.0.7)
+- **Charts**: Recharts (fully responsive canvas elements) (v3.8.1)
+- **Icons**: Lucide React (v1.16.0)
 
 ---
 
