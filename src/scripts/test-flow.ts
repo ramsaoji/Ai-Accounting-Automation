@@ -38,7 +38,7 @@ function resolveTargetFile(inputFilePath: string, inputDir: string): string {
 }
 
 async function runLocalTest() {
-  logger.info('--- 🧪 STARTING LOCAL PIPELINE INTEGRATION TEST (BATCH MODE) ---');
+  logger.info('--- STARTING LOCAL PIPELINE INTEGRATION TEST (BATCH MODE) ---');
   
   const inputDir = path.resolve(process.cwd(), 'data', 'input');
   const outputDir = path.resolve(process.cwd(), 'data', 'output');
@@ -60,7 +60,7 @@ async function runLocalTest() {
 
   if (specificFilePath) {
     const resolvedPath = resolveTargetFile(specificFilePath, inputDir);
-    logger.info({ resolvedPath }, '🎯 SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
+    logger.info({ resolvedPath }, 'SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
     files = [{
       name: path.basename(resolvedPath),
       path: resolvedPath,
@@ -102,8 +102,7 @@ async function runLocalTest() {
     const fileName = fileInfo.name;
     const samplePath = fileInfo.path;
 
-    logger.info(`\n==================================================`);
-    logger.info(`📥 BATCH PROCESSING FILE: "${fileName}"`);
+    logger.info(`BATCH PROCESSING FILE: "${fileName}"`);
     logger.info(`==================================================`);
 
     logger.info({ samplePath }, 'Reading spreadsheet into memory buffer...');
@@ -206,7 +205,15 @@ async function runLocalTest() {
     }
   }
 
-  logger.info('\n--- 🧪 BATCH INTEGRATION TEST RUN COMPLETE ---');
+  // 10. Dynamic SaaS Hub Compile: Regenerate master portal index
+  try {
+    const { rebuildMasterPortal } = await import('../excel/portal.builder.js');
+    rebuildMasterPortal(outputDir);
+  } catch (portalError) {
+    logger.error({ error: portalError }, 'Failed to rebuild SaaS Master Control Center portal');
+  }
+
+  logger.info('--- BATCH INTEGRATION TEST RUN COMPLETE ---');
 }
 
 // Execute the test run

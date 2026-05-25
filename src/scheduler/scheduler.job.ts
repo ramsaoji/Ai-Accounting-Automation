@@ -27,11 +27,11 @@ export class SchedulerJob {
       }
 
       this.isRunning = true;
-      logger.info('⏰ Scheduler triggered: Starting cron job run...');
+      logger.info('Scheduler triggered: Starting cron job run...');
 
       try {
         await orchestratorService.runPipeline();
-        logger.info('⏰ Scheduler: Cron job run finished successfully.');
+        logger.info('Scheduler: Cron job run finished successfully.');
       } catch (error) {
         logger.error({ error }, '⏰ Scheduler: Cron job execution failed.');
       } finally {
@@ -39,7 +39,7 @@ export class SchedulerJob {
       }
     });
 
-    logger.info('🚀 Background scheduler active and running.');
+    logger.info('Background scheduler active and running.');
   }
 
   /**

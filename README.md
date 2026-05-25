@@ -21,12 +21,17 @@ The service executes an automated ETL, Auditing, and visual reporting pipeline b
            [rules.engine.ts] (Modular Auditors & Flags)
                               │
                               ▼
-           [ai.service.ts] (Groq / Gemini / OpenAI Factory)
-                              │
-                              ▼
+            [ai.service.ts] (Groq / Gemini / OpenAI Factory)
+                               │
+                    ┌──────────┴──────────┐
+                    ▼                     ▼
+           [report-helper.ts]    [report-template.ts]
+         (SVG + Data Fallback)   (HTML/CSS Dashboard)
+                    └──────────┬──────────┘
+                               ▼
      ┌────────────────────────┴────────────────────────┐
      ▼                                                 ▼
-[telegram.service.ts] (Markdown)             [report-template.ts] (HTML/SVG Dashboard)
+[telegram.service.ts] (Markdown)        [data/output/<name>/summary.html]
 ```
 
 ---
@@ -43,7 +48,10 @@ ai-accounting-automation/
 │   │   └── drive.service.ts      # Excel spreadsheet searcher and downloader
 │   ├── excel/
 │   │   ├── excel.mapper.ts       # Dynamic column finder & row converter
-│   │   └── excel.parser.ts       # Workbook sheet reader (consolidates 25+ sheets)
+│   │   ├── excel.parser.ts       # Main parser selector facade
+│   │   └── parsers/
+│   │       ├── sales.parser.ts    # Daily sales multi-month parser
+│   │       └── debitors.parser.ts # Customer outstanding udhari parser
 │   ├── rules/
 │   │   ├── rules.types.ts        # Modular Rules Engine interfaces & Alert contracts
 │   │   └── rules.engine.ts       # Concrete Rule implementations (Spikes, Duplicates)
@@ -56,8 +64,10 @@ ai-accounting-automation/
 │   │   ├── ai.types.ts           # Swappable AI provider contract
 │   │   ├── ai.factory.ts         # Env-driven runtime provider factory
 │   │   ├── ai.prompts.ts         # High-fidelity prompts & mathematical contexts
-│   │   ├── report-template.ts    # SaaS HTML Command Center UI & SVG Chart Generator
-│   │   └── ai.service.ts         # Central orchestrator with retry and fallback engine
+│   │   ├── report-helper.ts      # Visual charts coordinate math & HTML trend row builders
+│   │   ├── report-template.ts    # Daily Sales Register HTML console UI shell
+│   │   ├── debitors-template.ts  # Customer outstanding Udhari HTML console UI shell
+│   │   └── ai.service.ts         # Lean central orchestrator for LLM prompt connections
 │   ├── telegram/
 │   │   ├── telegram.client.ts    # Telegram client with markdown recovery safety
 │   │   └── telegram.service.ts   # Chunking and interval delivery manager
@@ -66,7 +76,9 @@ ai-accounting-automation/
 │   ├── services/
 │   │   └── orchestrator.service.ts # Core pipeline coordinator with fail-safe alerts
 │   ├── types/
-│   │   └── accounting.types.ts   # Ingest schema, Zod validations, parsing models
+│   │   ├── accounting.types.ts   # Core types routing hub
+│   │   ├── sales.types.ts        # Daily sales validation schemas
+│   │   └── debitors.types.ts     # Customer udhari structures
 │   ├── logger/
 │   │   └── logger.ts             # Pino logger configurations
 │   ├── scripts/
@@ -150,7 +162,7 @@ To seed the input directory with realistic demo excel spreadsheets:
 ```bash
 npm run generate-sample
 ```
-This generates standard mock transaction files representing both the Daily Sales Register and the Debitors list format in your **`data/input/`** directory.
+This generates a standard mock transaction file in your **`data/input/`** directory, ready to audit immediately.
 
 ### 4. Running the Accounting Audits
 The system provides tailored, high-fidelity commands to process specific spreadsheets and generate interactive SaaS HTML dashboards:
@@ -160,19 +172,19 @@ The system provides tailored, high-fidelity commands to process specific spreads
   ```bash
   npm run audit-sales
   ```
-  *Output HTML:* `data/output/Hotel Gaurav Daily Sales Register_summary.html`
+  *Output HTML:* `data/output/Hotel Gaurav Daily Sales Register/summary.html`
 
 * 👤 **Audit Debitors & Outstanding Dues:**
   Parses the outstanding collections workbook sheets (`Summary`, `EntryList`, and `Breakup`), sums balance dues, and generates a Top 15 debtor leaderboard with individual percentage contribution progress bars:
   ```bash
   npm run audit-debitors
   ```
-  *Output HTML:* `data/output/DEBITORS LIST_summary.html`
+  *Output HTML:* `data/output/DEBITORS LIST/summary.html`
 
 * 🎯 **Audit Any Specific Spreadsheet (Configurable Leaderboard Limit):**
-  Trigger the audit pipeline targeting any custom spreadsheet and override the outstanding debtor list limit:
+  Trigger the audit pipeline targeting any custom spreadsheet using flexible name lookups and override the outstanding debtor list limit:
   ```bash
-  npm run audit -- --file "data/input/DEBITORS LIST.xlsx" --limit 20
+  npm run audit -- --file "DEBITORS LIST" --limit 20
   ```
   *Note: Double-dashes (`--`) are required by npm to correctly forward arguments to the underlying script.*
 

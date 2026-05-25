@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import path from 'path';
+import fs from 'fs';
 import { logger } from '../logger/logger.js';
 
 export async function generateSampleExcel() {
@@ -74,9 +75,14 @@ export async function generateSampleExcel() {
     col.width = Math.max(maxLen + 3, 12);
   });
 
-  const destPath = path.resolve(process.cwd(), 'sample_ledger.xlsx');
+  const inputDir = path.resolve(process.cwd(), 'data', 'input');
+  if (!fs.existsSync(inputDir)) {
+    fs.mkdirSync(inputDir, { recursive: true });
+  }
+
+  const destPath = path.join(inputDir, 'sample_ledger.xlsx');
   await workbook.xlsx.writeFile(destPath);
-  logger.info({ destPath }, '✅ Sample accounting workbook generated successfully!');
+  logger.info({ destPath }, 'Sample accounting workbook generated successfully!');
 }
 
 // Automatically invoke on script direct run only (ignore on imports)

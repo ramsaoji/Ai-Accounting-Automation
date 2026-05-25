@@ -43,7 +43,7 @@ export class OrchestratorService {
    */
   async runPipeline(): Promise<void> {
     const startTime = Date.now();
-    logger.info('🚀 Initiating AI Accounting Automation Pipeline...');
+    logger.info('Initiating AI Accounting Automation Pipeline...');
 
     // Detect if Google credentials are at their mock defaults
     const isMockDrive = 
@@ -82,14 +82,14 @@ export class OrchestratorService {
 
       if (specificFilePath) {
         const resolvedPath = resolveTargetFile(specificFilePath, inputDir);
-        logger.info({ resolvedPath }, '🎯 SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
+        logger.info({ resolvedPath }, 'SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
         filesToProcess.push({
           name: path.basename(resolvedPath),
           path: resolvedPath,
           buffer: fs.readFileSync(resolvedPath),
         });
       } else if (isMockDrive) {
-        logger.info('⚠️ Google Drive credentials are at mock defaults. Operating in BATCH LOCAL FILE MODE.');
+        logger.info('Google Drive credentials are at mock defaults. Operating in BATCH LOCAL FILE MODE.');
         
         // Scan for .xlsx files in data/input
         let files = fs.readdirSync(inputDir)
@@ -149,7 +149,7 @@ export class OrchestratorService {
       // Process loaded files sequentially
       for (const fileItem of filesToProcess) {
         const { name: fileName, buffer } = fileItem;
-        logger.info(`\n🚀 Ingesting file: "${fileName}"`);
+        logger.info(`Ingesting file: "${fileName}"`);
 
         try {
           // 3. Excel: Parse sheet rows into typed JSON and capture ingestion errors
@@ -207,7 +207,7 @@ export class OrchestratorService {
             fs.writeFileSync(htmlPath, reports.htmlReport);
             fs.writeFileSync(jsonPath, reports.jsonSummary);
             
-            logger.info({ mdPath, htmlPath, jsonPath }, `✅ Unified reports package successfully compiled and written locally.`);
+            logger.info({ mdPath, htmlPath, jsonPath }, 'Unified reports package successfully compiled and written locally.');
           } else {
             await telegramService.sendReport(reports.markdownReport);
           }
@@ -228,6 +228,14 @@ export class OrchestratorService {
             }
           }
         }
+      }
+
+      // 7. Dynamic SaaS Hub Compile: Regenerate master portal index
+      try {
+        const { rebuildMasterPortal } = await import('../excel/portal.builder.js');
+        rebuildMasterPortal(outputDir);
+      } catch (portalError) {
+        logger.error({ error: portalError }, 'Failed to rebuild SaaS Master Control Center portal');
       }
 
       const durationMs = Date.now() - startTime;

@@ -1,11 +1,19 @@
 import { AiProviderFactory } from './ai.factory.js';
 import { AiProvider } from './ai.types.js';
 import { PromptInputData } from './ai.prompts.js';
-import { rulesEngine } from '../rules/rules.engine.js';
 import { ParsingError, Transaction } from '../types/accounting.types.js';
 import { logger } from '../logger/logger.js';
 import { generateHtmlReport } from './report-template.js';
 import { generateDebitorsHtmlReport } from './debitors-template.js';
+import {
+  generateSalesSvgChart,
+  buildSalesTrendElements,
+  generateDebitorsSvgChart,
+  generateDebitorsHtmlRows,
+  groupAlertsIntoHtml,
+  computeSalesFallbackInsights,
+  computeDebitorsFallbackInsights
+} from './report-helper.js';
 
 export interface GeneratedReports {
   markdownReport: string;
@@ -27,7 +35,9 @@ export class AiService {
   async generateFinancialSummary(data: PromptInputData): Promise<GeneratedReports> {
     const { transactions, alerts, parsingErrors, fileName, runTimestamp, sheets } = data;
 
-    // Specialized Udhari & Debitors Register branch
+    // =========================================================================
+    // BRANCH A: Specialized Udhari & Debitors Register Orchestrator
+    // =========================================================================
     if (data.isDebitorsList && data.debitors) {
       logger.info({ fileName }, 'Generating specialized report for Debitors List');
 
@@ -37,9 +47,7 @@ export class AiService {
       const totalPendingSum = debitors.reduce((sum, d) => sum + d.pending, 0);
 
       const debitorsLimit = data.debitorsLimit || 10;
-      const sortedDebitors = [...debitors]
-        .sort((a, b) => b.pending - a.pending);
-      
+      const sortedDebitors = [...debitors].sort((a, b) => b.pending - a.pending);
       const topDebitorsLimitList = sortedDebitors.slice(0, debitorsLimit);
 
       const collectionSuccessRate = totalDebitSum > 0 
@@ -51,86 +59,12 @@ export class AiService {
       const topDebtorName = sortedDebitors[0]?.name || 'None';
       const topDebtorValue = sortedDebitors[0]?.pending || 0;
 
-      // 1. Generate SVG horizontal bar chart
-      const svgWidth = 900;
-      const barHeight = 24;
-      const barSpacing = 12;
-      const paddingLeft = 220; // room for name
-      const paddingRight = 120; // room for values
-      const paddingTop = 20;
-      const paddingBottom = 30;
-      const svgHeight = paddingTop + paddingBottom + topDebitorsLimitList.length * (barHeight + barSpacing);
-      
       const maxPending = Math.max(...topDebitorsLimitList.map(d => d.pending), 1);
-      
-      const barsMarkup: string[] = [];
-      const gridLines: string[] = [];
 
-      for (let i = 0; i <= 4; i++) {
-        const x = paddingLeft + (i * (svgWidth - paddingLeft - paddingRight)) / 4;
-        const gridValue = Math.round((i * maxPending) / 4);
-        gridLines.push(`
-          <line x1="${x}" y1="${paddingTop}" x2="${x}" y2="${svgHeight - paddingBottom}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
-          <text x="${x}" y="${svgHeight - paddingBottom + 16}" fill="var(--text-muted)" font-size="9" font-family="'Outfit', sans-serif" text-anchor="middle">₹${(gridValue/1000).toFixed(0)}K</text>
-        `);
-      }
-
-      topDebitorsLimitList.forEach((d, idx) => {
-        const y = paddingTop + idx * (barHeight + barSpacing);
-        const width = ((d.pending / maxPending) * (svgWidth - paddingLeft - paddingRight));
-        
-        const contributionPercent = totalPendingSum > 0 ? ((d.pending / totalPendingSum) * 100).toFixed(1) : '0';
-        
-        barsMarkup.push(`
-          <g class="bar-group">
-            <text x="${paddingLeft - 15}" y="${y + 16}" fill="var(--text-main)" font-size="11" font-family="'Outfit', sans-serif" font-weight="500" text-anchor="end">${d.name}</text>
-            <rect x="${paddingLeft}" y="${y}" width="${svgWidth - paddingLeft - paddingRight}" height="${barHeight}" fill="rgba(255,255,255,0.02)" rx="4" />
-            <rect x="${paddingLeft}" y="${y}" width="${width.toFixed(1)}" height="${barHeight}" fill="url(#duesBarGrad)" rx="4" class="chart-bar-rect" />
-            <text x="${paddingLeft + width + 10}" y="${y + 16}" fill="var(--text-main)" font-size="11" font-family="'Outfit', sans-serif" font-weight="600">₹${Math.round(d.pending).toLocaleString()} <tspan fill="var(--text-muted)" font-size="9" font-weight="400">(${contributionPercent}%)</tspan></text>
-          </g>
-        `);
-      });
-
-      const generatedSvgChart = `
-        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" class="neon-trend-chart">
-          <defs>
-            <linearGradient id="duesBarGrad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stop-color="#4f46e5" />
-              <stop offset="100%" stop-color="var(--brand-indigo)" />
-            </linearGradient>
-          </defs>
-          ${gridLines.join('\n')}
-          ${barsMarkup.join('\n')}
-        </svg>
-      `;
-
-      // 2. Generate HTML Debitor Rows
-      const htmlDebitorRows = topDebitorsLimitList.map((d) => {
-        const contributionPercent = totalPendingSum > 0 ? ((d.pending / totalPendingSum) * 100).toFixed(1) : '0';
-        const barPercent = Math.min(100, Math.max(8, Math.round((d.pending / maxPending) * 100)));
-        const healthStatus = d.pending > 20000 ? 'badge-red' : d.pending > 5000 ? 'badge-amber' : 'badge-green';
-        const statusLabel = d.pending > 20000 ? 'High Risk' : d.pending > 5000 ? 'Medium Alert' : 'Healthy';
-
-        return `
-          <tr>
-            <td><strong class="debtor-name">${d.name}</strong></td>
-            <td class="text-right font-medium numeric">₹${Math.round(d.debit).toLocaleString()}</td>
-            <td class="text-right font-medium numeric">₹${Math.round(d.credit).toLocaleString()}</td>
-            <td class="text-right font-semibold text-red numeric">₹${Math.round(d.pending).toLocaleString()}</td>
-            <td class="text-center">
-              <div class="trend-bar-wrapper" title="Outstanding Contribution: ${contributionPercent}%">
-                <div class="trend-bar-fill" style="width: ${barPercent}%; background-color: var(--brand-indigo);"></div>
-              </div>
-              <span style="font-size:0.8rem; color:var(--text-muted); margin-left: 6px;" class="numeric">${contributionPercent}%</span>
-            </td>
-            <td class="text-center"><span class="badge ${healthStatus}">${statusLabel}</span></td>
-          </tr>
-        `;
-      });
-
-      // 3. AI call for projections and checklist specific to Debitors
+      // AI calls for weekly checklist & 3-month outlook specific to debitors
       let aiWeeklyChecklist = '';
       let aiProjections = '';
+      let aiGenerated = false;
 
       const masterStatsText = `
 Master Debitor Accounts Cumulative Totals:
@@ -182,19 +116,27 @@ Rules:
 `;
         const projectionsResponse = await this.provider.generateText(projectionsPrompt, { temperature: 0.2 });
         aiProjections = projectionsResponse.trim();
+        aiGenerated = true;
 
       } catch (error) {
-        logger.error({ error }, 'AI debtor collection suggestions generation failed.');
-        aiWeeklyChecklist = `Reach out directly to ${topDebtorName} to establish a structured weekly repayment plan for their outstanding ₹${Math.round(topDebtorValue).toLocaleString()} balance.
-Implement a strict ₹5,000 credit cap per customer so no individual account can run up massive outstanding balances.
-Have the billing counter staff ask credit customers politely for full or partial clearance of balance dues before ordering more meals or drinks.`;
-
-        aiProjections = `Recovery of uncollected balances is projected to yield ₹150,000 next month if active direct call campaigns are started.
-Accounts like ${topDebtorName} with balances over ₹20,000 represent a severe collection write-off risk; pause new credits for them immediately.
-With a ${collectionSuccessRate}% overall collection success rate, cashflow remains tight; set a rule to collect at least 30% of outstanding balance monthly.`;
+        logger.error({ error }, 'AI debtor collection suggestions generation failed. Using data-driven fallback.');
+        const fallback = computeDebitorsFallbackInsights({
+          topDebitorsLimitList,
+          topDebtorName,
+          topDebtorValue,
+          totalPendingSum,
+          collectionSuccessRate,
+          averageOutstandingDues,
+          activeDebitorsCount
+        });
+        aiWeeklyChecklist = fallback.checklist;
+        aiProjections = fallback.projections;
       }
 
-      // Format HTML checklist and projections
+      // Delegate all visual rendering calculations to our report-helper library
+      const { generatedSvgChart } = generateDebitorsSvgChart(topDebitorsLimitList, maxPending, totalPendingSum);
+      const htmlDebitorRows = generateDebitorsHtmlRows(topDebitorsLimitList, maxPending, totalPendingSum);
+
       const htmlChecklistPoints = aiWeeklyChecklist
         .split('\n')
         .map(line => line.trim())
@@ -221,49 +163,9 @@ With a ${collectionSuccessRate}% overall collection success rate, cashflow remai
         })
         .join('\n');
 
-      // Alerts grouping
-      const alertGroups = new Map<string, typeof alerts>();
-      for (const a of alerts) {
-        if (!alertGroups.has(a.ruleId)) {
-          alertGroups.set(a.ruleId, []);
-        }
-        alertGroups.get(a.ruleId)!.push(a);
-      }
-
-      const htmlAlertsList = Array.from(alertGroups.entries()).map(([ruleId, list]) => {
-        const first = list[0];
-        const countLabel = list.length > 1 ? ` (${list.length} occurrences)` : '';
-        
-        let recommendation = 'Verify transaction details and check balance discrepancies.';
-        if (ruleId === 'RULE_001') {
-          recommendation = 'Confirm that multiple entries have not been double-posted for the same day.';
-        } else if (ruleId === 'RULE_002') {
-          recommendation = 'Evaluate high credit extensions or repayments to ensure data alignment.';
-        } else if (ruleId === 'RULE_005') {
-          recommendation = 'Negative balance indicates account credit error, correct ledger amount.';
-        }
-
-        const examples = list.slice(0, 2).map(a => `<li><em>${a.message}</em></li>`).join('');
-        const overflow = list.length > 2 ? `<li class="text-slate"><em>...and ${list.length - 2} other similar occurrences.</em></li>` : '';
-
-        return `
-          <div class="alert-box warning">
-            <div class="alert-header">
-              <svg class="alert-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-              <h4>${first.ruleName}${countLabel}</h4>
-            </div>
-            <ul>
-              ${examples}
-              ${overflow}
-            </ul>
-            <p class="alert-suggestion"><strong>👉 Action Plan:</strong> ${recommendation}</p>
-          </div>
-        `;
-      }).join('');
-
+      const htmlAlertsList = groupAlertsIntoHtml(alerts);
       const htmlErrors = parsingErrors.slice(0, 10).map(e => `<li><strong>Row ${e.row}</strong>: ${e.error}</li>`).join('');
 
-      // Build HTML Report
       const htmlReport = generateDebitorsHtmlReport({
         fileName,
         runTimestamp,
@@ -284,10 +186,11 @@ With a ${collectionSuccessRate}% overall collection success rate, cashflow remai
         htmlProjectionsPoints,
         htmlErrors,
         allErrorsLength: parsingErrors.length,
-        htmlAlertsList
+        htmlAlertsList,
+        aiGenerated
       });
 
-      // Build Markdown Report
+      // Format Markdown checklist and projections
       const mdChecklistPoints = aiWeeklyChecklist
         .split('\n')
         .map(line => line.trim())
@@ -302,6 +205,12 @@ With a ${collectionSuccessRate}% overall collection success rate, cashflow remai
         .map(line => `> * **${line.replace(/^[\*\-\d\.\s]+/, '')}**`)
         .join('\n');
 
+      // Group alerts map for markdown warning block
+      const alertGroups = new Map<string, typeof alerts>();
+      for (const a of alerts) {
+        if (!alertGroups.has(a.ruleId)) alertGroups.set(a.ruleId, []);
+        alertGroups.get(a.ruleId)!.push(a);
+      }
       const mdAlertsList = Array.from(alertGroups.entries()).map(([ruleId, list]) => {
         const first = list[0];
         const countLabel = list.length > 1 ? ` (${list.length} occurrences)` : '';
@@ -309,7 +218,7 @@ With a ${collectionSuccessRate}% overall collection success rate, cashflow remai
         return `> [!WARNING]\n> **${first.ruleName}${countLabel}**:\n${examples}`;
       }).join('\n\n');
 
-      const mdDebitorRows = topDebitorsLimitList.map((d, i) => {
+      const mdDebitorRowsList = topDebitorsLimitList.map((d, i) => {
         const pct = totalPendingSum > 0 ? ((d.pending / totalPendingSum) * 100).toFixed(0) : '0';
         return `| **#${i + 1}** | **${d.name}** | ₹${Math.round(d.debit).toLocaleString()} | ₹${Math.round(d.credit).toLocaleString()} | ₹${Math.round(d.pending).toLocaleString()} | ${pct}% |`;
       }).join('\n');
@@ -336,7 +245,7 @@ With a ${collectionSuccessRate}% overall collection success rate, cashflow remai
 ### 🏆 Top Outstanding Dues Leaderboard (Top ${debitorsLimit})
 | Rank | Customer Debitor | Total Debit (Purchased) | Total Credit (Repayed) | Outstanding Pending | Pending Contribution % |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-${mdDebitorRows}
+${mdDebitorRowsList}
 
 ---
 
@@ -352,10 +261,8 @@ ${mdChecklistPoints || '> * No checklist items generated.'}
 
 ### 🚨 Ingestion Exceptions & Warnings
 ${mdAlertsList || '> * All balances and daily registers are cleanly matching with zero alerts!'}
-
 `;
 
-      // 4. Generate JSON Summary
       const jsonSummary = JSON.stringify({
         fileName,
         timestamp: runTimestamp,
@@ -385,29 +292,15 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
         errors: parsingErrors,
       }, null, 2);
 
-      return {
-        markdownReport,
-        htmlReport,
-        jsonSummary
-      };
+      return { markdownReport, htmlReport, jsonSummary };
     }
 
-    // Default Fallback Sheets array if not provided (Case 2: Single Sheet Ledger)
+    // =========================================================================
+    // BRANCH B: Combined Multi-month Daily Sales Register Orchestrator
+    // =========================================================================
     const activeSheets = sheets && sheets.length > 0 
       ? sheets 
       : [{ sheetName: 'General Ledger', transactions, errors: parsingErrors }];
-
-
-    let masterLiquor = 0;
-    let masterFood = 0;
-    let masterRecovery = 0;
-    let masterExpenses = 0;
-    let masterCreditExtended = 0;
-
-    const monthlyTrendRows: string[] = [];
-    const htmlTrendRows: string[] = [];
-    const allTransactions: Transaction[] = [];
-    const allErrors: ParsingError[] = [];
 
     // Chronological date parser for sheet ordering
     const parseSheetDate = (name: string) => {
@@ -429,220 +322,51 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
     // Sort sheets chronologically to form a clean business timeline
     const sortedSheets = [...activeSheets].sort((a, b) => parseSheetDate(a.sheetName) - parseSheetDate(b.sheetName));
 
-    // Programmatic Milestones Tracking
-    let bestRevenueMonth = '';
-    let bestRevenueValue = 0;
-    let bestProfitMonth = '';
-    let bestProfitValue = -Infinity;
-    let peakExpenseMonth = '';
-    let peakExpenseValue = 0;
-
-    const jsonMonths: any[] = [];
-
-    // Precalculate sheets to find maximum net cashflow for visual meter ratios
     let maxAbsNet = 1;
     let maxInflowOutflow = 1;
 
     for (const s of sortedSheets) {
-      const liq = s.transactions.filter(t => t.category === 'Liquor Revenue').reduce((sum, t) => sum + t.amount, 0);
-      const food = s.transactions.filter(t => t.category === 'Food Revenue').reduce((sum, t) => sum + t.amount, 0);
-      const rec = s.transactions.filter(t => t.category === 'Credit Recovery').reduce((sum, t) => sum + t.amount, 0);
-      const exp = s.transactions.filter(t => t.category === 'Operational Expense').reduce((sum, t) => sum + t.amount, 0);
-      const cred = s.transactions.filter(t => t.category === 'Credit Extended').reduce((sum, t) => sum + t.amount, 0);
+      const liq = s.transactions.filter((t: Transaction) => t.category === 'Liquor Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+      const food = s.transactions.filter((t: Transaction) => t.category === 'Food Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+      const rec = s.transactions.filter((t: Transaction) => t.category === 'Credit Recovery').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+      const exp = s.transactions.filter((t: Transaction) => t.category === 'Operational Expense').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+      const cred = s.transactions.filter((t: Transaction) => t.category === 'Credit Extended').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
 
       const net = (liq + food + rec) - (exp + cred);
       const inc = liq + food + rec;
       const out = exp + cred;
 
-      if (Math.abs(net) > maxAbsNet) {
-        maxAbsNet = Math.abs(net);
-      }
+      if (Math.abs(net) > maxAbsNet) maxAbsNet = Math.abs(net);
       if (inc > maxInflowOutflow) maxInflowOutflow = inc;
       if (out > maxInflowOutflow) maxInflowOutflow = out;
     }
 
-    // =========================================================================
-    // 📈 DYNAMIC SVG NEON GRAPH GENERATION (Sales vs. Expenses Curves)
-    // =========================================================================
-    const svgWidth = 1160;
-    const svgHeight = 260;
-    const svgPaddingX = 60;
-    const svgPaddingY = 40;
+    // Call report helper functions to generate SVG visual lines and tabular cashflows
+    const generatedSvgChart = generateSalesSvgChart(sortedSheets, maxInflowOutflow);
+    const trendElements = buildSalesTrendElements(sortedSheets, maxAbsNet);
 
-    const pointsInflow: { x: number; y: number; label: string; value: number }[] = [];
-    const pointsOutflow: { x: number; y: number; label: string; value: number }[] = [];
-
-    sortedSheets.forEach((s, idx) => {
-      const liq = s.transactions.filter(t => t.category === 'Liquor Revenue').reduce((sum, t) => sum + t.amount, 0);
-      const food = s.transactions.filter(t => t.category === 'Food Revenue').reduce((sum, t) => sum + t.amount, 0);
-      const rec = s.transactions.filter(t => t.category === 'Credit Recovery').reduce((sum, t) => sum + t.amount, 0);
-      const exp = s.transactions.filter(t => t.category === 'Operational Expense').reduce((sum, t) => sum + t.amount, 0);
-      const cred = s.transactions.filter(t => t.category === 'Credit Extended').reduce((sum, t) => sum + t.amount, 0);
-
-      const inc = liq + food + rec;
-      const out = exp + cred;
-
-      const x = svgPaddingX + (idx * (svgWidth - 2 * svgPaddingX)) / Math.max(1, sortedSheets.length - 1);
-      const yInc = svgHeight - svgPaddingY - (inc / maxInflowOutflow) * (svgHeight - 2 * svgPaddingY);
-      const yOut = svgHeight - svgPaddingY - (out / maxInflowOutflow) * (svgHeight - 2 * svgPaddingY);
-
-      pointsInflow.push({ x, y: yInc, label: s.sheetName, value: inc });
-      pointsOutflow.push({ x, y: yOut, label: s.sheetName, value: out });
-    });
-
-    const inflowLinePath = pointsInflow.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-    const outflowLinePath = pointsOutflow.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-
-    const inflowFillPath = `${inflowLinePath} L ${pointsInflow[pointsInflow.length - 1].x.toFixed(1)} ${(svgHeight - svgPaddingY).toFixed(1)} L ${pointsInflow[0].x.toFixed(1)} ${(svgHeight - svgPaddingY).toFixed(1)} Z`;
-    const outflowFillPath = `${outflowLinePath} L ${pointsOutflow[pointsOutflow.length - 1].x.toFixed(1)} ${(svgHeight - svgPaddingY).toFixed(1)} L ${pointsOutflow[0].x.toFixed(1)} ${(svgHeight - svgPaddingY).toFixed(1)} Z`;
-
-    const svgGridLines: string[] = [];
-    const svgLabels: string[] = [];
-
-    // Horizontal Y grid lines
-    for (let i = 0; i <= 3; i++) {
-      const y = svgPaddingY + (i * (svgHeight - 2 * svgPaddingY)) / 3;
-      const gridValue = Math.round(maxInflowOutflow - (i * maxInflowOutflow) / 3);
-      svgGridLines.push(`
-        <line x1="${svgPaddingX}" y1="${y}" x2="${svgWidth - svgPaddingX}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4,4" />
-        <text x="${svgPaddingX - 12}" y="${y + 4}" fill="var(--text-muted)" font-size="10" font-family="'Outfit', sans-serif" text-anchor="end">₹${(gridValue / 100000).toFixed(1)}L</text>
-      `);
-    }
-
-    // X axis labels
-    const labelStep = Math.max(1, Math.round(sortedSheets.length / 8));
-    pointsInflow.forEach((p, idx) => {
-      if (idx % labelStep === 0 || idx === sortedSheets.length - 1) {
-        svgLabels.push(`
-          <text x="${p.x}" y="${svgHeight - svgPaddingY + 22}" fill="var(--text-muted)" font-size="10" font-family="'Outfit', sans-serif" text-anchor="middle">${p.label}</text>
-          <line x1="${p.x}" y1="${svgHeight - svgPaddingY}" x2="${p.x}" y2="${svgHeight - svgPaddingY + 5}" stroke="rgba(255,255,255,0.15)" />
-        `);
-      }
-    });
-
-    const svgInflowDots = pointsInflow.map(p => `
-      <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--green-accent)" stroke="#080b11" stroke-width="2" class="chart-point" />
-    `).join('\n');
-
-    const svgOutflowDots = pointsOutflow.map(p => `
-      <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--red-accent)" stroke="#080b11" stroke-width="2" class="chart-point" />
-    `).join('\n');
-
-    const generatedSvgChart = `
-      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" class="neon-trend-chart">
-        <defs>
-          <linearGradient id="inflowGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--green-accent)" stop-opacity="0.12" />
-            <stop offset="100%" stop-color="var(--green-accent)" stop-opacity="0.0" />
-          </linearGradient>
-          <linearGradient id="outflowGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--red-accent)" stop-opacity="0.08" />
-            <stop offset="100%" stop-color="var(--red-accent)" stop-opacity="0.0" />
-          </linearGradient>
-        </defs>
-        
-        <!-- Grid lines & Y scale labels -->
-        ${svgGridLines.join('\n')}
-        
-        <!-- Areas under the curves -->
-        <path d="${inflowFillPath}" fill="url(#inflowGrad)" />
-        <path d="${outflowFillPath}" fill="url(#outflowGrad)" />
-        
-        <!-- Trend Curves -->
-        <path d="${inflowLinePath}" fill="none" stroke="var(--green-accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="${outflowLinePath}" fill="none" stroke="var(--red-accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1" />
-        
-        <!-- Interactive Node circles -->
-        ${svgInflowDots}
-        ${svgOutflowDots}
-        
-        <!-- X Axis Labels -->
-        ${svgLabels.join('\n')}
-        <line x1="${svgPaddingX}" y1="${svgHeight - svgPaddingY}" x2="${svgWidth - svgPaddingX}" y2="${svgHeight - svgPaddingY}" stroke="rgba(255,255,255,0.12)" />
-      </svg>
-    `;
-
-    for (const s of sortedSheets) {
-      const liq = s.transactions.filter(t => t.category === 'Liquor Revenue').reduce((sum, t) => sum + t.amount, 0);
-      const food = s.transactions.filter(t => t.category === 'Food Revenue').reduce((sum, t) => sum + t.amount, 0);
-      const rec = s.transactions.filter(t => t.category === 'Credit Recovery').reduce((sum, t) => sum + t.amount, 0);
-      const exp = s.transactions.filter(t => t.category === 'Operational Expense').reduce((sum, t) => sum + t.amount, 0);
-      const cred = s.transactions.filter(t => t.category === 'Credit Extended').reduce((sum, t) => sum + t.amount, 0);
-
-      const inflows = liq + food + rec;
-      const outflows = exp + cred;
-      const net = inflows - outflows;
-
-      if (inflows > bestRevenueValue) {
-        bestRevenueValue = inflows;
-        bestRevenueMonth = s.sheetName;
-      }
-      if (net > bestProfitValue) {
-        bestProfitValue = net;
-        bestProfitMonth = s.sheetName;
-      }
-      if (exp > peakExpenseValue) {
-        peakExpenseValue = exp;
-        peakExpenseMonth = s.sheetName;
-      }
-
-      masterLiquor += liq;
-      masterFood += food;
-      masterRecovery += rec;
-      masterExpenses += exp;
-      masterCreditExtended += cred;
-
-      allTransactions.push(...s.transactions);
-      allErrors.push(...s.errors.map(e => ({
-        ...e,
-        error: `[${s.sheetName}] ${e.error}`
-      })));
-
-      monthlyTrendRows.push(
-        `| **${s.sheetName}** | ₹${Math.round(liq).toLocaleString()} | ₹${Math.round(food).toLocaleString()} | ₹${Math.round(cred).toLocaleString()} | ₹${Math.round(exp).toLocaleString()} | ₹${Math.round(net).toLocaleString()} | ${net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴'} |`
-      );
-
-      // Math for the visual CSS cashflow meter bar
-      const barPercent = Math.min(100, Math.max(8, Math.round((Math.abs(net) / maxAbsNet) * 100)));
-      const barColor = net >= 0 ? 'var(--green-accent)' : 'var(--red-accent)';
-
-      htmlTrendRows.push(`
-        <tr>
-          <td><strong class="month-name">${s.sheetName}</strong></td>
-          <td class="text-right font-medium numeric">₹${Math.round(liq).toLocaleString()}</td>
-          <td class="text-right font-medium numeric">₹${Math.round(food).toLocaleString()}</td>
-          <td class="text-right font-medium text-orange numeric">₹${Math.round(cred).toLocaleString()}</td>
-          <td class="text-right font-medium numeric">₹${Math.round(exp).toLocaleString()}</td>
-          <td class="text-right font-semibold ${net >= 0 ? 'text-green' : 'text-red'} numeric">₹${Math.round(net).toLocaleString()}</td>
-          <td>
-            <div class="trend-bar-wrapper" title="Performance: ${barPercent}% of absolute peak">
-              <div class="trend-bar-fill" style="width: ${barPercent}%; background-color: ${barColor};"></div>
-            </div>
-          </td>
-          <td class="text-center"><span class="badge ${net >= 0 ? 'badge-green' : 'badge-red'}">${net >= 0 ? 'Surplus' : 'Deficit'}</span></td>
-        </tr>
-      `);
-
-      jsonMonths.push({
-        sheetName: s.sheetName,
-        liquor: Math.round(liq),
-        food: Math.round(food),
-        creditRecovery: Math.round(rec),
-        expenses: Math.round(exp),
-        creditExtended: Math.round(cred),
-        inflows: Math.round(inflows),
-        outflows: Math.round(outflows),
-        net: Math.round(net),
-        status: net >= 0 ? 'Surplus' : 'Deficit'
-      });
-    }
+    const {
+      htmlTrendRows,
+      monthlyTrendRows,
+      bestRevenueMonth,
+      bestRevenueValue,
+      bestProfitMonth,
+      bestProfitValue,
+      peakExpenseMonth,
+      peakExpenseValue,
+      masterLiquor,
+      masterFood,
+      masterRecovery,
+      masterExpenses,
+      masterCreditExtended,
+      jsonMonths
+    } = trendElements;
 
     const masterIncome = masterLiquor + masterFood + masterRecovery;
     const masterOutflow = masterExpenses + masterCreditExtended;
     const masterNet = masterIncome - masterOutflow;
     const masterStatus = masterNet >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
-    // Ratios & Collection Health
     const liquorPercentage = masterLiquor + masterFood > 0 
       ? ((masterLiquor / (masterLiquor + masterFood)) * 100).toFixed(1)
       : '0.0';
@@ -650,91 +374,35 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
       ? ((masterFood / (masterLiquor + masterFood)) * 100).toFixed(1)
       : '0.0';
 
+    const creditOutstandingGap = masterCreditExtended - masterRecovery;
     const creditRecoveryRate = masterCreditExtended > 0
       ? ((masterRecovery / masterCreditExtended) * 100).toFixed(1)
       : '100.0';
-    const creditOutstandingGap = masterCreditExtended - masterRecovery;
 
-    // Rules engine evaluation on all transactions combined
-    const masterAlerts = rulesEngine.evaluate(allTransactions);
-    const alertGroups = new Map<string, typeof alerts>();
-    for (const a of masterAlerts) {
-      if (!alertGroups.has(a.ruleId)) {
-        alertGroups.set(a.ruleId, []);
-      }
-      alertGroups.get(a.ruleId)!.push(a);
+    const allTransactions: Transaction[] = [];
+    const allErrors: ParsingError[] = [];
+    for (const s of sortedSheets) {
+      allTransactions.push(...s.transactions);
+      allErrors.push(...s.errors.map(e => ({
+        ...e,
+        error: `[${s.sheetName}] ${e.error}`
+      })));
     }
 
-    const mdAlertsList = Array.from(alertGroups.entries()).map(([ruleId, list]) => {
-      const first = list[0];
-      const countLabel = list.length > 1 ? ` (${list.length} occurrences)` : '';
-      
-      let recommendation = 'Verify transaction details and correct ledger logging.';
-      if (ruleId === 'RULE_001') {
-        recommendation = 'Double-check invoice numbers to make sure this is not a duplicate entry.';
-      } else if (ruleId === 'RULE_002') {
-        recommendation = 'Verify this large entry to make sure the amount was logged correctly.';
-      } else if (ruleId === 'RULE_004') {
-        recommendation = 'Restaurant and bar operations run late and on weekends; make sure the daily cash matches what was logged.';
-      }
-
-      const examples = list.slice(0, 2).map(a => `> * _${a.message}_`).join('\n');
-      const overflow = list.length > 2 ? `> * _...and ${list.length - 2} other similar logs._` : '';
-
-      return `> [!WARNING]
-> **${first.ruleName}${countLabel}**:
-${examples}
-${overflow}
-> 
-> **👉 Suggestion**: ${recommendation}`;
-    }).join('\n\n');
-
-    const htmlAlertsList = Array.from(alertGroups.entries()).map(([ruleId, list]) => {
-      const first = list[0];
-      const countLabel = list.length > 1 ? ` (${list.length} occurrences)` : '';
-      
-      let recommendation = 'Verify transaction details and correct ledger logging.';
-      if (ruleId === 'RULE_001') {
-        recommendation = 'Double-check invoice numbers to make sure this is not a duplicate entry.';
-      } else if (ruleId === 'RULE_002') {
-        recommendation = 'Verify this large entry to make sure the amount was logged correctly.';
-      } else if (ruleId === 'RULE_004') {
-        recommendation = 'Restaurant and bar operations run late and on weekends; make sure the daily cash matches what was logged.';
-      }
-
-      const examples = list.slice(0, 2).map(a => `<li><em>${a.message}</em></li>`).join('');
-      const overflow = list.length > 2 ? `<li class="text-slate"><em>...and ${list.length - 2} other similar occurrences.</em></li>` : '';
-
-      return `
-        <div class="alert-box warning">
-          <div class="alert-header">
-            <svg class="alert-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            <h4>${first.ruleName}${countLabel}</h4>
-          </div>
-          <ul>
-            ${examples}
-            ${overflow}
-          </ul>
-          <p class="alert-suggestion"><strong>👉 Action Plan:</strong> ${recommendation}</p>
-        </div>
-      `;
-    }).join('');
-
-    // =========================================================================
-    // AI ENGINES: Dynamic Trend Suggestions + Predictive 3-Month Projections
-    // =========================================================================
+    // AI weekly suggestions & projections call
     let aiWeeklyChecklist = '';
     let aiProjections = '';
+    let aiGenerated = false;
 
     try {
       logger.info({ sheetCount: activeSheets.length }, 'Invoking AI to generate Strategic Projections & Action Checklist...');
       
       const monthlySummaryText = sortedSheets.map(s => {
-        const liq = s.transactions.filter(t => t.category === 'Liquor Revenue').reduce((sum, t) => sum + t.amount, 0);
-        const food = s.transactions.filter(t => t.category === 'Food Revenue').reduce((sum, t) => sum + t.amount, 0);
-        const rec = s.transactions.filter(t => t.category === 'Credit Recovery').reduce((sum, t) => sum + t.amount, 0);
-        const exp = s.transactions.filter(t => t.category === 'Operational Expense').reduce((sum, t) => sum + t.amount, 0);
-        const cred = s.transactions.filter(t => t.category === 'Credit Extended').reduce((sum, t) => sum + t.amount, 0);
+        const liq = s.transactions.filter((t: Transaction) => t.category === 'Liquor Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+        const food = s.transactions.filter((t: Transaction) => t.category === 'Food Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+        const rec = s.transactions.filter((t: Transaction) => t.category === 'Credit Recovery').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+        const exp = s.transactions.filter((t: Transaction) => t.category === 'Operational Expense').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+        const cred = s.transactions.filter((t: Transaction) => t.category === 'Credit Extended').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
         const inc = liq + food + rec;
         const out = exp + cred;
         const net = inc - out;
@@ -752,7 +420,6 @@ Master Cumulative Totals (All Months):
 - Outstanding Credit Gap: ₹${Math.round(creditOutstandingGap).toLocaleString()} (Recovery Rate: ${creditRecoveryRate}%)
       `;
 
-      // Sub-Query 1: Generate Action Checklist
       const checklistPrompt = `
 You are a friendly, encouraging local restaurant consultant advising the owner of "Hotel Gaurav".
 Review these financial stats:
@@ -769,7 +436,6 @@ Rules:
       const checklistResponse = await this.provider.generateText(checklistPrompt, { temperature: 0.15 });
       aiWeeklyChecklist = checklistResponse.trim();
 
-      // Sub-Query 2: Generate 3-Month Projections
       const projectionsPrompt = `
 You are an expert hospitality planner. Look at the historical monthly sales and expense trend for Hotel Gaurav:
 ${monthlySummaryText}
@@ -789,18 +455,29 @@ Rules:
       aiProjections = projectionsResponse.trim();
 
       logger.info('AI successfully generated trend projections and meeting checklist.');
+      aiGenerated = true;
     } catch (error) {
-      logger.error({ error }, 'AI strategic trend and projections generation failed.');
-      aiWeeklyChecklist = `Focus on increasing restaurant food sales (currently only ${foodPercentage}% of total revenue) by launching a targeted weekend family menu.
-Prioritize active credit collection campaigns to recover the outstanding ₹${Math.round(creditOutstandingGap).toLocaleString()} customer balance.
-Audit weekend and off-hours cash register closures to make sure daily sales log matches physically collected cash.`;
-      
-      aiProjections = `Liquor sales are projected to stay strong (averaging ₹1.5M - ₹1.7M monthly). Keep popular bar inventory well-stocked to avoid customer disappointment.
-With ₹${Math.round(creditOutstandingGap).toLocaleString()} in outstanding credit, collections are projected to get harder. Implement a strict ₹5,000 credit cap per customer.
-Supplier and wage expenses are projected to peak at ₹240,000 next quarter. Keep an cash buffer of ₹100,000 ready to absorb seasonal cost spikes.`;
+      logger.error({ error }, 'AI strategic trend and projections generation failed. Using data-driven fallback.');
+      const fallback = computeSalesFallbackInsights({
+        sortedSheets,
+        masterLiquor,
+        masterFood,
+        masterExpenses,
+        masterCreditExtended,
+        masterRecovery,
+        creditOutstandingGap,
+        creditRecoveryRate,
+        foodPercentage,
+        liquorPercentage,
+        bestRevenueMonth,
+        bestRevenueValue,
+        peakExpenseMonth,
+        peakExpenseValue
+      });
+      aiWeeklyChecklist = fallback.checklist;
+      aiProjections = fallback.projections;
     }
 
-    // Format Markdown Outputs
     const mdChecklistPoints = aiWeeklyChecklist
       .split('\n')
       .map(line => line.trim())
@@ -821,7 +498,6 @@ Supplier and wage expenses are projected to peak at ₹240,000 next quarter. Kee
       })
       .join('\n');
 
-    // Format HTML Outputs
     const htmlChecklistPoints = aiWeeklyChecklist
       .split('\n')
       .map(line => line.trim())
@@ -856,9 +532,21 @@ Supplier and wage expenses are projected to peak at ₹240,000 next quarter. Kee
       ? allErrors.slice(0, 10).map(e => `<li><strong>Row ${e.row}</strong>: ${e.error}</li>`).join('')
       : '';
 
-    // =========================================================================
-    // 📑 REPORT 1: HIGH-FIDELITY MARKDOWN DASHBOARD
-    // =========================================================================
+    const htmlAlertsList = groupAlertsIntoHtml(alerts);
+
+    // Group alerts map for markdown warning block
+    const alertGroups = new Map<string, typeof alerts>();
+    for (const a of alerts) {
+      if (!alertGroups.has(a.ruleId)) alertGroups.set(a.ruleId, []);
+      alertGroups.get(a.ruleId)!.push(a);
+    }
+    const mdAlertsList = Array.from(alertGroups.entries()).map(([ruleId, list]) => {
+      const first = list[0];
+      const countLabel = list.length > 1 ? ` (${list.length} occurrences)` : '';
+      const examples = list.slice(0, 2).map(a => `... ${a.message}`).join('\n');
+      return `> [!WARNING]\n> **${first.ruleName}${countLabel}**:\n${examples}`;
+    }).join('\n\n');
+
     const markdownReport = `# 📋 Hotel Gaurav Daily Sales Register — Master Performance Summary
 
 > [!NOTE]
@@ -930,14 +618,8 @@ ${allErrors.length > 0 ? `\n### Format Error Log (First 10):\n${formattedErrors}
 ## ⚠️ Key Operational Alerts (Top Exceptions)
 
 ${mdAlertsList || '> [!NOTE]\n> ✅ No alerts or exceptions detected across the entire historical data.'}
-
----
-_Note: Please review the trends and exceptions above before closing your operational cycle counts._
 `;
 
-    // =========================================================================
-    // 📑 REPORT 2: LUXURIOUS, PRINT-READY BRANDED HTML DASHBOARD (Delegated to modular template)
-    // =========================================================================
     const htmlReport = generateHtmlReport({
       fileName,
       runTimestamp,
@@ -964,16 +646,15 @@ _Note: Please review the trends and exceptions above before closing your operati
       allTransactionsLength: allTransactions.length,
       allErrorsLength: allErrors.length,
       htmlErrors,
-      htmlAlertsList
+      htmlAlertsList,
+      aiGenerated
     });
 
-    // =========================================================================
-    // 📑 REPORT 3: STRIPED JSON FINANCE DATA PACKAGE (Financial Brain for Chat)
-    // =========================================================================
     const jsonSummary = JSON.stringify({
       fileName,
       runTimestamp,
       totalMonths: sortedSheets.length,
+      totalTransactions: transactions.length,
       masterTotals: {
         liquorSales: Math.round(masterLiquor),
         foodSales: Math.round(masterFood),
@@ -1007,11 +688,7 @@ _Note: Please review the trends and exceptions above before closing your operati
       }))
     }, null, 2);
 
-    return {
-      markdownReport,
-      htmlReport,
-      jsonSummary
-    };
+    return { markdownReport, htmlReport, jsonSummary };
   }
 }
 
