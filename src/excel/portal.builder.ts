@@ -3,7 +3,7 @@ import path from 'path';
 import { logger } from '../logger/logger.js';
 
 export function rebuildMasterPortal(outputDir: string) {
-  logger.info({ outputDir }, 'Regenerating dynamic SaaS Master Dashboard Landing Hub...');
+  logger.info({ outputDir }, 'Regenerating dynamic Master Dashboard Landing Hub...');
 
   try {
     if (!fs.existsSync(outputDir)) {
@@ -111,7 +111,7 @@ export function rebuildMasterPortal(outputDir: string) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SaaS Master Financial Control Center</title>
+  <title>Master Financial Control Center</title>
   <link rel="stylesheet" href="./theme.css">
 </head>
 <body class="sidebar-collapsed">
@@ -141,7 +141,7 @@ export function rebuildMasterPortal(outputDir: string) {
         </ul>
       </div>
       <div class="sidebar-footer">
-        <p>SaaS Control Hub v1.0</p>
+        <p>Control Hub v1.0</p>
         <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">Dynamic compilation</p>
       </div>
     </aside>
@@ -150,7 +150,7 @@ export function rebuildMasterPortal(outputDir: string) {
     <main class="main-workspace">
       <header class="top-action-bar">
         <div class="workspace-title">
-          <h1>SaaS Master Financial Command Center</h1>
+          <h1>Master Financial Command Center</h1>
           <p>Consolidated view of all active Excel ledgers and customer udhari summaries</p>
         </div>
         <div class="live-status-pill">
@@ -188,8 +188,8 @@ export function rebuildMasterPortal(outputDir: string) {
 </html>`;
 
     fs.writeFileSync(path.resolve(outputDir, 'index.html'), htmlContent);
-    logger.info('SaaS Master Dashboard Landing Hub successfully compiled at data/output/index.html');
+    logger.info('Master Dashboard Landing Hub successfully compiled at data/output/index.html');
   } catch (error) {
-    logger.error({ error }, 'Failed to generate SaaS master dashboard landing hub');
+    logger.error({ error }, 'Failed to generate master dashboard landing hub');
   }
 }

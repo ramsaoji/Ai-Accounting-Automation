@@ -42,10 +42,10 @@ export async function generateSampleExcel() {
   // Mock transactions representing normal, anomalous, and invalid data
   const data = [
     // Regular credit (Revenue)
-    ['2026-05-15 10:00:00', 'INV-2026-001', 'Revenue', 'SaaS Client Subscription Tier A', 120000, 'credit', 'Stripe Inflow'],
+    ['2026-05-15 10:00:00', 'INV-2026-001', 'Revenue', 'Client Subscription Tier A', 120000, 'credit', 'Stripe Inflow'],
     // Regular debits
     ['2026-05-16 11:30:00', 'INV-2026-002', 'Infrastructure', 'AWS Monthly Invoice', 18500, 'debit', 'Amazon Web Services'],
-    ['2026-05-17 14:00:00', 'INV-2026-003', 'SaaS Tools', 'Slack Team Yearly renewal', 8200, 'debit', 'Slack Technologies'],
+    ['2026-05-17 14:00:00', 'INV-2026-003', 'Tools', 'Slack Team Yearly renewal', 8200, 'debit', 'Slack Technologies'],
     // High Expense Breaching ₹50,000 threshold (RULE_002)
     ['2026-05-18 16:15:00', 'INV-2026-004', 'Consulting', 'Q2 Cybersecurity Vulnerability Audit', 75000, 'debit', 'SecOps Consulting Group'],
     // Duplicate Invoices (RULE_001)

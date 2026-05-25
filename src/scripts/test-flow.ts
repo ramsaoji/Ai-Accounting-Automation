@@ -328,12 +328,12 @@ async function runLocalTest() {
     }
   }
 
-  // 10. Dynamic SaaS Hub Compile: Regenerate master portal index
+  // 10. Dynamic Hub Compile: Regenerate master portal index
   try {
     const { rebuildMasterPortal } = await import('../excel/portal.builder.js');
     rebuildMasterPortal(outputDir);
   } catch (portalError) {
-    logger.error({ error: portalError }, 'Failed to rebuild SaaS Master Control Center portal');
+    logger.error({ error: portalError }, 'Failed to rebuild Master Control Center portal');
   }
 
   logger.info('--- BATCH INTEGRATION TEST RUN COMPLETE ---');

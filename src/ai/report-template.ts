@@ -81,7 +81,7 @@ export function generateHtmlReport(data: HtmlTemplateData): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hotel Gaurav — SaaS Financial Command Center</title>
+  <title>Hotel Gaurav — Financial Command Center</title>
   <link rel="stylesheet" href="../theme.css">
 </head>
 <body>
@@ -102,7 +102,7 @@ export function generateHtmlReport(data: HtmlTemplateData): string {
 
   <div class="app-wrapper">
     
-    <!-- LEFT SIDEBAR: SaaS Application Controller Navigation -->
+    <!-- LEFT SIDEBAR: Application Controller Navigation -->
     <aside class="sidebar">
       <!-- Collapse toggle button -->
       <button class="sidebar-collapse-btn" aria-label="Collapse Menu">

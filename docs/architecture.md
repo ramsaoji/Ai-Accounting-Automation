@@ -26,7 +26,7 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     │
     ▼
 [LOAD] Resilient Outputs Dispatch
-        ├── Isolated Folder-wise HTML SaaS Dashboards
+        ├── Isolated Folder-wise HTML Dashboards
         └── Rate-Throttled Telegram Bulletins Queue
 ```
 

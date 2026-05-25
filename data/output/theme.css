@@ -756,7 +756,7 @@ ol.projections-list li {
   box-shadow: 0 0 10px rgba(251, 191, 36, 0.2);
 }
 
-/* SaaS Portal Landing Specifics */
+/* Portal Landing Specifics */
 .portal-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));

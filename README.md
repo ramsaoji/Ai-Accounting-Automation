@@ -1,6 +1,6 @@
 # AI Accounting Automation Service 📊💼
 
-A production-ready, stateless, and fully modular financial audit background worker built with **Node.js** and **TypeScript**. This service automatically downloads or reads multi-page Excel financial ledgers, processes and aggregates transaction records across years of data, executes an extensible business rules validation engine to detect anomalies, generates high-quality executive summaries using **swappable AI LLM Providers**, and produces three distinct reports: a Telegram-compatible executive brief, a markdown report, and an interactive **SaaS Financial Command Center HTML Dashboard** featuring custom SVG chart integrations!
+A production-ready, stateless, and fully modular financial audit background worker built with **Node.js** and **TypeScript**. This service automatically downloads or reads multi-page Excel financial ledgers, processes and aggregates transaction records across years of data, executes an extensible business rules validation engine to detect anomalies, generates high-quality executive summaries using **swappable AI LLM Providers**, and produces three distinct reports: a Telegram-compatible executive brief, a markdown report, and an interactive **Financial Command Center HTML Dashboard** featuring custom SVG chart integrations!
 
 ---
 
@@ -98,9 +98,9 @@ ai-accounting-automation/
 
 ---
 
-## 📊 Interactive SaaS Financial Command Center HTML Dashboard
+## 📊 Interactive Financial Command Center HTML Dashboard
 
-The output generation pipeline produces a fully responsive, highly interactive **SaaS Executive Dashboard** saved at `data/output/<ledger_name>/summary.html` built with pure CSS and vanilla JavaScript:
+The output generation pipeline produces a fully responsive, highly interactive **Executive Dashboard** saved at `data/output/<ledger_name>/summary.html` built with pure CSS and vanilla JavaScript:
 
 ### 🎨 Visual Design & Aesthetics
 * **Palette & Surfaces:** Modern dark-theme using a dark-blue backdrop (`#060913`), deep glassmorphism card containers, border highlights, and color-coded status elements.
@@ -172,7 +172,7 @@ npm run generate-sample
 This generates a standard mock transaction file in your **`data/input/`** directory, ready to audit immediately.
 
 ### 4. Running the Accounting Audits
-The system provides tailored, high-fidelity commands to process specific spreadsheets and generate interactive SaaS HTML dashboards:
+The system provides tailored, high-fidelity commands to process specific spreadsheets and generate interactive HTML dashboards:
 
 * 📊 **Audit Daily Sales Register:**
   Processes multi-month daily ledger pages, logs inflows/outflows, and compiles a time-series line chart dashboard:
@@ -245,7 +245,7 @@ npx tsx src/scripts/test-flow.ts
 
 ### 4️⃣ Step 4: Open Your Audit Results!
 Go to the **`data/output/<ledger_name>/`** folder (e.g. `data/output/Hotel Gaurav Daily Sales Register/`):
-* 🖥️ **`summary.html`**: Double-click this to open the gorgeous interactive SaaS dashboard containing neon line charts, collapsible navigation control menus, checklist items, and live statistics!
+* 🖥️ **`summary.html`**: Double-click this to open the gorgeous interactive dashboard containing neon line charts, collapsible navigation control menus, checklist items, and live statistics!
 * 📄 **`summary.md`**: Open this file to see a clean markdown summary format.
 * ⚙️ **`summary.json`**: Open this file to inspect the underlying parsed data aggregates.
 * ⚙️ **`../system.log`**: Go one folder up to inspect the technical validation logs of all runs.

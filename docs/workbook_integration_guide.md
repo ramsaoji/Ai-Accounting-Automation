@@ -95,7 +95,7 @@ if (isInventoryList) {
 
 ---
 
-## 🎨 Step 4: Design the HTML SaaS Dashboard Layout
+## 🎨 Step 4: Design the HTML Dashboard Layout
 
 Create a dedicated visual template under `src/ai/` (e.g. `src/ai/inventory-template.ts`). It should return a styled, responsive HTML string with the custom components:
 * Keep the collapsible sidebars and mobile sliding navigation drawer menus consistent.

@@ -353,12 +353,12 @@ export class OrchestratorService {
         }
       }
 
-      // 7. Dynamic SaaS Hub Compile: Regenerate master portal index
+      // 7. Dynamic Hub Compile: Regenerate master portal index
       try {
         const { rebuildMasterPortal } = await import('../excel/portal.builder.js');
         rebuildMasterPortal(outputDir);
       } catch (portalError) {
-        logger.error({ error: portalError }, 'Failed to rebuild SaaS Master Control Center portal');
+        logger.error({ error: portalError }, 'Failed to rebuild Master Control Center portal');
       }
 
       const durationMs = Date.now() - startTime;

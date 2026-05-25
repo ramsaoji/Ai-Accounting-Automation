@@ -36,7 +36,7 @@ Ensure your active provider matches the configured API keys in `.env`:
 ### Safe Fallback & Dry-Run Mode
 If all external AI keys are unavailable or expired, the service **does not crash**.
 1. **Parser & Rules Resilience:** Ingestion, custom parsing synonyms mapping, and the business rules engine execution continue to run successfully.
-2. **Data-Driven Fallback:** The orchestrator detects key expiration, bypasses the LLM query phase, and dynamically computes real data insights from the parsed Excel numbers (monthly averages, high-risk account identification, recovery projections) — allowing the HTML SaaS Dashboard to compile cleanly with 100% real data and zero hardcoded estimates.
+2. **Data-Driven Fallback:** The orchestrator detects key expiration, bypasses the LLM query phase, and dynamically computes real data insights from the parsed Excel numbers (monthly averages, high-risk account identification, recovery projections) — allowing the HTML Dashboard to compile cleanly with 100% real data and zero hardcoded estimates.
 
 ---
 
