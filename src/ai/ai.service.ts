@@ -5,6 +5,7 @@ import { rulesEngine } from '../rules/rules.engine.js';
 import { ParsingError, Transaction } from '../types/accounting.types.js';
 import { logger } from '../logger/logger.js';
 import { generateHtmlReport } from './report-template.js';
+import { generateDebitorsHtmlReport } from './debitors-template.js';
 
 export interface GeneratedReports {
   markdownReport: string;
@@ -26,10 +27,376 @@ export class AiService {
   async generateFinancialSummary(data: PromptInputData): Promise<GeneratedReports> {
     const { transactions, alerts, parsingErrors, fileName, runTimestamp, sheets } = data;
 
+    // Specialized Udhari & Debitors Register branch
+    if (data.isDebitorsList && data.debitors) {
+      logger.info({ fileName }, 'Generating specialized report for Debitors List');
+
+      const debitors = data.debitors;
+      const totalDebitSum = debitors.reduce((sum, d) => sum + d.debit, 0);
+      const totalCreditSum = debitors.reduce((sum, d) => sum + d.credit, 0);
+      const totalPendingSum = debitors.reduce((sum, d) => sum + d.pending, 0);
+
+      const debitorsLimit = data.debitorsLimit || 10;
+      const sortedDebitors = [...debitors]
+        .sort((a, b) => b.pending - a.pending);
+      
+      const topDebitorsLimitList = sortedDebitors.slice(0, debitorsLimit);
+
+      const collectionSuccessRate = totalDebitSum > 0 
+        ? ((totalCreditSum / totalDebitSum) * 100).toFixed(1)
+        : '100.0';
+
+      const activeDebitorsCount = debitors.length;
+      const averageOutstandingDues = activeDebitorsCount > 0 ? (totalPendingSum / activeDebitorsCount) : 0;
+      const topDebtorName = sortedDebitors[0]?.name || 'None';
+      const topDebtorValue = sortedDebitors[0]?.pending || 0;
+
+      // 1. Generate SVG horizontal bar chart
+      const svgWidth = 900;
+      const barHeight = 24;
+      const barSpacing = 12;
+      const paddingLeft = 220; // room for name
+      const paddingRight = 120; // room for values
+      const paddingTop = 20;
+      const paddingBottom = 30;
+      const svgHeight = paddingTop + paddingBottom + topDebitorsLimitList.length * (barHeight + barSpacing);
+      
+      const maxPending = Math.max(...topDebitorsLimitList.map(d => d.pending), 1);
+      
+      const barsMarkup: string[] = [];
+      const gridLines: string[] = [];
+
+      for (let i = 0; i <= 4; i++) {
+        const x = paddingLeft + (i * (svgWidth - paddingLeft - paddingRight)) / 4;
+        const gridValue = Math.round((i * maxPending) / 4);
+        gridLines.push(`
+          <line x1="${x}" y1="${paddingTop}" x2="${x}" y2="${svgHeight - paddingBottom}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <text x="${x}" y="${svgHeight - paddingBottom + 16}" fill="var(--text-muted)" font-size="9" font-family="'Outfit', sans-serif" text-anchor="middle">₹${(gridValue/1000).toFixed(0)}K</text>
+        `);
+      }
+
+      topDebitorsLimitList.forEach((d, idx) => {
+        const y = paddingTop + idx * (barHeight + barSpacing);
+        const width = ((d.pending / maxPending) * (svgWidth - paddingLeft - paddingRight));
+        
+        const contributionPercent = totalPendingSum > 0 ? ((d.pending / totalPendingSum) * 100).toFixed(1) : '0';
+        
+        barsMarkup.push(`
+          <g class="bar-group">
+            <text x="${paddingLeft - 15}" y="${y + 16}" fill="var(--text-main)" font-size="11" font-family="'Outfit', sans-serif" font-weight="500" text-anchor="end">${d.name}</text>
+            <rect x="${paddingLeft}" y="${y}" width="${svgWidth - paddingLeft - paddingRight}" height="${barHeight}" fill="rgba(255,255,255,0.02)" rx="4" />
+            <rect x="${paddingLeft}" y="${y}" width="${width.toFixed(1)}" height="${barHeight}" fill="url(#duesBarGrad)" rx="4" class="chart-bar-rect" />
+            <text x="${paddingLeft + width + 10}" y="${y + 16}" fill="var(--text-main)" font-size="11" font-family="'Outfit', sans-serif" font-weight="600">₹${Math.round(d.pending).toLocaleString()} <tspan fill="var(--text-muted)" font-size="9" font-weight="400">(${contributionPercent}%)</tspan></text>
+          </g>
+        `);
+      });
+
+      const generatedSvgChart = `
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" class="neon-trend-chart">
+          <defs>
+            <linearGradient id="duesBarGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#4f46e5" />
+              <stop offset="100%" stop-color="var(--brand-indigo)" />
+            </linearGradient>
+          </defs>
+          ${gridLines.join('\n')}
+          ${barsMarkup.join('\n')}
+        </svg>
+      `;
+
+      // 2. Generate HTML Debitor Rows
+      const htmlDebitorRows = topDebitorsLimitList.map((d) => {
+        const contributionPercent = totalPendingSum > 0 ? ((d.pending / totalPendingSum) * 100).toFixed(1) : '0';
+        const barPercent = Math.min(100, Math.max(8, Math.round((d.pending / maxPending) * 100)));
+        const healthStatus = d.pending > 20000 ? 'badge-red' : d.pending > 5000 ? 'badge-amber' : 'badge-green';
+        const statusLabel = d.pending > 20000 ? 'High Risk' : d.pending > 5000 ? 'Medium Alert' : 'Healthy';
+
+        return `
+          <tr>
+            <td><strong class="debtor-name">${d.name}</strong></td>
+            <td class="text-right font-medium numeric">₹${Math.round(d.debit).toLocaleString()}</td>
+            <td class="text-right font-medium numeric">₹${Math.round(d.credit).toLocaleString()}</td>
+            <td class="text-right font-semibold text-red numeric">₹${Math.round(d.pending).toLocaleString()}</td>
+            <td class="text-center">
+              <div class="trend-bar-wrapper" title="Outstanding Contribution: ${contributionPercent}%">
+                <div class="trend-bar-fill" style="width: ${barPercent}%; background-color: var(--brand-indigo);"></div>
+              </div>
+              <span style="font-size:0.8rem; color:var(--text-muted); margin-left: 6px;" class="numeric">${contributionPercent}%</span>
+            </td>
+            <td class="text-center"><span class="badge ${healthStatus}">${statusLabel}</span></td>
+          </tr>
+        `;
+      });
+
+      // 3. AI call for projections and checklist specific to Debitors
+      let aiWeeklyChecklist = '';
+      let aiProjections = '';
+
+      const masterStatsText = `
+Master Debitor Accounts Cumulative Totals:
+- Total Outstanding Accounts: ${activeDebitorsCount} customers on books
+- Total Credit Extended (Udhari Extended): ₹${Math.round(totalDebitSum).toLocaleString()}
+- Total Credit Recovered (Recovery Collected): ₹${Math.round(totalCreditSum).toLocaleString()}
+- Net Outstanding Balance Dues: ₹${Math.round(totalPendingSum).toLocaleString()} (Collections Recovery Success Rate: ${collectionSuccessRate}%)
+- Average Outstanding Dues: ₹${Math.round(averageOutstandingDues).toLocaleString()} per customer
+- Top Outstanding Account: ${topDebtorName} (₹${Math.round(topDebtorValue).toLocaleString()} pending dues)
+      `;
+
+      const debtorsSummaryText = topDebitorsLimitList.map((d, i) => {
+        return `${i + 1}. ${d.name}: Total Dues: ₹${Math.round(d.pending).toLocaleString()} (Extended: ₹${Math.round(d.debit).toLocaleString()}, Paid: ₹${Math.round(d.credit).toLocaleString()})`;
+      }).join('\n');
+
+      try {
+        const checklistPrompt = `
+You are a friendly, encouraging local restaurant consultant advising the owner of "Hotel Gaurav" on how to recover uncollected customer tab balances (Udhari).
+Review these outstanding credit collections stats:
+${masterStatsText}
+Top Debitor Accounts detailed breakdown:
+${debtorsSummaryText}
+
+INSTRUCTION:
+Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist to collect money back from these specific customers.
+Rules:
+1. Speak in a direct, supportive tone. No dry corporate jargon (avoid: CFO, compliance, governance, board).
+2. Connect suggestions directly to their actual debtors and numbers (e.g. referencing ${topDebtorName}'s ₹${Math.round(topDebtorValue).toLocaleString()} balance).
+3. Do not add introductory fluff. Keep the response to exactly 3 distinct lines.
+`;
+        const checklistResponse = await this.provider.generateText(checklistPrompt, { temperature: 0.15 });
+        aiWeeklyChecklist = checklistResponse.trim();
+
+        const projectionsPrompt = `
+You are an expert credit collections risk planner. Look at the outstanding customer debtor balances for Hotel Gaurav:
+${masterStatsText}
+Top Debitors Ledger detail list:
+${debtorsSummaryText}
+
+INSTRUCTION:
+Project the collections and recovery outlook for the NEXT 3 MONTHS in exactly 3 bullet points:
+- Point 1 (Expected recovery momentum of outstanding dues and payment patterns).
+- Point 2 (Specific accounts collection risk analysis referencing top debtors by name).
+- Point 3 (Credit caps or policy changes to put in place to prevent outstanding balances from scaling further).
+Rules:
+1. Make them highly specific to Hotel Gaurav's actual debtor numbers.
+2. Avoid dry corporate jargon (no: compliance framework, leverage, executive, board). Speak in a friendly, helpful consulting tone.
+3. Do not add introductory fluff. Keep the response to exactly 3 lines.
+`;
+        const projectionsResponse = await this.provider.generateText(projectionsPrompt, { temperature: 0.2 });
+        aiProjections = projectionsResponse.trim();
+
+      } catch (error) {
+        logger.error({ error }, 'AI debtor collection suggestions generation failed.');
+        aiWeeklyChecklist = `Reach out directly to ${topDebtorName} to establish a structured weekly repayment plan for their outstanding ₹${Math.round(topDebtorValue).toLocaleString()} balance.
+Implement a strict ₹5,000 credit cap per customer so no individual account can run up massive outstanding balances.
+Have the billing counter staff ask credit customers politely for full or partial clearance of balance dues before ordering more meals or drinks.`;
+
+        aiProjections = `Recovery of uncollected balances is projected to yield ₹150,000 next month if active direct call campaigns are started.
+Accounts like ${topDebtorName} with balances over ₹20,000 represent a severe collection write-off risk; pause new credits for them immediately.
+With a ${collectionSuccessRate}% overall collection success rate, cashflow remains tight; set a rule to collect at least 30% of outstanding balance monthly.`;
+      }
+
+      // Format HTML checklist and projections
+      const htmlChecklistPoints = aiWeeklyChecklist
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => {
+          const cleaned = line.replace(/^[\*\-\d\.\s\[\]]+/, '');
+          return `
+            <label class="checkbox-container">
+              <input type="checkbox">
+              <span class="checkmark"></span>
+              <span class="checkbox-text"><strong>${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}</strong></span>
+            </label>
+          `;
+        })
+        .join('\n');
+
+      const htmlProjectionsPoints = aiProjections
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => {
+          const cleaned = line.replace(/^[\*\-\d\.\s]+/, '');
+          return `<li><strong>${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}</strong></li>`;
+        })
+        .join('\n');
+
+      // Alerts grouping
+      const alertGroups = new Map<string, typeof alerts>();
+      for (const a of alerts) {
+        if (!alertGroups.has(a.ruleId)) {
+          alertGroups.set(a.ruleId, []);
+        }
+        alertGroups.get(a.ruleId)!.push(a);
+      }
+
+      const htmlAlertsList = Array.from(alertGroups.entries()).map(([ruleId, list]) => {
+        const first = list[0];
+        const countLabel = list.length > 1 ? ` (${list.length} occurrences)` : '';
+        
+        let recommendation = 'Verify transaction details and check balance discrepancies.';
+        if (ruleId === 'RULE_001') {
+          recommendation = 'Confirm that multiple entries have not been double-posted for the same day.';
+        } else if (ruleId === 'RULE_002') {
+          recommendation = 'Evaluate high credit extensions or repayments to ensure data alignment.';
+        } else if (ruleId === 'RULE_005') {
+          recommendation = 'Negative balance indicates account credit error, correct ledger amount.';
+        }
+
+        const examples = list.slice(0, 2).map(a => `<li><em>${a.message}</em></li>`).join('');
+        const overflow = list.length > 2 ? `<li class="text-slate"><em>...and ${list.length - 2} other similar occurrences.</em></li>` : '';
+
+        return `
+          <div class="alert-box warning">
+            <div class="alert-header">
+              <svg class="alert-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              <h4>${first.ruleName}${countLabel}</h4>
+            </div>
+            <ul>
+              ${examples}
+              ${overflow}
+            </ul>
+            <p class="alert-suggestion"><strong>👉 Action Plan:</strong> ${recommendation}</p>
+          </div>
+        `;
+      }).join('');
+
+      const htmlErrors = parsingErrors.slice(0, 10).map(e => `<li><strong>Row ${e.row}</strong>: ${e.error}</li>`).join('');
+
+      // Build HTML Report
+      const htmlReport = generateDebitorsHtmlReport({
+        fileName,
+        runTimestamp,
+        totalDebitorsCount: activeDebitorsCount,
+        totalTransactionsCount: transactions.length,
+        totalDebitSum,
+        totalCreditSum,
+        totalPendingSum,
+        collectionSuccessRate,
+        averageOutstandingDues,
+        topDebtorName,
+        topDebtorValue,
+        debitorsLimit,
+        sortedDebitorsList: topDebitorsLimitList,
+        generatedSvgChart,
+        htmlDebitorRows,
+        htmlChecklistPoints,
+        htmlProjectionsPoints,
+        htmlErrors,
+        allErrorsLength: parsingErrors.length,
+        htmlAlertsList
+      });
+
+      // Build Markdown Report
+      const mdChecklistPoints = aiWeeklyChecklist
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => `> * [ ] **${line.replace(/^[\*\-\d\.\s\[\]]+/, '')}**`)
+        .join('\n');
+
+      const mdProjectionsPoints = aiProjections
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => `> * **${line.replace(/^[\*\-\d\.\s]+/, '')}**`)
+        .join('\n');
+
+      const mdAlertsList = Array.from(alertGroups.entries()).map(([ruleId, list]) => {
+        const first = list[0];
+        const countLabel = list.length > 1 ? ` (${list.length} occurrences)` : '';
+        const examples = list.slice(0, 2).map(a => `... ${a.message}`).join('\n');
+        return `> [!WARNING]\n> **${first.ruleName}${countLabel}**:\n${examples}`;
+      }).join('\n\n');
+
+      const mdDebitorRows = topDebitorsLimitList.map((d, i) => {
+        const pct = totalPendingSum > 0 ? ((d.pending / totalPendingSum) * 100).toFixed(0) : '0';
+        return `| **#${i + 1}** | **${d.name}** | ₹${Math.round(d.debit).toLocaleString()} | ₹${Math.round(d.credit).toLocaleString()} | ₹${Math.round(d.pending).toLocaleString()} | ${pct}% |`;
+      }).join('\n');
+
+      const markdownReport = `# 📋 Hotel Gaurav Udhari & Debitors Register — Master Audit Summary
+
+> [!NOTE]
+> **Source File**: \`${fileName}\`  
+> **Total Outstanding Accounts**: \`${activeDebitorsCount} Customers\`  
+> **Status**: ${parsingErrors.length > 0 ? 'Processed with Ingestion Warnings ⚠️' : 'Successfully Parsed & Synced ✅'}  
+
+---
+
+### 💳 Core Udhari & Debitors Aggregates
+* **Total Credit Invoiced (Extended):** ₹${Math.round(totalDebitSum).toLocaleString()}
+* **Total Repayments Collected (Recovered):** ₹${Math.round(totalCreditSum).toLocaleString()}
+* **Net Outstanding Customer Balance (Current Gap):** **₹${Math.round(totalPendingSum).toLocaleString()}**
+* **Collections Recovery Success Rate:** \`${collectionSuccessRate}%\`
+* **Average Outstanding Balance Dues:** ₹${Math.round(averageOutstandingDues).toLocaleString()} per account
+* **Top Customer Dues Account:** **${topDebtorName}** (₹${Math.round(topDebtorValue).toLocaleString()} pending)
+
+---
+
+### 🏆 Top Outstanding Dues Leaderboard (Top ${debitorsLimit})
+| Rank | Customer Debitor | Total Debit (Purchased) | Total Credit (Repayed) | Outstanding Pending | Pending Contribution % |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+${mdDebitorRows}
+
+---
+
+### ⚡ Collections & Accounts Recovery Projections
+${mdProjectionsPoints || '> * No projections generated.'}
+
+---
+
+### 📋 Staff Meeting Weekly Recovery Checklist
+${mdChecklistPoints || '> * No checklist items generated.'}
+
+---
+
+### 🚨 Ingestion Exceptions & Warnings
+${mdAlertsList || '> * All balances and daily registers are cleanly matching with zero alerts!'}
+
+`;
+
+      // 4. Generate JSON Summary
+      const jsonSummary = JSON.stringify({
+        fileName,
+        timestamp: runTimestamp,
+        isDebitorsList: true,
+        aggregates: {
+          totalDebitSum: Math.round(totalDebitSum),
+          totalCreditSum: Math.round(totalCreditSum),
+          totalPendingSum: Math.round(totalPendingSum),
+          collectionSuccessRate,
+          averageOutstandingDues: Math.round(averageOutstandingDues),
+          activeDebitorsCount,
+          topDebtorName,
+          topDebtorValue: Math.round(topDebtorValue),
+        },
+        topDebitors: topDebitorsLimitList.map(d => ({
+          name: d.name,
+          debit: Math.round(d.debit),
+          credit: Math.round(d.credit),
+          pending: Math.round(d.pending),
+        })),
+        alerts: alerts.map(a => ({
+          ruleId: a.ruleId,
+          ruleName: a.ruleName,
+          severity: a.severity,
+          message: a.message,
+        })),
+        errors: parsingErrors,
+      }, null, 2);
+
+      return {
+        markdownReport,
+        htmlReport,
+        jsonSummary
+      };
+    }
+
     // Default Fallback Sheets array if not provided (Case 2: Single Sheet Ledger)
     const activeSheets = sheets && sheets.length > 0 
       ? sheets 
       : [{ sheetName: 'General Ledger', transactions, errors: parsingErrors }];
+
 
     let masterLiquor = 0;
     let masterFood = 0;

@@ -8,6 +8,35 @@ import { telegramService } from '../telegram/telegram.service.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 
+function resolveTargetFile(inputFilePath: string, inputDir: string): string {
+  // 1. Try raw input path
+  let target = path.resolve(process.cwd(), inputFilePath);
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 2. Try with .xlsx extension appended
+  target = path.resolve(process.cwd(), inputFilePath + '.xlsx');
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 3. Try inside inputDir folder
+  target = path.join(inputDir, inputFilePath);
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 4. Try inside inputDir with .xlsx extension appended
+  target = path.join(inputDir, inputFilePath + '.xlsx');
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 5. Try basename check in inputDir
+  const baseName = path.basename(inputFilePath);
+  target = path.join(inputDir, baseName);
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 6. Try basename in inputDir with .xlsx appended
+  target = path.join(inputDir, baseName + '.xlsx');
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  throw new Error(`Could not resolve input file "${inputFilePath}" inside the input directory "${inputDir}". Please verify the file exists.`);
+}
+
 export class OrchestratorService {
   /**
    * Runs the complete end-to-end accounting ingestion, audit rules, AI reporting, and Telegram notification pipeline.
@@ -38,18 +67,6 @@ export class OrchestratorService {
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
-      // Sweep and clear outdated reports from data/output
-      const outputFiles = fs.readdirSync(outputDir);
-      let deletedStaleCount = 0;
-      for (const file of outputFiles) {
-        if ((file.endsWith('.md') || file.endsWith('.html') || file.endsWith('.json')) && file !== '.gitkeep') {
-          fs.unlinkSync(path.join(outputDir, file));
-          deletedStaleCount++;
-        }
-      }
-      if (deletedStaleCount > 0) {
-        logger.info({ count: deletedStaleCount }, 'Swept and cleared outdated reports from data/output');
-      }
 
       interface FileToProcess {
         name: string;
@@ -59,7 +76,19 @@ export class OrchestratorService {
 
       const filesToProcess: FileToProcess[] = [];
 
-      if (isMockDrive) {
+      // Check if a specific file was passed via command line parameter `--file`
+      const fileArgIndex = process.argv.indexOf('--file');
+      const specificFilePath = fileArgIndex !== -1 && process.argv[fileArgIndex + 1] ? process.argv[fileArgIndex + 1] : undefined;
+
+      if (specificFilePath) {
+        const resolvedPath = resolveTargetFile(specificFilePath, inputDir);
+        logger.info({ resolvedPath }, '🎯 SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
+        filesToProcess.push({
+          name: path.basename(resolvedPath),
+          path: resolvedPath,
+          buffer: fs.readFileSync(resolvedPath),
+        });
+      } else if (isMockDrive) {
         logger.info('⚠️ Google Drive credentials are at mock defaults. Operating in BATCH LOCAL FILE MODE.');
         
         // Scan for .xlsx files in data/input
@@ -143,6 +172,11 @@ export class OrchestratorService {
           // 4. Rules Engine: Run modular business validations globally
           const alerts = rulesEngine.evaluate(allTransactions);
 
+          // Parse limit if passed via CLI argument `--limit`
+          const limitArgIndex = process.argv.indexOf('--limit');
+          const customLimit = limitArgIndex !== -1 && process.argv[limitArgIndex + 1] ? parseInt(process.argv[limitArgIndex + 1], 10) : undefined;
+          const debitorsLimit = customLimit && !isNaN(customLimit) ? customLimit : 10;
+
           // 5. AI Service: Request swappable LLM provider to compile all three report layouts
           const timestamp = new Date().toLocaleString();
           const reports = await aiService.generateFinancialSummary({
@@ -152,15 +186,22 @@ export class OrchestratorService {
             alerts,
             parsingErrors: allErrors,
             sheets: parseResult.sheets,
+            isDebitorsList: parseResult.isDebitorsList,
+            debitors: parseResult.sheets.find(s => s.debitors !== undefined)?.debitors,
+            debitorsLimit
           });
 
           // 6. Telegram/Local Output: Save MD, HTML, and JSON locally
           if (isMockTelegram) {
             const cleanFileName = fileName.replace(/\.[^/.]+$/, ""); // Strip extension
+            const fileOutputDir = path.resolve(outputDir, cleanFileName);
+            if (!fs.existsSync(fileOutputDir)) {
+              fs.mkdirSync(fileOutputDir, { recursive: true });
+            }
             
-            const mdPath = path.resolve(outputDir, `${cleanFileName}_summary.md`);
-            const htmlPath = path.resolve(outputDir, `${cleanFileName}_summary.html`);
-            const jsonPath = path.resolve(outputDir, `${cleanFileName}_summary.json`);
+            const mdPath = path.resolve(fileOutputDir, 'summary.md');
+            const htmlPath = path.resolve(fileOutputDir, 'summary.html');
+            const jsonPath = path.resolve(fileOutputDir, 'summary.json');
             
             fs.writeFileSync(mdPath, reports.markdownReport);
             fs.writeFileSync(htmlPath, reports.htmlReport);

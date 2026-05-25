@@ -8,6 +8,9 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test-flow": "tsx src/scripts/test-flow.ts",
+    "audit": "tsx src/scripts/test-flow.ts",
+    "audit-sales": "tsx src/scripts/test-flow.ts --file \"data/input/Hotel Gaurav Daily Sales Register.xlsx\"",
+    "audit-debitors": "tsx src/scripts/test-flow.ts --file \"data/input/DEBITORS LIST.xlsx\" --limit 15",
     "chat": "tsx src/scripts/chat-ledger.ts",
     "generate-sample": "tsx src/scripts/generate-sample.ts"
   },

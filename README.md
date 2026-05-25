@@ -84,7 +84,7 @@ ai-accounting-automation/
 
 ## 📊 Interactive SaaS Financial Command Center HTML Dashboard
 
-The output generation pipeline produces a fully responsive, highly interactive **SaaS Executive Dashboard** saved at `data/output/<ledger_name>_summary.html` built with pure CSS and vanilla JavaScript:
+The output generation pipeline produces a fully responsive, highly interactive **SaaS Executive Dashboard** saved at `data/output/<ledger_name>/summary.html` built with pure CSS and vanilla JavaScript:
 
 ### 🎨 Visual Design & Aesthetics
 * **Palette & Surfaces:** Modern dark-theme using a dark-blue backdrop (`#060913`), deep glassmorphism card containers, border highlights, and color-coded status elements.
@@ -130,7 +130,7 @@ npm run chat
 
 ---
 
-## ⚡ Quickstart
+## ⚡ Quickstart & Specific File Processing
 
 ### 1. Ingestion Setup & Installation
 Clone the workspace files or initialize the target directory, then execute package installation:
@@ -145,24 +145,39 @@ cp .env.example .env
 ```
 Fill in the parameters (details below).
 
-### 3. Generate Local Test Ledger
-To test the parser and rules engine locally without setting up Google Drive immediately:
+### 3. Generate Local Test Ledgers
+To seed the input directory with realistic demo excel spreadsheets:
 ```bash
-npx tsx src/scripts/generate-sample.ts
+npm run generate-sample
 ```
-This generates a realistic financial spreadsheet loaded with real-world transactions (including duplicate payments, expense breaches, off-hours activity, and data errors) inside your **`data/input/`** directory.
+This generates standard mock transaction files representing both the Daily Sales Register and the Debitors list format in your **`data/input/`** directory.
 
-### 4. Execute Pipeline Integration Test
-Verify all subsystems (parsing, rules engine, live AI analysis, and HTML outputs) with a single command:
-```bash
-npx tsx src/scripts/test-flow.ts
-```
-* **Active API Keys?** The script calls the live provider (configured in `.env`), performs semantic business auditing, and saves the executive brief inside **`data/output/sample_ledger_summary.html`** (and the companion `.md` and `.json` formats).
-* **Offline Fallback?** If no key is set or the API rate limits, our fail-safe hybrid engine compiles the complete multi-page audit report with perfect mathematical cashflow calculations and skipped row lists seamlessly!
-* **System Logging**: The complete historical trace of every validation warn, rules flag, and API metric is appended persistently to **`data/output/system.log`**.
+### 4. Running the Accounting Audits
+The system provides tailored, high-fidelity commands to process specific spreadsheets and generate interactive SaaS HTML dashboards:
+
+* 📊 **Audit Daily Sales Register:**
+  Processes multi-month daily ledger pages, logs inflows/outflows, and compiles a time-series line chart dashboard:
+  ```bash
+  npm run audit-sales
+  ```
+  *Output HTML:* `data/output/Hotel Gaurav Daily Sales Register_summary.html`
+
+* 👤 **Audit Debitors & Outstanding Dues:**
+  Parses the outstanding collections workbook sheets (`Summary`, `EntryList`, and `Breakup`), sums balance dues, and generates a Top 15 debtor leaderboard with individual percentage contribution progress bars:
+  ```bash
+  npm run audit-debitors
+  ```
+  *Output HTML:* `data/output/DEBITORS LIST_summary.html`
+
+* 🎯 **Audit Any Specific Spreadsheet (Configurable Leaderboard Limit):**
+  Trigger the audit pipeline targeting any custom spreadsheet and override the outstanding debtor list limit:
+  ```bash
+  npm run audit -- --file "data/input/DEBITORS LIST.xlsx" --limit 20
+  ```
+  *Note: Double-dashes (`--`) are required by npm to correctly forward arguments to the underlying script.*
 
 ### 5. Launch Service Background Worker
-To run the background worker (scheduler & native health endpoint):
+To run the background worker daemon (scheduler & native health endpoint):
 ```bash
 npm run dev
 ```
@@ -210,10 +225,11 @@ npx tsx src/scripts/test-flow.ts
 ```
 
 ### 4️⃣ Step 4: Open Your Audit Results!
-Go to the **`data/output/`** folder:
-* 🖥️ **`Hotel Gaurav Daily Sales Register_summary.html`**: Double-click this to open the gorgeous interactive SaaS dashboard containing neon line charts, collapsible navigation control menus, checklist items, and live statistics!
-* 📄 **`Hotel Gaurav Daily Sales Register_summary.md`**: Open this file to see a clean markdown summary format.
-* ⚙️ **`system.log`**: Open this file to inspect the technical validation logs.
+Go to the **`data/output/<ledger_name>/`** folder (e.g. `data/output/Hotel Gaurav Daily Sales Register/`):
+* 🖥️ **`summary.html`**: Double-click this to open the gorgeous interactive SaaS dashboard containing neon line charts, collapsible navigation control menus, checklist items, and live statistics!
+* 📄 **`summary.md`**: Open this file to see a clean markdown summary format.
+* ⚙️ **`summary.json`**: Open this file to inspect the underlying parsed data aggregates.
+* ⚙️ **`../system.log`**: Go one folder up to inspect the technical validation logs of all runs.
 
 ---
 

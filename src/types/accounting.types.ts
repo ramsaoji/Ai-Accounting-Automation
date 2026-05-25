@@ -27,13 +27,22 @@ export interface ParsingError {
   error: string;
 }
 
+export interface DebitorSummary {
+  name: string;
+  debit: number;
+  credit: number;
+  pending: number;
+}
+
 export interface SheetParsingResult {
   sheetName: string;
   transactions: Transaction[];
   errors: ParsingError[];
+  debitors?: DebitorSummary[];
 }
 
 export interface ExcelParsingResult {
   fileName: string;
   sheets: SheetParsingResult[];
+  isDebitorsList?: boolean;
 }

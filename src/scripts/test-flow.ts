@@ -8,6 +8,35 @@ import { generateSampleExcel } from './generate-sample.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 
+function resolveTargetFile(inputFilePath: string, inputDir: string): string {
+  // 1. Try raw input path
+  let target = path.resolve(process.cwd(), inputFilePath);
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 2. Try with .xlsx extension appended
+  target = path.resolve(process.cwd(), inputFilePath + '.xlsx');
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 3. Try inside inputDir folder
+  target = path.join(inputDir, inputFilePath);
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 4. Try inside inputDir with .xlsx extension appended
+  target = path.join(inputDir, inputFilePath + '.xlsx');
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 5. Try basename check in inputDir
+  const baseName = path.basename(inputFilePath);
+  target = path.join(inputDir, baseName);
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  // 6. Try basename in inputDir with .xlsx appended
+  target = path.join(inputDir, baseName + '.xlsx');
+  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+
+  throw new Error(`Could not resolve input file "${inputFilePath}" inside the input directory "${inputDir}". Please verify the file exists.`);
+}
+
 async function runLocalTest() {
   logger.info('--- 🧪 STARTING LOCAL PIPELINE INTEGRATION TEST (BATCH MODE) ---');
   
@@ -22,47 +51,51 @@ async function runLocalTest() {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Sweep and clear outdated reports from data/output
-  const outputFiles = fs.readdirSync(outputDir);
-  let deletedStaleCount = 0;
-  for (const file of outputFiles) {
-    if ((file.endsWith('.md') || file.endsWith('.html') || file.endsWith('.json')) && file !== '.gitkeep') {
-      fs.unlinkSync(path.join(outputDir, file));
-      deletedStaleCount++;
-    }
-  }
-  if (deletedStaleCount > 0) {
-    logger.info({ count: deletedStaleCount }, 'Swept and cleared outdated reports from data/output');
-  }
 
-  // Scan for .xlsx files in data/input
-  let files = fs.readdirSync(inputDir)
-    .filter(f => f.endsWith('.xlsx'))
-    .map(f => {
-      const filePath = path.join(inputDir, f);
-      const stat = fs.statSync(filePath);
-      return { name: f, path: filePath, mtime: stat.mtimeMs };
-    })
-    .sort((a, b) => b.mtime - a.mtime);
+  // Check if a specific file was passed via command line parameter `--file`
+  const fileArgIndex = process.argv.indexOf('--file');
+  const specificFilePath = fileArgIndex !== -1 && process.argv[fileArgIndex + 1] ? process.argv[fileArgIndex + 1] : undefined;
 
-  if (files.length === 0) {
-    logger.info(`No Excel spreadsheets found in '${inputDir}'. Automatically seeding a 'sample_ledger.xlsx' template...`);
-    await generateSampleExcel();
+  let files: { name: string; path: string; mtime: number }[] = [];
 
-    const sampleSource = path.resolve(process.cwd(), 'sample_ledger.xlsx');
-    const sampleDest = path.join(inputDir, 'sample_ledger.xlsx');
-    
-    fs.copyFileSync(sampleSource, sampleDest);
-    fs.unlinkSync(sampleSource);
-
+  if (specificFilePath) {
+    const resolvedPath = resolveTargetFile(specificFilePath, inputDir);
+    logger.info({ resolvedPath }, '🎯 SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
     files = [{
-      name: 'sample_ledger.xlsx',
-      path: sampleDest,
+      name: path.basename(resolvedPath),
+      path: resolvedPath,
       mtime: Date.now()
     }];
+  } else {
+    // Scan for .xlsx files in data/input
+    files = fs.readdirSync(inputDir)
+      .filter(f => f.endsWith('.xlsx'))
+      .map(f => {
+        const filePath = path.join(inputDir, f);
+        const stat = fs.statSync(filePath);
+        return { name: f, path: filePath, mtime: stat.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (files.length === 0) {
+      logger.info(`No Excel spreadsheets found in '${inputDir}'. Automatically seeding a 'sample_ledger.xlsx' template...`);
+      await generateSampleExcel();
+
+      const sampleSource = path.resolve(process.cwd(), 'sample_ledger.xlsx');
+      const sampleDest = path.join(inputDir, 'sample_ledger.xlsx');
+      
+      fs.copyFileSync(sampleSource, sampleDest);
+      fs.unlinkSync(sampleSource);
+
+      files = [{
+        name: 'sample_ledger.xlsx',
+        path: sampleDest,
+        mtime: Date.now()
+      }];
+    }
   }
 
-  logger.info(`Found ${files.length} Excel spreadsheet(s) to process. Initiating batch execution...`);
+  logger.info(`Found ${files.length} Excel spreadsheet(s) to process. Initiating execution...`);
 
   // Loop and process each file in batch
   for (const fileInfo of files) {
@@ -105,6 +138,11 @@ async function runLocalTest() {
       (activeProvider === 'groq' && config.GROQ_API_KEY && config.GROQ_API_KEY !== 'your_groq_api_key_here') ||
       (activeProvider === 'ollama');
 
+    // Parse limit if passed via CLI argument `--limit`
+    const limitArgIndex = process.argv.indexOf('--limit');
+    const customLimit = limitArgIndex !== -1 && process.argv[limitArgIndex + 1] ? parseInt(process.argv[limitArgIndex + 1], 10) : undefined;
+    const debitorsLimit = customLimit && !isNaN(customLimit) ? customLimit : 10;
+
     let reports: any = null;
 
     if (hasApiKey) {
@@ -117,6 +155,9 @@ async function runLocalTest() {
           alerts,
           parsingErrors: allErrors,
           sheets: parseResult.sheets,
+          isDebitorsList: parseResult.isDebitorsList,
+          debitors: parseResult.sheets.find(s => s.debitors !== undefined)?.debitors,
+          debitorsLimit
         });
       } catch (err) {
         logger.error({ err }, 'Live AI generation failed. Falling back to default report template.');
@@ -130,15 +171,20 @@ async function runLocalTest() {
 
     // 8. Write final reports locally
     const cleanFileName = fileName.replace(/\.[^/.]+$/, ""); // Strip extension
-    const mdPath = path.resolve(outputDir, `${cleanFileName}_summary.md`);
-    const htmlPath = path.resolve(outputDir, `${cleanFileName}_summary.html`);
-    const jsonPath = path.resolve(outputDir, `${cleanFileName}_summary.json`);
+    const fileOutputDir = path.resolve(outputDir, cleanFileName);
+    if (!fs.existsSync(fileOutputDir)) {
+      fs.mkdirSync(fileOutputDir, { recursive: true });
+    }
+
+    const mdPath = path.resolve(fileOutputDir, 'summary.md');
+    const htmlPath = path.resolve(fileOutputDir, 'summary.html');
+    const jsonPath = path.resolve(fileOutputDir, 'summary.json');
     
     fs.writeFileSync(mdPath, reports.markdownReport);
     fs.writeFileSync(htmlPath, reports.htmlReport);
     fs.writeFileSync(jsonPath, reports.jsonSummary);
     
-    logger.info({ mdPath, htmlPath, jsonPath }, 'Saved Unified Master Reports Package inside data/output directory.');
+    logger.info({ mdPath, htmlPath, jsonPath }, 'Saved Unified Master Reports Package inside targeted subfolder.');
 
     // 9. Check Telegram credentials and send message
     const hasTelegramKeys = 
