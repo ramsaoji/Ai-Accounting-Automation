@@ -132,7 +132,7 @@ export class OrchestratorService {
         // 1. Google Drive: Fetch latest Excel workbook
         const fileInfo = await driveService.getLatestExcelFile();
         if (!fileInfo) {
-          logger.warn('⚠️ Pipeline aborted: No accounting spreadsheets found in target Google Drive folder.');
+          logger.warn('[WARN] Pipeline aborted: No accounting spreadsheets found in target Google Drive folder.');
           return;
         }
 
@@ -208,12 +208,27 @@ export class OrchestratorService {
             fs.writeFileSync(jsonPath, reports.jsonSummary);
             
             logger.info({ mdPath, htmlPath, jsonPath }, 'Unified reports package successfully compiled and written locally.');
+
+            // Also copy to frontend public directory for offline static sync
+            try {
+              const frontendDataDir = path.resolve(process.cwd(), 'web', 'public', 'data');
+              if (!fs.existsSync(frontendDataDir)) {
+                fs.mkdirSync(frontendDataDir, { recursive: true });
+              }
+              const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
+              const frontendJsonName = isDebtors ? 'debitors-summary.json' : 'sales-summary.json';
+              const frontendJsonPath = path.resolve(frontendDataDir, frontendJsonName);
+              fs.writeFileSync(frontendJsonPath, reports.jsonSummary);
+              logger.info({ frontendJsonPath }, 'Synced latest static JSON to web public directory.');
+            } catch (syncErr) {
+              logger.warn({ syncErr }, 'Failed to sync static JSON to frontend public folder');
+            }
           } else {
             await telegramService.sendReport(reports.markdownReport);
           }
         } catch (fileError) {
           const fileErrMessage = fileError instanceof Error ? fileError.message : String(fileError);
-          logger.error({ fileName, error: fileErrMessage }, `❌ Error processing spreadsheet in batch list`);
+          logger.error({ fileName, error: fileErrMessage }, `[ERROR] Error processing spreadsheet in batch list`);
           
           if (isMockTelegram) {
             const crashPath = path.resolve(outputDir, `${fileName}_crash_alert.md`);
@@ -244,11 +259,11 @@ export class OrchestratorService {
           processedCount: filesToProcess.length,
           durationSec: Number((durationMs / 1000).toFixed(2)) 
         }, 
-        '🎉 AI Accounting Automation Pipeline completed batch execution!'
+        '[SUCCESS] AI Accounting Automation Pipeline completed batch execution!'
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error({ error }, '❌ Critical failure in orchestrator runPipeline');
+      logger.error({ error }, '[ERROR] Critical failure in orchestrator runPipeline');
       throw error;
     }
   }

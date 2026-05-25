@@ -185,6 +185,21 @@ async function runLocalTest() {
     
     logger.info({ mdPath, htmlPath, jsonPath }, 'Saved Unified Master Reports Package inside targeted subfolder.');
 
+    // Also copy to frontend public directory for offline static sync
+    try {
+      const frontendDataDir = path.resolve(process.cwd(), 'web', 'public', 'data');
+      if (!fs.existsSync(frontendDataDir)) {
+        fs.mkdirSync(frontendDataDir, { recursive: true });
+      }
+      const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
+      const frontendJsonName = isDebtors ? 'debitors-summary.json' : 'sales-summary.json';
+      const frontendJsonPath = path.resolve(frontendDataDir, frontendJsonName);
+      fs.writeFileSync(frontendJsonPath, reports.jsonSummary);
+      logger.info({ frontendJsonPath }, 'Synced latest static JSON to web public directory.');
+    } catch (syncErr) {
+      logger.warn({ syncErr }, 'Failed to sync static JSON to frontend public folder');
+    }
+
     // 9. Check Telegram credentials and send message
     const hasTelegramKeys = 
       config.TELEGRAM_BOT_TOKEN && 

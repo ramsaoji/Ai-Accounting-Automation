@@ -346,6 +346,10 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
           credit: Math.round(d.credit),
           pending: Math.round(d.pending),
         })),
+        allDebitors: data.debitors ? data.debitors.map(d => ({
+          name: d.name,
+          pending: Math.round(d.pending)
+        })) : [],
         alerts: alerts.map(a => ({
           ruleId: a.ruleId,
           ruleName: a.ruleName,
@@ -353,7 +357,7 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
           message: a.message,
         })),
         errors: parsingErrors,
-        intelligence: aiIntelligence.split('\n').map(l => l.trim()).filter(l => l.length > 0),
+        intelligence: aiIntelligence.split('\n').map(l => cleanPromptPoint(l)).filter(l => l.length > 0),
       }, null, 2);
 
       return { markdownReport, htmlReport, jsonSummary };
@@ -800,7 +804,7 @@ ${mdAlertsList || '> [!NOTE]\n> ✅ No alerts or exceptions detected across the 
         totalOccurrences: list.length,
         example: list[0].message
       })),
-      intelligence: aiIntelligence.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+      intelligence: aiIntelligence.split('\n').map(l => cleanPromptPoint(l)).filter(l => l.length > 0)
     }, null, 2);
 
     return { markdownReport, htmlReport, jsonSummary };
