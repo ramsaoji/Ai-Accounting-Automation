@@ -1,3 +1,4 @@
+// Active Interactive Bot
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -6,6 +7,7 @@ import { orchestratorService } from './services/orchestrator.service.js';
 import { config } from './config/config.js';
 import { logger } from './logger/logger.js';
 import { AiProviderFactory } from './ai/ai.factory.js';
+import { telegramBot } from './telegram/telegram.bot.js';
 
 // 1. Initialize background cron scheduler
 try {
@@ -13,6 +15,13 @@ try {
 } catch (err) {
   logger.fatal({ err }, 'Failed to start background scheduler. Exiting process.');
   process.exit(1);
+}
+
+// 1.5 Initialize background Telegram Bot interactive listener
+try {
+  telegramBot.start();
+} catch (err) {
+  logger.error({ err }, 'Failed to start interactive Telegram Bot listener. Proceeding with core services.');
 }
 
 // 2. Spin up a lightweight native HTTP server for Railway / Render health-checks
@@ -275,6 +284,13 @@ const shutdown = (signal: string) => {
   
   // Stop scheduler
   schedulerJob.stop();
+
+  // Stop Telegram Bot
+  try {
+    telegramBot.stop();
+  } catch (err) {
+    logger.error({ err }, 'Error stopping Telegram Bot during shutdown');
+  }
 
   // Close HTTP server
   server.close(() => {

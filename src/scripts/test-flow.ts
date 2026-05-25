@@ -185,6 +185,53 @@ async function runLocalTest() {
     
     logger.info({ mdPath, htmlPath, jsonPath }, 'Saved Unified Master Reports Package inside targeted subfolder.');
 
+    // If it is daily sales, compile and save daily-sales.json grouping by calendar date
+    if (!parseResult.isDebitorsList) {
+      const dailyMap = new Map<string, {
+        date: string;
+        liquor: number;
+        food: number;
+        creditRecovery: number;
+        expenses: number;
+        creditExtended: number;
+      }>();
+
+      for (const t of allTransactions) {
+        if (!t.date || isNaN(t.date.getTime())) continue;
+        
+        const dateStr = t.date.toISOString().split('T')[0];
+        if (!dailyMap.has(dateStr)) {
+          dailyMap.set(dateStr, {
+            date: dateStr,
+            liquor: 0,
+            food: 0,
+            creditRecovery: 0,
+            expenses: 0,
+            creditExtended: 0
+          });
+        }
+        
+        const dayData = dailyMap.get(dateStr)!;
+        const amt = t.amount || 0;
+        if (t.category === 'Liquor Revenue') {
+          dayData.liquor += amt;
+        } else if (t.category === 'Food Revenue') {
+          dayData.food += amt;
+        } else if (t.category === 'Credit Recovery') {
+          dayData.creditRecovery += amt;
+        } else if (t.category === 'Operational Expense') {
+          dayData.expenses += amt;
+        } else if (t.category === 'Credit Extended') {
+          dayData.creditExtended += amt;
+        }
+      }
+      
+      const dailySalesArray = Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+      const dailySalesPath = path.resolve(fileOutputDir, 'daily-sales.json');
+      fs.writeFileSync(dailySalesPath, JSON.stringify(dailySalesArray, null, 2));
+      logger.info({ dailySalesPath }, 'Compiled daily-sales list written locally.');
+    }
+
     // Also copy to frontend public directory for offline static sync
     try {
       const frontendDataDir = path.resolve(process.cwd(), 'web', 'public', 'data');
@@ -208,12 +255,73 @@ async function runLocalTest() {
       config.TELEGRAM_CHAT_ID !== '-1001234567890';
 
     if (hasTelegramKeys) {
-      logger.info('Active Telegram bot credentials detected. Delivering report to chat...');
+      logger.info('Active Telegram bot credentials detected. Delivering Executive Summary to chat...');
       try {
-        await telegramService.sendReport(reports.markdownReport);
-        logger.info('Telegram test delivery succeeded!');
-      } catch (err) {
-        logger.error({ err }, 'Telegram test delivery failed.');
+        const summaryObj = JSON.parse(reports.jsonSummary);
+        let summaryText = '';
+
+        if (parseResult.isDebitorsList) {
+          const agg = summaryObj.aggregates || {};
+          const top = summaryObj.topDebitors || [];
+          const alertsCount = summaryObj.alerts?.length || 0;
+          
+          summaryText = `🔄 *Google Drive Ingestion Sync Complete* ✅\n` +
+            `📁 *File Ingested*: \`${summaryObj.fileName}\`\n` +
+            `📅 *Sync Time*: \`${summaryObj.timestamp}\`\n\n` +
+            `👥 *Udhari & Debitors Register Summary:*\n` +
+            `• 📖 *Active Credit Accounts*: ${agg.activeDebitorsCount || 0} customers\n` +
+            `• 📉 *Total Credit Extended*: ₹${Math.round(agg.totalDebitSum || 0).toLocaleString()}\n` +
+            `• 📈 *Total Credit Recovered*: ₹${Math.round(agg.totalCreditSum || 0).toLocaleString()}\n` +
+            `• 💰 *Net Balance Outstanding*: *₹${Math.round(agg.totalPendingSum || 0).toLocaleString()}*\n` +
+            `• ✅ *Recovery Success Rate*: ${agg.collectionSuccessRate || 0}%\n\n` +
+            `🔥 *Top Outstanding Debits:*\n`;
+
+          if (top.length > 0) {
+            top.slice(0, 5).forEach((d: any, i: number) => {
+              const pendingVal = d.pending ?? 0;
+              const riskLevel = pendingVal > 20000 ? 'High Risk 🚨' : pendingVal > 5000 ? 'Medium Alert ⚠️' : 'Healthy ✅';
+              summaryText += `${i + 1}. *${d.name}*: ₹${Math.round(pendingVal).toLocaleString()} (Risk: _${riskLevel}_)\n`;
+            });
+          } else {
+            summaryText += `_No pending debtor accounts found!_\n`;
+          }
+
+          if (alertsCount > 0) {
+            summaryText += `\n⚠️ *Audit Exceptions (${alertsCount} alerts detected)*\n`;
+          }
+          
+          summaryText += `\n💡 _Tip: Tap '👥 Debitors List' below or ask me any question to get strategic recovery advice!_`;
+        } else {
+          const mt = summaryObj.masterTotals || {};
+          const bm = summaryObj.benchmarks || {};
+          const alertsCount = summaryObj.alerts?.length || 0;
+          
+          summaryText = `🔄 *Google Drive Ingestion Sync Complete* ✅\n` +
+            `📁 *File Ingested*: \`${summaryObj.fileName}\`\n` +
+            `📅 *Sync Time*: \`${summaryObj.runTimestamp || summaryObj.timestamp || 'N/A'}\`\n\n` +
+            `📊 *Daily Sales & Cashflow Summary:*\n` +
+            `• 🍷 *Liquor Sales*: ₹${Math.round(mt.liquorSales || 0).toLocaleString()} (${bm.liquorPercentage || 0}% of sales)\n` +
+            `• 🍲 *Food Sales*: ₹${Math.round(mt.foodSales || 0).toLocaleString()} (${bm.foodPercentage || 0}% of sales)\n` +
+            `• 💵 *Net Cashflow*: *₹${Math.round(mt.netCashflow || 0).toLocaleString()}* (${mt.surplusStatus || 'N/A'})\n` +
+            `• 🔄 *Credit Recovery Rate*: ${bm.creditRecoveryRate || 0}%\n` +
+            `• 🌟 *Best Month*: ${bm.bestRevenueMonth} (₹${Math.round(bm.bestRevenueValue || 0).toLocaleString()})\n`;
+
+          if (alertsCount > 0) {
+            summaryText += `\n⚠️ *Audit Exceptions (${alertsCount} alerts detected)*\n`;
+          }
+          
+          summaryText += `\n💡 _Tip: Tap '📊 Sales Summary' below or ask me to compare months!_`;
+        }
+
+        await telegramService.sendReport(summaryText);
+        logger.info('Telegram Executive Summary delivery succeeded!');
+      } catch (err: any) {
+        logger.error({ err: err.message }, 'Telegram Executive Summary delivery failed. Trying raw fallback...');
+        try {
+          await telegramService.sendReport(reports.markdownReport);
+        } catch (fallbackErr) {
+          logger.error({ fallbackErr }, 'Raw fallback also failed.');
+        }
       }
     } else {
       logger.warn('Telegram credentials are at default settings. Skipping Telegram dispatch.');
