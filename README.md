@@ -49,6 +49,7 @@ ai-accounting-automation/
 │   ├── excel/
 │   │   ├── excel.mapper.ts       # Dynamic column finder & row converter
 │   │   ├── excel.parser.ts       # Main parser selector facade
+│   │   ├── portal.builder.ts     # Master portal compiler & dashboard indexer
 │   │   └── parsers/
 │   │       ├── sales.parser.ts    # Daily sales multi-month parser
 │   │       └── debitors.parser.ts # Customer outstanding udhari parser
@@ -82,7 +83,10 @@ ai-accounting-automation/
 │   ├── logger/
 │   │   └── logger.ts             # Pino logger configurations
 │   ├── scripts/
+│   │   ├── chat-ledger.ts        # Interactive ledger financial consultant CLI
+│   │   ├── check-gemini.ts       # Gemini API validation/diagnostics helper
 │   │   ├── generate-sample.ts    # Seed script generating sample test workbook
+│   │   ├── inspect-excel.ts      # Excel sheet structure inspection utility
 │   │   └── test-flow.ts          # Integrations tester simulating full workflow
 │   └── index.ts                  # App entrypoint (runs scheduler + health check server)
 ├── Dockerfile                    # Multi-stage, low footprint production container

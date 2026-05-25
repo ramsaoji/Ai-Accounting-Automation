@@ -52,6 +52,7 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
   * `parsers/sales.parser.ts`: Tailored multi-month sales register parser.
   * `parsers/debitors.parser.ts`: Tailored customer outstanding balance parser.
   * `excel.mapper.ts`: Synonym header translator. Resolves variants (e.g. `Amount` vs `Invoiced Amount`) dynamically.
+  * `portal.builder.ts`: Rebuilds the Master Dashboard Landing Hub (`data/output/index.html`) by scanning the output folder for audited ledger summaries (`summary.json`) and generating clean overview cards with live status links.
 * **Safety Patch:** Implements an in-memory monkey patch to safely intercept ExcelJS name validation bugs regarding Microsoft Excel protected tab names (e.g. `History`).
 
 ### 4. Strategy Rules Auditing (`src/rules/`)
