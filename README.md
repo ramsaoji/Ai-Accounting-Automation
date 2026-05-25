@@ -117,6 +117,9 @@ The output generation pipeline produces a fully responsive, highly interactive *
 ### 📋 Weekly Operational Action Checklist
 * Aggregates recommended staff procedures in a beautiful checklist format, complete with tick checkboxes and text line-through completed states.
 
+### 🏆 AI Strategic Intelligence Panel
+* A premium, gold-highlighted executive intelligence panel exposing critical operational leaks (e.g. food/liquor ratio imbalances, peak cost spikes, dues concentration risks, and collections efficiency metrics) with reliable deterministic data backups when offline.
+
 ---
 
 ## 💬 Hotel Gaurav CLI Financial Chat Advisor

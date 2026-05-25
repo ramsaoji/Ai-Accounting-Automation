@@ -16,6 +16,7 @@ export interface DebitorTemplateData {
   htmlDebitorRows: string[];
   htmlChecklistPoints: string;
   htmlProjectionsPoints: string;
+  htmlIntelligencePoints: string;
   htmlErrors: string;
   allErrorsLength: number;
   htmlAlertsList: string;
@@ -41,6 +42,7 @@ export function generateDebitorsHtmlReport(data: DebitorTemplateData): string {
     htmlDebitorRows,
     htmlChecklistPoints,
     htmlProjectionsPoints,
+    htmlIntelligencePoints,
     htmlErrors,
     allErrorsLength,
     htmlAlertsList,
@@ -50,6 +52,17 @@ export function generateDebitorsHtmlReport(data: DebitorTemplateData): string {
   const aiTag = aiGenerated
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);vertical-align:middle;margin-left:8px;white-space:nowrap;flex-shrink:0;">&#10022; AI Generated</span>`
     : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.25);vertical-align:middle;margin-left:8px;white-space:nowrap;flex-shrink:0;">&#9881; Data Computed</span>`;
+
+  const intelSidebarLabel = aiGenerated ? 'Strategic Intel' : 'Strategic Intel';
+  const intelSidebarTag = aiGenerated 
+    ? `<span style="font-size: 0.65rem; font-weight: 700; color: #a78bfa; background: rgba(139,92,246,0.15); padding: 1px 6px; border-radius: 4px; margin-left: 6px;">AI</span>`
+    : `<span style="font-size: 0.65rem; font-weight: 700; color: #818cf8; background: rgba(99,102,241,0.15); padding: 1px 6px; border-radius: 4px; margin-left: 6px;">DATA</span>`;
+
+  const intelPanelTitle = aiGenerated ? 'AI Strategic Intelligence Panel' : 'Deterministic Strategic Intelligence';
+  const intelPanelStyle = aiGenerated
+    ? `background: linear-gradient(135deg, rgba(139,92,246,0.04) 0%, rgba(99,102,241,0.02) 100%); border: 1px solid rgba(139,92,246,0.25);`
+    : `background: linear-gradient(135deg, rgba(99,102,241,0.03) 0%, rgba(20,184,166,0.01) 100%); border: 1px solid rgba(99,102,241,0.2);`;
+  const intelIconStroke = aiGenerated ? '#a78bfa' : '#818cf8';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -109,6 +122,12 @@ export function generateDebitorsHtmlReport(data: DebitorTemplateData): string {
             <a href="#chart-section">
               <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2"></path></svg>
               <span class="nav-text">Dues Visualization</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#intel">
+              <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+              <span class="nav-text">Strategic Intel ${intelSidebarTag}</span>
             </a>
           </li>
           <li class="nav-item">
@@ -266,6 +285,21 @@ export function generateDebitorsHtmlReport(data: DebitorTemplateData): string {
         </div>
       </div>
 
+      <!-- AI Strategic Intelligence Panel (Full Width) -->
+      <div class="card" id="intel" style="${intelPanelStyle}">
+        <h2 class="card-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <span style="display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <svg style="width:20px; height:20px; fill:none; stroke:${intelIconStroke}; stroke-width:2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+            ${intelPanelTitle}
+            ${aiTag}
+          </span>
+        </h2>
+        <p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:20px;">Deep data-driven pattern intelligence uncovering dues risk clusters, recovery velocity, and accounting delays:</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+          ${htmlIntelligencePoints}
+        </div>
+      </div>
+
       <!-- Dynamic Lower Grid (Checklist & Projections) -->
       <div class="lower-grid">
         
@@ -273,12 +307,12 @@ export function generateDebitorsHtmlReport(data: DebitorTemplateData): string {
         <div style="display:flex; flex-direction:column; gap:30px;">
           <!-- Weekly Action Checklist -->
           <div class="card" id="actions" style="margin-bottom: 0;">
-            <h2 class="card-title" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-              <span style="display: inline-flex; align-items: center; gap: 8px;">
+            <h2 class="card-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <span style="display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <svg style="width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
                 Weekly Dues Recovery Checklist
+                ${aiTag}
               </span>
-              ${aiTag}
             </h2>
             <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px;">Tap collection procedures below to cross them off during accounting cycles:</p>
             <div style="margin-top:15px;">
@@ -304,12 +338,12 @@ export function generateDebitorsHtmlReport(data: DebitorTemplateData): string {
 
         <!-- Right Side: AI Projections Card taking equal height -->
         <div class="card" id="projections" style="margin-bottom: 0; display: flex; flex-direction: column; justify-content: space-between;">
-          <h2 class="card-title" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-            <span style="display: inline-flex; align-items: center; gap: 8px;">
+          <h2 class="card-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <span style="display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <svg style="width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
               Dynamic Recovery &amp; Collection Outlook
+              ${aiTag}
             </span>
-            ${aiTag}
           </h2>
           <ol class="projections-list" style="flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 20px;">
             ${htmlProjectionsPoints}

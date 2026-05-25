@@ -21,6 +21,17 @@ export interface GeneratedReports {
   jsonSummary: string;
 }
 
+function cleanPromptPoint(line: string): string {
+  let cleaned = line.trim();
+  // Strip common leading markers like bullet points, numbers, asterisks, brackets, or dashes
+  cleaned = cleaned.replace(/^[\*\-\d\.\s\[\]\(\)]+/, '');
+  // Strip trailing brackets/parentheses if present
+  cleaned = cleaned.replace(/[\)\]]+$/, '');
+  cleaned = cleaned.trim();
+  if (cleaned.length === 0) return '';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 export class AiService {
   private provider: AiProvider;
 
@@ -61,9 +72,10 @@ export class AiService {
 
       const maxPending = Math.max(...topDebitorsLimitList.map(d => d.pending), 1);
 
-      // AI calls for weekly checklist & 3-month outlook specific to debitors
+      // AI calls for weekly checklist, 3-month outlook and strategic intelligence specific to debitors
       let aiWeeklyChecklist = '';
       let aiProjections = '';
+      let aiIntelligence = '';
       let aiGenerated = false;
 
       const masterStatsText = `
@@ -81,7 +93,7 @@ Master Debitor Accounts Cumulative Totals:
       }).join('\n');
 
       try {
-        const checklistPrompt = `
+        const unifiedPrompt = `
 You are a friendly, encouraging local restaurant consultant advising the owner of "Hotel Gaurav" on how to recover uncollected customer tab balances (Udhari).
 Review these outstanding credit collections stats:
 ${masterStatsText}
@@ -89,33 +101,55 @@ Top Debitor Accounts detailed breakdown:
 ${debtorsSummaryText}
 
 INSTRUCTION:
-Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist to collect money back from these specific customers.
-Rules:
-1. Speak in a direct, supportive tone. No dry corporate jargon (avoid: CFO, compliance, governance, board).
-2. Connect suggestions directly to their actual debtors and numbers (e.g. referencing ${topDebtorName}'s ₹${Math.round(topDebtorValue).toLocaleString()} balance).
-3. Do not add introductory fluff. Keep the response to exactly 3 distinct lines.
-`;
-        const checklistResponse = await this.provider.generateText(checklistPrompt, { temperature: 0.15 });
-        aiWeeklyChecklist = checklistResponse.trim();
+Analyze the provided credit data and generate three separate sections of insights:
 
-        const projectionsPrompt = `
-You are an expert credit collections risk planner. Look at the outstanding customer debtor balances for Hotel Gaurav:
-${masterStatsText}
-Top Debitors Ledger detail list:
-${debtorsSummaryText}
+1. WEEKLY STAFF MEETING CHECKLIST: Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist to collect money back from these specific customers.
+2. DYNAMIC 3-MONTH PROJECTIONS: Project the collections and recovery outlook for the NEXT 3 MONTHS in exactly 3 bullet points.
+3. STRATEGIC INTELLIGENCE (DUES RISK & RECORD HABITS): Identify exactly 3 hidden insights, dues concentration risk alerts, or record-keeping recommendations (e.g. credit caps on top debtors, recovery velocity, off-hours bookkeeping posting habits).
 
-INSTRUCTION:
-Project the collections and recovery outlook for the NEXT 3 MONTHS in exactly 3 bullet points:
-- Point 1 (Expected recovery momentum of outstanding dues and payment patterns).
-- Point 2 (Specific accounts collection risk analysis referencing top debtors by name).
-- Point 3 (Credit caps or policy changes to put in place to prevent outstanding balances from scaling further).
 Rules:
-1. Make them highly specific to Hotel Gaurav's actual debtor numbers.
-2. Avoid dry corporate jargon (no: compliance framework, leverage, executive, board). Speak in a friendly, helpful consulting tone.
-3. Do not add introductory fluff. Keep the response to exactly 3 lines.
+- Speak in a friendly, encouraging, and supportive consulting tone.
+- Do NOT use dry corporate jargon (avoid: CFO, leverage, compliance, governance, board, executive, ingestion, pipeline).
+- Connect insights directly to their actual debtors and numbers (e.g. DILIP SAGADE, SURAJ KHARCHE).
+- Keep introductory or formatting fluff out of your response.
+- Format your response EXACTLY using these bracket delimiters so we can parse it:
+
+[CHECKLIST_START]
+(Checklist line 1)
+(Checklist line 2)
+(Checklist line 3)
+[CHECKLIST_END]
+
+[PROJECTIONS_START]
+(Projection bullet 1)
+(Projection bullet 2)
+(Projection bullet 3)
+[PROJECTIONS_END]
+
+[INTELLIGENCE_START]
+(Intelligence insight 1)
+(Intelligence insight 2)
+(Intelligence insight 3)
+[INTELLIGENCE_END]
 `;
-        const projectionsResponse = await this.provider.generateText(projectionsPrompt, { temperature: 0.2 });
-        aiProjections = projectionsResponse.trim();
+        const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
+        
+        const checklistMatch = responseText.match(/\[CHECKLIST_START\]([\s\S]*?)\[CHECKLIST_END\]/i);
+        const projectionsMatch = responseText.match(/\[PROJECTIONS_START\]([\s\S]*?)\[PROJECTIONS_END\]/i);
+        const intelligenceMatch = responseText.match(/\[INTELLIGENCE_START\]([\s\S]*?)\[INTELLIGENCE_END\]/i);
+
+        aiWeeklyChecklist = checklistMatch ? checklistMatch[1].trim() : '';
+        aiProjections = projectionsMatch ? projectionsMatch[1].trim() : '';
+        aiIntelligence = intelligenceMatch ? intelligenceMatch[1].trim() : '';
+
+        // Safest split fallback if formatting blocks completely failed
+        if (!aiWeeklyChecklist || !aiProjections || !aiIntelligence) {
+          const lines = responseText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+          aiWeeklyChecklist = lines.slice(0, 3).join('\n');
+          aiProjections = lines.slice(3, 6).join('\n');
+          aiIntelligence = lines.slice(6, 9).join('\n');
+        }
+
         aiGenerated = true;
 
       } catch (error) {
@@ -131,6 +165,7 @@ Rules:
         });
         aiWeeklyChecklist = fallback.checklist;
         aiProjections = fallback.projections;
+        aiIntelligence = fallback.intelligence;
       }
 
       // Delegate all visual rendering calculations to our report-helper library
@@ -142,12 +177,12 @@ Rules:
         .map(line => line.trim())
         .filter(line => line.length > 0)
         .map(line => {
-          const cleaned = line.replace(/^[\*\-\d\.\s\[\]]+/, '');
+          const cleaned = cleanPromptPoint(line);
           return `
             <label class="checkbox-container">
               <input type="checkbox">
               <span class="checkmark"></span>
-              <span class="checkbox-text"><strong>${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}</strong></span>
+              <span class="checkbox-text"><strong>${cleaned}</strong></span>
             </label>
           `;
         })
@@ -158,8 +193,23 @@ Rules:
         .map(line => line.trim())
         .filter(line => line.length > 0)
         .map(line => {
-          const cleaned = line.replace(/^[\*\-\d\.\s]+/, '');
-          return `<li><strong>${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}</strong></li>`;
+          const cleaned = cleanPromptPoint(line);
+          return `<li><strong>${cleaned}</strong></li>`;
+        })
+        .join('\n');
+
+      const htmlIntelligencePoints = aiIntelligence
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => {
+          const cleaned = cleanPromptPoint(line);
+          return `
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-size: 1.1rem; color: var(--brand-gold);">✦</span>
+              <p style="font-size: 0.88rem; color: var(--text-main); margin: 0; line-height: 1.5;">${cleaned}</p>
+            </div>
+          `;
         })
         .join('\n');
 
@@ -184,6 +234,7 @@ Rules:
         htmlDebitorRows,
         htmlChecklistPoints,
         htmlProjectionsPoints,
+        htmlIntelligencePoints,
         htmlErrors,
         allErrorsLength: parsingErrors.length,
         htmlAlertsList,
@@ -195,14 +246,21 @@ Rules:
         .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0)
-        .map(line => `> * [ ] **${line.replace(/^[\*\-\d\.\s\[\]]+/, '')}**`)
+        .map(line => `> * [ ] **${cleanPromptPoint(line)}**`)
         .join('\n');
 
       const mdProjectionsPoints = aiProjections
         .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0)
-        .map(line => `> * **${line.replace(/^[\*\-\d\.\s]+/, '')}**`)
+        .map(line => `> * **${cleanPromptPoint(line)}**`)
+        .join('\n');
+
+      const mdIntelligencePoints = aiIntelligence
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => `> * **${cleanPromptPoint(line)}**`)
         .join('\n');
 
       // Group alerts map for markdown warning block
@@ -259,6 +317,11 @@ ${mdChecklistPoints || '> * No checklist items generated.'}
 
 ---
 
+### 🏆 AI Strategic Intelligence & Hidden Dues Risks
+${mdIntelligencePoints || '> * No strategic insights generated.'}
+
+---
+
 ### 🚨 Ingestion Exceptions & Warnings
 ${mdAlertsList || '> * All balances and daily registers are cleanly matching with zero alerts!'}
 `;
@@ -290,6 +353,7 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
           message: a.message,
         })),
         errors: parsingErrors,
+        intelligence: aiIntelligence.split('\n').map(l => l.trim()).filter(l => l.length > 0),
       }, null, 2);
 
       return { markdownReport, htmlReport, jsonSummary };
@@ -389,9 +453,10 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
       })));
     }
 
-    // AI weekly suggestions & projections call
+    // AI weekly suggestions, projections and strategic intelligence call
     let aiWeeklyChecklist = '';
     let aiProjections = '';
+    let aiIntelligence = '';
     let aiGenerated = false;
 
     try {
@@ -420,41 +485,64 @@ Master Cumulative Totals (All Months):
 - Outstanding Credit Gap: ₹${Math.round(creditOutstandingGap).toLocaleString()} (Recovery Rate: ${creditRecoveryRate}%)
       `;
 
-      const checklistPrompt = `
+      const unifiedPrompt = `
 You are a friendly, encouraging local restaurant consultant advising the owner of "Hotel Gaurav".
 Review these financial stats:
 ${masterStatsText}
+Monthly breakdown:
 ${monthlySummaryText}
 
 INSTRUCTION:
-Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist.
+Analyze the provided financial data and generate three separate sections of insights:
+
+1. WEEKLY STAFF MEETING CHECKLIST: Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist.
+2. DYNAMIC 3-MONTH PROJECTIONS: Project the operational outlook for the NEXT 3 MONTHS in exactly 3 bullet points.
+3. STRATEGIC INTELLIGENCE (HIDDEN LEAKS & RATIO OPPORTUNITIES): Identify exactly 3 hidden insights, ratio optimizations, or operational leak alerts (e.g. food vs liquor ratio, peak monthly expense leakage, credit collections gap risk).
+
 Rules:
-1. Speak in a direct, supportive tone. No dry corporate jargon (avoid: CFO, leverage, compliance, governance, board, ingestion).
-2. Connect suggestions directly to their actual numbers (e.g. food sales underperforming at ${foodPercentage}%, or chasing the outstanding ₹${Math.round(creditOutstandingGap).toLocaleString()} credit gap).
-3. Do not add introductory fluff. Keep the entire response to exactly 3 distinct lines.
+- Speak in a friendly, encouraging, and supportive consulting tone.
+- Do NOT use dry corporate jargon (avoid: CFO, leverage, compliance, governance, board, executive, ingestion, pipeline).
+- Connect insights directly to their actual numbers and months.
+- Keep introductory or formatting fluff out of your response.
+- Format your response EXACTLY using these bracket delimiters so we can parse it:
+
+[CHECKLIST_START]
+(Checklist line 1)
+(Checklist line 2)
+(Checklist line 3)
+[CHECKLIST_END]
+
+[PROJECTIONS_START]
+(Projection bullet 1)
+(Projection bullet 2)
+(Projection bullet 3)
+[PROJECTIONS_END]
+
+[INTELLIGENCE_START]
+(Intelligence insight 1)
+(Intelligence insight 2)
+(Intelligence insight 3)
+[INTELLIGENCE_END]
 `;
-      const checklistResponse = await this.provider.generateText(checklistPrompt, { temperature: 0.15 });
-      aiWeeklyChecklist = checklistResponse.trim();
+      const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
 
-      const projectionsPrompt = `
-You are an expert hospitality planner. Look at the historical monthly sales and expense trend for Hotel Gaurav:
-${monthlySummaryText}
-${masterStatsText}
+      const checklistMatch = responseText.match(/\[CHECKLIST_START\]([\s\S]*?)\[CHECKLIST_END\]/i);
+      const projectionsMatch = responseText.match(/\[PROJECTIONS_START\]([\s\S]*?)\[PROJECTIONS_END\]/i);
+      const intelligenceMatch = responseText.match(/\[INTELLIGENCE_START\]([\s\S]*?)\[INTELLIGENCE_END\]/i);
 
-INSTRUCTION:
-Project the operational outlook for the NEXT 3 MONTHS in exactly 3 bullet points:
-- Point 1 (Expected Sales & Cashflow trend based on seasonality or historical momentum).
-- Point 2 (Expected Credit Collections Risk and suggestions).
-- Point 3 (Expected Supplier Expenses & inventory stock buffer advice based on past expense peaks).
-Rules:
-1. Make them highly specific to Hotel Gaurav's numbers.
-2. Avoid dry corporate jargon (no: CFO, leverage, executive, board, pipeline). Speak in a friendly, helpful planning tone.
-3. Do not add introductory fluff. Keep the response to exactly 3 lines.
-`;
-      const projectionsResponse = await this.provider.generateText(projectionsPrompt, { temperature: 0.2 });
-      aiProjections = projectionsResponse.trim();
+      aiWeeklyChecklist = checklistMatch ? checklistMatch[1].trim() : '';
+      aiProjections = projectionsMatch ? projectionsMatch[1].trim() : '';
+      aiIntelligence = intelligenceMatch ? intelligenceMatch[1].trim() : '';
 
-      logger.info('AI successfully generated trend projections and meeting checklist.');
+      // Safest split fallback if formatting blocks completely failed
+      if (!aiWeeklyChecklist || !aiProjections || !aiIntelligence) {
+        const lines = responseText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        aiWeeklyChecklist = lines.slice(0, 3).join('\n');
+        aiProjections = lines.slice(3, 6).join('\n');
+        aiIntelligence = lines.slice(6, 9).join('\n');
+      }
+
+      logger.info('AI successfully generated unified projections, checklist and strategic intelligence.');
       aiGenerated = true;
     } catch (error) {
       logger.error({ error }, 'AI strategic trend and projections generation failed. Using data-driven fallback.');
@@ -476,26 +564,28 @@ Rules:
       });
       aiWeeklyChecklist = fallback.checklist;
       aiProjections = fallback.projections;
+      aiIntelligence = fallback.intelligence;
     }
 
     const mdChecklistPoints = aiWeeklyChecklist
       .split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0)
-      .map(line => {
-        const cleaned = line.replace(/^[\*\-\d\.\s\[\]]+/, '');
-        return `> * [ ] **${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}**`;
-      })
+      .map(line => `> * [ ] **${cleanPromptPoint(line)}**`)
       .join('\n');
 
     const mdProjectionsPoints = aiProjections
       .split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0)
-      .map(line => {
-        const cleaned = line.replace(/^[\*\-\d\.\s]+/, '');
-        return `> * **${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}**`;
-      })
+      .map(line => `> * **${cleanPromptPoint(line)}**`)
+      .join('\n');
+
+    const mdIntelligencePoints = aiIntelligence
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .map(line => `> * **${cleanPromptPoint(line)}**`)
       .join('\n');
 
     const htmlChecklistPoints = aiWeeklyChecklist
@@ -503,12 +593,12 @@ Rules:
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
-        const cleaned = line.replace(/^[\*\-\d\.\s\[\]]+/, '');
+        const cleaned = cleanPromptPoint(line);
         return `
           <label class="checkbox-container">
             <input type="checkbox">
             <span class="checkmark"></span>
-            <span class="checkbox-text"><strong>${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}</strong></span>
+            <span class="checkbox-text"><strong>${cleaned}</strong></span>
           </label>
         `;
       })
@@ -519,8 +609,23 @@ Rules:
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
-        const cleaned = line.replace(/^[\*\-\d\.\s]+/, '');
-        return `<li><strong>${cleaned.substring(0, 1).toUpperCase()}${cleaned.substring(1)}</strong></li>`;
+        const cleaned = cleanPromptPoint(line);
+        return `<li><strong>${cleaned}</strong></li>`;
+      })
+      .join('\n');
+
+    const htmlIntelligencePoints = aiIntelligence
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .map(line => {
+        const cleaned = cleanPromptPoint(line);
+        return `
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-size: 1.1rem; color: var(--brand-gold);">✦</span>
+            <p style="font-size: 0.88rem; color: var(--text-main); margin: 0; line-height: 1.5;">${cleaned}</p>
+          </div>
+        `;
       })
       .join('\n');
 
@@ -606,6 +711,14 @@ ${mdChecklistPoints}
 
 ---
 
+## 🏆 AI Strategic Intelligence & Hidden Operational Leaks
+
+> [!TIP]
+> **Operational insight, revenue-mix, and cost-leak optimizations**:
+${mdIntelligencePoints}
+
+---
+
 ## 🔍 File & Records Integrity
 
 * **Total Months Processed**: \`${sortedSheets.length}\`
@@ -643,6 +756,7 @@ ${mdAlertsList || '> [!NOTE]\n> ✅ No alerts or exceptions detected across the 
       htmlTrendRows,
       htmlChecklistPoints,
       htmlProjectionsPoints,
+      htmlIntelligencePoints,
       allTransactionsLength: allTransactions.length,
       allErrorsLength: allErrors.length,
       htmlErrors,
@@ -685,7 +799,8 @@ ${mdAlertsList || '> [!NOTE]\n> ✅ No alerts or exceptions detected across the 
         severity: list[0].severity,
         totalOccurrences: list.length,
         example: list[0].message
-      }))
+      })),
+      intelligence: aiIntelligence.split('\n').map(l => l.trim()).filter(l => l.length > 0)
     }, null, 2);
 
     return { markdownReport, htmlReport, jsonSummary };
