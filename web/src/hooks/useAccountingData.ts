@@ -3,7 +3,7 @@ import type { MasterSummary } from '../types';
 import { fetchAccountingData, fetchSystemHealth } from '../services/api';
 import { toast } from 'sonner';
 
-export function useAccountingData() {
+export function useAccountingData(isAuthenticated: boolean) {
   const [salesData, setSalesData] = useState<MasterSummary | null>(null);
   const [debitorsData, setDebitorsData] = useState<MasterSummary | null>(null);
   const [connectionMode, setConnectionMode] = useState<'live' | 'static' | 'empty'>('empty');
@@ -41,8 +41,10 @@ export function useAccountingData() {
   }, []);
 
   useEffect(() => {
-    sync();
-  }, [sync]);
+    if (isAuthenticated) {
+      sync();
+    }
+  }, [sync, isAuthenticated]);
 
   return {
     salesData,

@@ -118,17 +118,17 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-muted p-1 rounded-lg">
+          <TabsList className="w-full flex h-9 p-1 bg-muted rounded-lg">
             <TabsTrigger
               value="app-lock"
-              className="flex items-center justify-center gap-2 py-1.5 text-xs font-semibold select-none cursor-pointer data-active:bg-background"
+              className="cursor-pointer select-none text-xs font-semibold dark:data-active:bg-background dark:data-active:border-transparent data-active:shadow-sm text-muted-foreground data-active:text-foreground transition-all duration-150"
             >
               <Lock className="size-3.5" />
               App Lock Passcode
             </TabsTrigger>
             <TabsTrigger
               value="upload"
-              className="flex items-center justify-center gap-2 py-1.5 text-xs font-semibold select-none cursor-pointer data-active:bg-background"
+              className="cursor-pointer select-none text-xs font-semibold dark:data-active:bg-background dark:data-active:border-transparent data-active:shadow-sm text-muted-foreground data-active:text-foreground transition-all duration-150"
             >
               <Upload className="size-3.5" />
               Upload Passcode

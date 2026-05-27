@@ -14,7 +14,8 @@ import {
   Grid,
   Cloud,
   Loader2,
-  Lock
+  Lock,
+  LogOut
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -68,6 +69,7 @@ interface AppSidebarProps {
   theme: any;
   setTheme: (t: any) => void;
   onOpenSecuritySettings: () => void;
+  onLogout: () => void;
 }
 
 function AppSidebar({
@@ -79,7 +81,8 @@ function AppSidebar({
   activeAlerts,
   theme,
   setTheme,
-  onOpenSecuritySettings
+  onOpenSecuritySettings,
+  onLogout
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -273,6 +276,17 @@ function AppSidebar({
               <span>Change Security Passcodes</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={onLogout}
+              className="text-xs font-semibold text-destructive hover:text-destructive hover:bg-destructive/5 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 cursor-pointer"
+              tooltip="Lock Application"
+            >
+              <LogOut className="size-4" />
+              <span>Lock Application</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
@@ -294,6 +308,12 @@ export function App() {
   const [appSessionToken, setAppSessionToken] = useState(() => sessionStorage.getItem('app_session_token') || '');
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
+  const handleLogout = () => {
+    sessionStorage.removeItem('app_session_token');
+    setAppSessionToken('');
+    toast.info("Application locked successfully.");
+  };
+
   const mainRef = useRef<HTMLDivElement>(null);
 
   // Scroll to top on activeView or activeWorkspace change
@@ -304,7 +324,7 @@ export function App() {
   }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
-  const { salesData, debitorsData, connectionMode, cronSchedule, isLoading, sync: fetchRealData } = useAccountingData();
+  const { salesData, debitorsData, connectionMode, cronSchedule, isLoading, sync: fetchRealData } = useAccountingData(!!appSessionToken);
 
   const businessName = useMemo(() => {
     const files = [salesData?.fileName, debitorsData?.fileName].filter(Boolean) as string[];
@@ -550,6 +570,7 @@ export function App() {
             theme={theme}
             setTheme={setTheme}
             onOpenSecuritySettings={() => setIsSecurityOpen(true)}
+            onLogout={handleLogout}
           />
 
           {/* Sidebar Main Content Inset Wrapper */}
