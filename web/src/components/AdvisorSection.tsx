@@ -68,6 +68,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
   const isInitialMount = useRef(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     if (scrollContainerRef.current) {
@@ -75,6 +76,22 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
         top: scrollContainerRef.current.scrollHeight,
         behavior: 'smooth'
       });
+    }
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      // Cap height mathematically at 120px to match standard modern chat input caps
+      const nextHeight = Math.min(120, textareaRef.current.scrollHeight);
+      textareaRef.current.style.height = `${nextHeight}px`;
+    }
+  }, [input]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(input);
     }
   };
 
@@ -336,20 +353,23 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                 e.preventDefault();
                 handleSend(input);
               }}
-              className="flex items-center gap-2 w-full shrink-0"
+              className="flex items-end gap-2 w-full shrink-0 animate-in fade-in duration-200"
             >
-              <input
-                type="text"
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Ask about sales, debtor caps, or staff checklists..."
-                className="flex-1 bg-background dark:bg-muted/40 border border-border rounded-md px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 h-9"
+                className="flex-1 bg-background dark:bg-muted/40 border border-border rounded-md px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 resize-none min-h-[36px] scroll-smooth py-2.5 overflow-y-auto"
+                style={{ height: 'auto' }}
               />
               <Button
                 type="submit"
                 size="sm"
                 disabled={!input.trim()}
-                className="h-9 px-3.5 cursor-pointer"
+                className="h-9 px-3.5 cursor-pointer shrink-0"
               >
                 <Send className="size-4" />
               </Button>
