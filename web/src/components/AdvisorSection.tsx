@@ -196,11 +196,11 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
   return (
     <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
       {/* Title */}
-      <div className="border-b pb-4 md:pb-5">
-        <h1 className="font-heading font-semibold text-xl tracking-tight text-foreground">
+      <div className="border-b pb-3 md:pb-5">
+        <h1 className="font-heading font-semibold text-lg sm:text-xl tracking-tight text-foreground">
           AI Strategic Advisor
         </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
           Ask questions, compare margins, or generate objectives using context-aware ledger modeling.
         </p>
       </div>
@@ -210,26 +210,26 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
         
         {/* Playbooks Sidebar (1/4 size) */}
         <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden h-auto lg:h-full select-none shrink-0 min-w-0">
-          <div className="p-4 border-b bg-muted/20 flex items-center gap-2">
+          <div className="hidden lg:flex p-4 border-b bg-muted/20 items-center gap-2">
             <Compass className="size-4 text-primary" />
             <span className="text-xs font-bold text-foreground">Advisory Playbooks</span>
           </div>
-          <div className="p-2 md:p-3 flex-1 grid grid-cols-3 lg:flex lg:flex-col gap-2 lg:gap-1 overflow-auto">
+          <div className="p-2 lg:p-3 flex-1 grid grid-cols-3 lg:flex lg:flex-col gap-1.5 lg:gap-1 overflow-auto">
             {playbooks.map((p) => {
               const isActive = activePlaybook === p.id;
               return (
                 <button
                   key={p.id}
                   onClick={() => setActivePlaybook(p.id)}
-                  className={`p-2.5 md:p-3 rounded-lg border text-left cursor-pointer transition-all duration-200 flex flex-col gap-0.5 md:gap-1 items-center lg:items-start text-center lg:text-left shrink-0 ${
+                  className={`p-2 lg:p-3 rounded-lg border text-left cursor-pointer transition-all duration-200 flex flex-col gap-0.5 md:gap-1 items-center lg:items-start text-center lg:text-left shrink-0 ${
                     isActive
                       ? 'bg-muted border-foreground/20'
                       : 'bg-background hover:bg-muted/40'
                   }`}
                 >
-                  <div className="flex flex-col lg:flex-row items-center gap-1.5 md:gap-2">
+                  <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-2">
                     {p.icon}
-                    <span className="text-[0.68rem] sm:text-xs font-bold text-foreground leading-none">{p.name.split(' ')[0]}</span>
+                    <span className="text-[10px] sm:text-xs font-bold text-foreground leading-none">{p.name.split(' ')[0]}</span>
                   </div>
                   <span className="text-[0.65rem] text-muted-foreground leading-normal mt-0.5 hidden lg:block">
                     {p.desc}
@@ -245,7 +245,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
         </div>
 
         {/* Chat Feed Pane (3/4 size) */}
-        <Card className="lg:col-span-3 border bg-card/45 h-[620px] sm:h-[680px] lg:h-full overflow-hidden flex flex-col justify-between min-w-0">
+        <Card className="lg:col-span-3 border bg-card/45 h-[440px] sm:h-[580px] lg:h-full overflow-hidden flex flex-col justify-between min-w-0">
           <CardHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between space-y-0 select-none gap-2">
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0 mt-0.5">
