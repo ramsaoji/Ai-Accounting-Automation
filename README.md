@@ -291,7 +291,7 @@ To protect administrative functions and financial metrics, the application imple
 
 * **Fullscreen App Lock Screen**: A fullscreen glassmorphic lock screen prevents unauthorized dashboard view access. Users must type their passcode, which is validated against the database. On validation, the backend generates an ephemeral session token cached in the browser's `sessionStorage`.
 * **Upload Passcode Layer**: File uploads via the Web UI require validation of a dedicated upload passcode, blocking arbitrary ledger modifications.
-* **Database-Backed Credential Sync**: Security passcodes are stored securely in PostgreSQL (Neon) under the `financial_reports` table (`report_type = 'security-config'`). They initialize automatically from `.env` values on first boot and can be updated at runtime.
+* **Database-Backed Credential Sync**: Security passcodes are stored securely in PostgreSQL (Neon) under the `financial_reports` table (`report_type = 'security-config'`) using high-strength **argon2 password hashing**. They initialize automatically from `.env` values on first boot and can be updated at runtime.
 * **Redesigned Tabbed Settings Modal**: A sidebar control allows administrators to change credentials dynamically. It features a tabbed interface splitting **App Lock Passcode** and **Upload Passcode** updates, including eye icon visibility toggles and strict validation matching fields before sending requests.
 
 ---

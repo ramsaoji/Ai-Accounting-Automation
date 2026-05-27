@@ -8,7 +8,7 @@ import { logger } from '../../logger/logger.js';
 import { corsHeaders } from '../cors.js';
 import { config } from '../../config/config.js';
 
-import { getSecurityCredentials, uploadSessions } from './security.controller.js';
+import { getSecurityCredentials, uploadSessions, verifyPasscode } from './security.controller.js';
 
 /**
  * GET /api/data/sales
@@ -138,7 +138,8 @@ export function handleFileUpload(req: http.IncomingMessage, res: http.ServerResp
 
       // 1. Authenticate Raw Password & Generate Session Token (Lockscreen Ping)
       if (targetUploadPassword && password !== undefined) {
-        if (password === targetUploadPassword) {
+        const isMatch = await verifyPasscode(targetUploadPassword, password);
+        if (isMatch) {
           const token = crypto.randomUUID();
           uploadSessions.add(token);
           res.writeHead(200, corsHeaders);

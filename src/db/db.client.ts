@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
+import * as argon2 from 'argon2';
 
 const { Pool } = pg;
 
@@ -89,8 +90,8 @@ export async function initSecurityConfig(): Promise<void> {
     if (!existing) {
       logger.info('No security config found in Neon DB. Initializing with credentials configured in .env...');
       const defaultData = {
-        uploadPassword: config.UPLOAD_PASSWORD,
-        appPassword: config.APP_PASSWORD
+        uploadPassword: await argon2.hash(config.UPLOAD_PASSWORD),
+        appPassword: await argon2.hash(config.APP_PASSWORD)
       };
       await saveReport('security-config', defaultData);
     } else {
