@@ -402,7 +402,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
             <Button
               variant="outline"
               size="icon"
-              className="size-8 cursor-pointer"
+              className="cursor-pointer"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
             >
@@ -414,7 +414,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
             <Button
               variant="outline"
               size="icon"
-              className="size-8 cursor-pointer"
+              className="cursor-pointer"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
             >

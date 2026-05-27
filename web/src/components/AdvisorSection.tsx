@@ -294,7 +294,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                 <p className="text-[0.65rem] text-muted-foreground truncate hidden sm:block mt-0.5">Context: {summary.fileName}</p>
               </div>
             </div>
-            <Button variant="outline" size="xs" onClick={clearChat} className="text-[10px] sm:text-xs h-7 px-2 sm:px-2.5 shrink-0">
+            <Button variant="outline" size="xs" onClick={clearChat} className="text-[10px] sm:text-xs h-8 sm:h-7 px-2 sm:px-2.5 shrink-0">
               <RefreshCw className="size-3.5 shrink-0" />
               <span className="hidden sm:inline ml-1">Clear Chat</span>
             </Button>
@@ -346,7 +346,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                   variant="outline"
                   size="xs"
                   onClick={() => handleSend(sug)}
-                  className="text-[0.65rem] text-muted-foreground hover:text-foreground rounded-full flex-shrink-0 flex items-center gap-1 h-6 sm:h-7 px-2.5 sm:px-3 border-border/80 hover:bg-muted whitespace-nowrap"
+                  className="text-[0.65rem] text-muted-foreground hover:text-foreground rounded-full flex-shrink-0 flex items-center gap-1 h-8 sm:h-7 px-2.5 sm:px-3 border-border/80 hover:bg-muted whitespace-nowrap"
                 >
                   {sug}
                   <ArrowUpRight className="size-2.5 sm:size-3 text-muted-foreground/80 shrink-0" />
@@ -375,7 +375,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                 type="submit"
                 size="sm"
                 disabled={!input.trim()}
-                className="h-9 px-3.5 cursor-pointer shrink-0"
+                className="h-10 sm:h-9 px-3.5 cursor-pointer shrink-0"
               >
                 <Send className="size-4" />
               </Button>

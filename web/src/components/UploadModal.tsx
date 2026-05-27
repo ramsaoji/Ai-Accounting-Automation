@@ -282,7 +282,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                       <div className="flex flex-col items-center">
                         <span className="text-xs font-semibold">Select ledger sheets</span>
                         <span className="text-[0.62rem] text-muted-foreground mt-1 mb-3">Accepts only Excel files (.xlsx)</span>
-                        <Button variant="outline" size="xs" onClick={triggerFileSelect} className="h-8 text-[0.68rem] px-3 font-semibold cursor-pointer">
+                        <Button variant="outline" size="sm" onClick={triggerFileSelect} className="w-full sm:w-auto font-semibold cursor-pointer">
                           Browse Files
                         </Button>
                       </div>
@@ -314,11 +314,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                         ))}
                       </div>
 
-                      <div className="flex gap-2 justify-start mt-1">
-                        <Button variant="outline" size="xs" onClick={triggerFileSelect} className="h-7 text-[0.62rem] px-2.5 font-semibold cursor-pointer">
+                      <div className="flex flex-col sm:flex-row gap-2 w-full mt-1">
+                        <Button variant="outline" size="sm" onClick={triggerFileSelect} className="w-full sm:w-auto font-semibold cursor-pointer">
                           Add More Files
                         </Button>
-                        <Button variant="ghost" size="xs" onClick={reset} className="h-7 text-[0.62rem] px-2.5 text-destructive hover:bg-destructive/10 cursor-pointer">
+                        <Button variant="ghost" size="sm" onClick={reset} className="w-full sm:w-auto text-destructive hover:bg-destructive/10 cursor-pointer">
                           Clear All
                         </Button>
                       </div>
@@ -375,7 +375,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                   <span className="text-[0.62rem] text-muted-foreground px-4 leading-normal break-all">
                     {errorMsg || 'An error occurred while compiling summaries.'}
                   </span>
-                  <Button variant="outline" size="xs" onClick={reset} className="mt-2 text-[0.62rem] h-7 px-3">
+                  <Button variant="outline" size="sm" onClick={reset} className="mt-2 w-full sm:w-auto">
                     Clear & Reset
                   </Button>
                 </div>

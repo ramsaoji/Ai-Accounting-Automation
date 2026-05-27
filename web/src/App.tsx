@@ -578,7 +578,7 @@ export function App() {
             {/* Top Header Navbar */}
             <header className="h-16 border-b border-border/80 px-4 md:px-6 flex items-center justify-between bg-card select-none">
               <div className="flex items-center gap-3">
-                <SidebarTrigger className="hover:bg-muted size-8 border bg-background" />
+                <SidebarTrigger className="hover:bg-muted size-9 sm:size-8 border bg-background cursor-pointer" />
                 <div className="w-px h-4 bg-border shrink-0 self-center" aria-hidden="true" />
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                   <span className="font-semibold text-foreground hidden sm:inline">{businessName}</span>

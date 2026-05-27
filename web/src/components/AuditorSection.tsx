@@ -516,7 +516,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                     size="sm"
                     variant="outline"
                     onClick={() => toggleAcknowledge(activeSelectedAlert.message)}
-                    className="text-xs h-9"
+                    className="text-xs h-10 sm:h-9"
                   >
                     {acknowledgedAlerts.includes(activeSelectedAlert.message) ? (
                       <>
@@ -605,20 +605,23 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
 
               {/* Footer Buttons */}
               <div className="flex justify-end gap-2 border-t pt-4 mt-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="default"
                   onClick={() => setActiveActionModal(null)}
-                  className="px-4 py-2 border rounded-lg text-xs font-semibold text-muted-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="text-xs cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="px-4 py-2 bg-foreground text-background font-semibold rounded-lg text-xs hover:bg-foreground/90 cursor-pointer transition-colors shadow-xs flex items-center gap-1.5"
+                  size="default"
+                  className="text-xs font-semibold cursor-pointer flex items-center gap-1.5"
                 >
                   <ShieldCheck className="size-4" />
                   Authorize & Approve
-                </button>
+                </Button>
               </div>
             </form>
           </div>

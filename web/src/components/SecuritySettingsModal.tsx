@@ -118,7 +118,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="w-full flex h-9 p-1 bg-muted rounded-lg">
+          <TabsList className="w-full flex h-10 sm:h-9 p-1 bg-muted rounded-lg">
             <TabsTrigger
               value="app-lock"
               className="cursor-pointer select-none text-xs font-semibold dark:data-active:bg-background dark:data-active:border-transparent data-active:shadow-sm text-muted-foreground data-active:text-foreground transition-all duration-150"
@@ -280,7 +280,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
+                size="default"
                 onClick={() => handleModalClose(false)}
                 disabled={isUpdating}
                 className="text-xs"
@@ -289,7 +289,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
               </Button>
               <Button
                 type="submit"
-                size="sm"
+                size="default"
                 disabled={isUpdating}
                 className="text-xs font-semibold cursor-pointer shrink-0"
               >

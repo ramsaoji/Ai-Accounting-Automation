@@ -502,7 +502,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
                               e.stopPropagation();
                               triggerReminderCopy(debtor);
                             }}
-                            className="gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-primary/5 text-primary border border-primary/10 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-xs cursor-pointer transition-all duration-200 shrink-0"
+                            className="gap-1.5 h-9 sm:h-8 px-3 rounded-lg text-xs font-semibold bg-primary/5 text-primary border border-primary/10 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-xs cursor-pointer transition-all duration-200 shrink-0"
                           >
                             <MessageSquare className="size-3.5 shrink-0" />
                             <span>Remind</span>
