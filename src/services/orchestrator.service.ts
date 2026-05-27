@@ -157,7 +157,7 @@ export class OrchestratorService {
     // Detect if Telegram credentials are at their mock defaults
     const isMockTelegram = 
       config.TELEGRAM_BOT_TOKEN === '1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ' ||
-      config.TELEGRAM_CHAT_ID === '-1001234567890';
+      config.TELEGRAM_CHAT_ID.includes('-1001234567890');
 
     try {
       const inputDir = path.resolve(process.cwd(), 'data', 'input');

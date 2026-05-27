@@ -217,7 +217,8 @@ async function runLocalTest() {
       config.TELEGRAM_BOT_TOKEN && 
       config.TELEGRAM_BOT_TOKEN !== '1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ' &&
       config.TELEGRAM_CHAT_ID && 
-      config.TELEGRAM_CHAT_ID !== '-1001234567890';
+      config.TELEGRAM_CHAT_ID.length > 0 &&
+      !config.TELEGRAM_CHAT_ID.includes('-1001234567890');
 
     if (hasTelegramKeys) {
       logger.info('Active Telegram bot credentials detected. Delivering Executive Summary to chat...');

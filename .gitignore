@@ -86,6 +86,8 @@ Thumbs.db
 .env.development.local
 .env.test.local
 .env.production.local
+.env.render
+.env.vercel
 
 # Project-specific generated inputs/outputs
 data/input/*
