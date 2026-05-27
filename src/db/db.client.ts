@@ -45,7 +45,7 @@ export async function initDb(): Promise<void> {
 /**
  * Upserts a financial report JSON payload into the database.
  */
-export async function saveReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata', data: any): Promise<void> {
+export async function saveReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config', data: any): Promise<void> {
   if (!pool) return;
   try {
     await initDb(); // Ensure table exists
@@ -65,7 +65,7 @@ export async function saveReport(reportType: 'sales' | 'debitors' | 'daily-sales
 /**
  * Retrieves a financial report JSON payload from the database.
  */
-export async function getReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata'): Promise<any | null> {
+export async function getReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config'): Promise<any | null> {
   if (!pool) return null;
   try {
     await initDb(); // Ensure table exists
@@ -75,5 +75,28 @@ export async function getReport(reportType: 'sales' | 'debitors' | 'daily-sales'
   } catch (err) {
     logger.error({ err, reportType }, 'Failed to read report from Neon DB');
     return null;
+  }
+}
+
+/**
+ * Initializes the default security config inside Neon DB if not already existing.
+ */
+export async function initSecurityConfig(): Promise<void> {
+  if (!pool) return;
+  try {
+    await initDb();
+    const existing = await getReport('security-config');
+    if (!existing) {
+      logger.info('No security config found in Neon DB. Initializing with credentials configured in .env...');
+      const defaultData = {
+        uploadPassword: config.UPLOAD_PASSWORD,
+        appPassword: config.APP_PASSWORD
+      };
+      await saveReport('security-config', defaultData);
+    } else {
+      logger.info('Security config row exists and is ready in Neon DB.');
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to initialize database security credentials config');
   }
 }

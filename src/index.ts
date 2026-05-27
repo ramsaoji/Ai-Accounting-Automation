@@ -3,11 +3,13 @@ import { schedulerJob } from './scheduler/scheduler.job.js';
 import { config } from './config/config.js';
 import { logger } from './logger/logger.js';
 import { telegramBot } from './telegram/telegram.bot.js';
-import { initDb } from './db/db.client.js';
+import { initDb, initSecurityConfig } from './db/db.client.js';
 import { handleRequest } from './api/router.js';
 
 // 0. Initialize Neon DB if configured
-initDb().catch((dbErr) => {
+initDb().then(async () => {
+  await initSecurityConfig();
+}).catch((dbErr) => {
   logger.error({ err: dbErr }, 'Failed to initialize Neon DB connection');
 });
 

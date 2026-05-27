@@ -80,3 +80,14 @@ If outputs are not appearing in `data/output/`:
 ### C. Environment Reload Delays
 * **Problem:** Setting `DATABASE_URL` in `.env` while `npm run dev` is running does not reload the database connection pool in the active Node memory namespace.
 * **Resolution:** Stop the backend server in the console (Ctrl+C) and run `npm run dev` again to force Node.js to load the updated environment variables. Use `npx tsx src/scripts/check-db.ts` to inspect the connection live.
+
+### D. Forgotten Passcodes / Access Denied
+* **Problem:** Locked out of the application due to forgotten App Lock or Ingestion passcodes.
+* **Resolution:**
+  1. The security configurations are stored in the PostgreSQL database under the `financial_reports` table with `report_type = 'security-config'`.
+  2. Connect to your database using a psql client or Neon console, and delete the security configuration row:
+     ```sql
+     DELETE FROM financial_reports WHERE report_type = 'security-config';
+     ```
+  3. Restart the backend server process. The service will detect the missing record on startup and automatically re-initialize the credentials using the `APP_PASSWORD` and `UPLOAD_PASSWORD` values defined in your `.env` file (which are strictly required to be configured in the environment).
+

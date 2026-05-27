@@ -78,6 +78,11 @@ On mount, the dashboard runs a background fetch to determine connection status a
 - **Contextual Ledger Chat**: Ask questions about top debtors or spending spikes. The advisor generates responses using real parsed metrics via `POST /api/chat`.
 - **Offline Heuristic Fallback**: If the backend AI is unreachable, a local data-driven heuristic engine generates meaningful answers from the already-loaded ledger summary.
 
+### 🔐 Security & Access Control
+- **Fullscreen App Lock Screen**: Displays a security lock overlay upon mounting. Users must verify their passcode on the backend (creating a browser `sessionStorage` token) before viewing the dashboard metrics.
+- **Upload Passcode Gate**: Form submissions for ledger uploads require a correct ingestion password to prevent unauthorized spreadsheet uploads.
+- **Tabbed Security console**: Features a dedicated settings console to update credentials in the Neon PostgreSQL database. Provides side-by-side tabs for updating the App Lock passcode or the Upload passcode independently with confirmation mismatch verification and password visibility toggles (`Eye`/`EyeOff`).
+
 ---
 
 ## 💻 Tech Stack

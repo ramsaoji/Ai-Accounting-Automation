@@ -1,11 +1,14 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { getReport } from '../../db/db.client.js';
 import { orchestratorService } from '../../services/orchestrator.service.js';
 import { logger } from '../../logger/logger.js';
 import { corsHeaders } from '../cors.js';
 import { config } from '../../config/config.js';
+
+import { getSecurityCredentials, uploadSessions } from './security.controller.js';
 
 /**
  * GET /api/data/sales
@@ -128,8 +131,37 @@ export function handleFileUpload(req: http.IncomingMessage, res: http.ServerResp
   });
   req.on('end', async () => {
     try {
-      const { fileName, fileData } = JSON.parse(body);
+      const { fileName, fileData, password, sessionToken } = JSON.parse(body);
       
+      const creds = await getSecurityCredentials();
+      const targetUploadPassword = creds.uploadPassword;
+
+      // 1. Authenticate Raw Password & Generate Session Token (Lockscreen Ping)
+      if (targetUploadPassword && password !== undefined) {
+        if (password === targetUploadPassword) {
+          const token = crypto.randomUUID();
+          uploadSessions.add(token);
+          res.writeHead(200, corsHeaders);
+          res.end(JSON.stringify({ status: 'authorized', sessionToken: token }));
+          return;
+        } else {
+          logger.warn('Unauthorized upload attempt: invalid lockscreen password');
+          res.writeHead(401, corsHeaders);
+          res.end(JSON.stringify({ error: 'Unauthorized: Invalid upload password' }));
+          return;
+        }
+      }
+
+      // 2. Validate Session Token for file uploads
+      if (targetUploadPassword) {
+        if (!sessionToken || !uploadSessions.has(sessionToken)) {
+          logger.warn({ fileName: fileName || 'unknown' }, 'Unauthorized upload attempt: invalid or expired session token');
+          res.writeHead(401, corsHeaders);
+          res.end(JSON.stringify({ error: 'Unauthorized: Invalid or expired upload session' }));
+          return;
+        }
+      }
+
       if (!fileName || !fileData) {
         res.writeHead(400, corsHeaders);
         res.end(JSON.stringify({ error: 'fileName and fileData (base64) are required fields' }));

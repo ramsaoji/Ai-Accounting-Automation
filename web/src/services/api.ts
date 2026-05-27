@@ -130,9 +130,34 @@ function generateOfflineHeuristicResponse(query: string, isDebitors: boolean, su
 }
 
 /**
+ * Verifies upload administrative authorization password with the backend API.
+ * Returns the generated session token string on success, or null on failure.
+ */
+export async function verifyUploadPassword(password: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/upload`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        password
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.sessionToken || null;
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
  * Uploads an Excel ledger spreadsheet and parses/audits it in real-time.
  */
-export async function uploadSpreadsheet(fileName: string, base64Data: string): Promise<MasterSummary> {
+export async function uploadSpreadsheet(fileName: string, base64Data: string, sessionToken?: string): Promise<MasterSummary> {
   const res = await fetch(`${apiBaseUrl}/api/upload`, {
     method: 'POST',
     headers: {
@@ -140,7 +165,8 @@ export async function uploadSpreadsheet(fileName: string, base64Data: string): P
     },
     body: JSON.stringify({
       fileName,
-      fileData: base64Data
+      fileData: base64Data,
+      sessionToken
     })
   });
 
@@ -183,5 +209,60 @@ export async function fetchSystemHealth(): Promise<{ cron: string; status: strin
     console.warn('Failed to fetch system health metadata.', err);
   }
   return null;
+}
+
+/**
+ * Verifies the app lock screen password on the backend.
+ * Returns the sessionToken string on success, or null on failure.
+ */
+export async function verifyAppLockPassword(password: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/security/verify-app`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.sessionToken || null;
+    }
+    return null;
+  } catch (err) {
+    console.error('Failed to verify app password:', err);
+    return null;
+  }
+}
+
+/**
+ * Requests backend database password updates.
+ */
+export async function changeSecurityPasswords(
+  currentPassword: string,
+  newUploadPassword?: string,
+  newAppPassword?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/security/change`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentPassword,
+        newUploadPassword,
+        newAppPassword
+      })
+    });
+    if (res.ok) {
+      return { success: true };
+    }
+    const data = await res.json().catch(() => ({}));
+    return { success: false, error: data.error || 'Server rejected password update request' };
+  } catch (err: any) {
+    console.error('Failed to update passwords:', err);
+    return { success: false, error: err.message || 'Connection failed' };
+  }
 }
 

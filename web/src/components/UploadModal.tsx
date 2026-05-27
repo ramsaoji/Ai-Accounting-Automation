@@ -17,9 +17,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  X
+  X,
+  Eye,
+  EyeOff
 } from 'lucide-react';
-import { uploadSpreadsheet } from '../services/api';
+import { uploadSpreadsheet, verifyUploadPassword } from '../services/api';
 
 interface UploadModalProps {
   onSuccess: () => void;
@@ -34,6 +36,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [currentFileName, setCurrentFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [sessionToken, setSessionToken] = useState('');
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,6 +51,31 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
     setCurrentFileIndex(0);
     setCurrentFileName('');
     setErrorMsg(null);
+    setPasswordInput('');
+    setSessionToken('');
+    setIsAuthorized(false);
+    setIsVerifying(false);
+    setShowPassword(false);
+  };
+
+  const handleAuthorize = async () => {
+    if (!passwordInput.trim()) return;
+    setIsVerifying(true);
+    try {
+      const token = await verifyUploadPassword(passwordInput);
+      if (token) {
+        setSessionToken(token);
+        setIsAuthorized(true);
+        setPasswordInput(''); // COMPLETELY ERASE THE PASSWORD FROM STATE IMMEDIATELY!
+        toast.success("Security authorization accepted.");
+      } else {
+        toast.error("Invalid upload password. Access denied.");
+      }
+    } catch (err) {
+      toast.error("Security verification request failed.");
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -122,7 +154,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
         // 3. AI Ingestion & DB Upsert
         setStatus('processing');
         setProgress(Math.round(overallProgressStart + overallProgressWeight * 0.75));
-        await uploadSpreadsheet(file.name, base64Data);
+        await uploadSpreadsheet(file.name, base64Data, sessionToken);
         
         // Finished file i
         setProgress(Math.round(((i + 1) / files.length) * 100));
@@ -156,150 +188,215 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
         }
       />
       
-      <DialogContent className="sm:max-w-md select-none">
-        <DialogHeader>
-          <DialogTitle className="text-sm font-bold">Upload Accounting Spreadsheet(s)</DialogTitle>
-          <DialogDescription className="text-xs">
-            Ingest liquor registers, daily cash sales, or debtors lists. The AI auditor will parse, validate, and index all transactions immediately.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-md select-none animate-in fade-in duration-200">
+        {!isAuthorized ? (
+          <>
+            <DialogHeader className="flex flex-col items-center text-center">
+              <div className="size-11 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 mb-2">
+                <UploadCloud className="size-5 text-primary" />
+              </div>
+              <DialogTitle className="text-sm font-bold text-center">Upload Security Authorization</DialogTitle>
+              <DialogDescription className="text-xs text-center max-w-[320px]">
+                Please enter your administrative authorization password to unlock Excel spreadsheet ingestion controls.
+              </DialogDescription>
+            </DialogHeader>
 
-        {/* Google Drive Overwrite Info Note */}
-        <div className="p-3 border border-warning/20 bg-warning/5 rounded-lg flex items-start gap-2.5 text-[11.5px] text-warning select-none leading-normal">
-          <AlertCircle className="size-4 text-warning shrink-0 mt-0.5" />
-          <div className="flex flex-col gap-0.5">
-            <span className="font-bold text-foreground text-xs leading-none mb-0.5">Google Drive Synchronization Note</span>
-            <span className="text-muted-foreground text-[11px] leading-relaxed">
-              If Google Drive sync is active, uploading a sheet manually will <strong className="text-warning font-semibold">override</strong> the synced worksheet in the database.
-            </span>
-          </div>
-        </div>
+            <div className="flex flex-col gap-1.5 py-4 w-full select-none text-left">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                Authorization Password
+              </label>
+              <div className="relative w-full">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAuthorize();
+                    }
+                  }}
+                  placeholder="Enter security key to unlock..."
+                  className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
+                  disabled={isVerifying}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
 
-        {/* Dynamic State Viewports */}
-        <div className="flex flex-col items-center justify-center border-2 border-dashed border-border/80 rounded-xl p-6 bg-muted/10 transition-colors">
-          {status === 'idle' && (
-            <div className="flex flex-col items-center text-center gap-3 w-full">
-              {files.length === 0 ? (
-                <>
-                  <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
-                    <FileSpreadsheet className="size-6 text-primary" />
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs font-semibold">Select ledger sheets</span>
-                    <span className="text-[0.62rem] text-muted-foreground mt-1 mb-3">Accepts only Excel files (.xlsx)</span>
-                    <Button variant="outline" size="xs" onClick={triggerFileSelect} className="h-8 text-[0.68rem] px-3 font-semibold cursor-pointer">
-                      Browse Files
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="w-full flex flex-col gap-2">
-                  <span className="text-[0.62rem] font-bold text-muted-foreground uppercase tracking-wider text-left self-start">
-                    Selected Spreadsheets ({files.length})
+            <DialogFooter className="sm:justify-between gap-2">
+              <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} className="text-xs">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAuthorize}
+                disabled={!passwordInput.trim() || isVerifying}
+                className="text-xs font-semibold cursor-pointer shrink-0"
+              >
+                {isVerifying ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Verifying...
                   </span>
-                  
-                  {/* Scrollable file queue list */}
-                  <div className="flex flex-col gap-1.5 w-full max-h-36 overflow-y-auto pr-1 no-scrollbar my-1.5">
-                    {files.map((f, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg border bg-background text-xs select-none">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileSpreadsheet className="size-4 text-primary shrink-0" />
-                          <span className="font-semibold truncate text-foreground pr-2 text-left">{f.name}</span>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-[0.58rem] text-muted-foreground font-mono">{(f.size / 1024).toFixed(1)} KB</span>
-                          <button
-                            onClick={() => removeFile(idx)}
-                            className="text-muted-foreground hover:text-destructive cursor-pointer p-0.5 rounded hover:bg-muted"
-                          >
-                            <X className="size-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                ) : 'Verify & Proceed'}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold">Upload Accounting Spreadsheet(s)</DialogTitle>
+              <DialogDescription className="text-xs">
+                Ingest liquor registers, daily cash sales, or debtors lists. The AI auditor will parse, validate, and index all transactions immediately.
+              </DialogDescription>
+            </DialogHeader>
 
-                  <div className="flex gap-2 justify-start mt-1">
-                    <Button variant="outline" size="xs" onClick={triggerFileSelect} className="h-7 text-[0.62rem] px-2.5 font-semibold cursor-pointer">
-                      Add More Files
-                    </Button>
-                    <Button variant="ghost" size="xs" onClick={reset} className="h-7 text-[0.62rem] px-2.5 text-destructive hover:bg-destructive/10 cursor-pointer">
-                      Clear All
-                    </Button>
-                  </div>
+            {/* Google Drive Overwrite Info Note */}
+            <div className="p-3 border border-warning/20 bg-warning/5 rounded-lg flex items-start gap-2.5 text-[11.5px] text-warning select-none leading-normal">
+              <AlertCircle className="size-4 text-warning shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-bold text-foreground text-xs leading-none mb-0.5">Google Drive Synchronization Note</span>
+                <span className="text-muted-foreground text-[11px] leading-relaxed">
+                  If Google Drive sync is active, uploading a sheet manually will <strong className="text-warning font-semibold">override</strong> the synced worksheet in the database.
+                </span>
+              </div>
+            </div>
+
+            {/* Dynamic State Viewports */}
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border/80 rounded-xl p-6 bg-muted/10 transition-colors">
+              {status === 'idle' && (
+                <div className="flex flex-col items-center text-center gap-3 w-full">
+                  {files.length === 0 ? (
+                    <>
+                      <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                        <FileSpreadsheet className="size-6 text-primary" />
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-semibold">Select ledger sheets</span>
+                        <span className="text-[0.62rem] text-muted-foreground mt-1 mb-3">Accepts only Excel files (.xlsx)</span>
+                        <Button variant="outline" size="xs" onClick={triggerFileSelect} className="h-8 text-[0.68rem] px-3 font-semibold cursor-pointer">
+                          Browse Files
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full flex flex-col gap-2">
+                      <span className="text-[0.62rem] font-bold text-muted-foreground uppercase tracking-wider text-left self-start">
+                        Selected Spreadsheets ({files.length})
+                      </span>
+                      
+                      {/* Scrollable file queue list */}
+                      <div className="flex flex-col gap-1.5 w-full max-h-36 overflow-y-auto pr-1 no-scrollbar my-1.5">
+                        {files.map((f, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 rounded-lg border bg-background text-xs select-none">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileSpreadsheet className="size-4 text-primary shrink-0" />
+                              <span className="font-semibold truncate text-foreground pr-2 text-left">{f.name}</span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="text-[0.58rem] text-muted-foreground font-mono">{(f.size / 1024).toFixed(1)} KB</span>
+                              <button
+                                onClick={() => removeFile(idx)}
+                                className="text-muted-foreground hover:text-destructive cursor-pointer p-0.5 rounded hover:bg-muted"
+                              >
+                                <X className="size-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2 justify-start mt-1">
+                        <Button variant="outline" size="xs" onClick={triggerFileSelect} className="h-7 text-[0.62rem] px-2.5 font-semibold cursor-pointer">
+                          Add More Files
+                        </Button>
+                        <Button variant="ghost" size="xs" onClick={reset} className="h-7 text-[0.62rem] px-2.5 text-destructive hover:bg-destructive/10 cursor-pointer">
+                          Clear All
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".xlsx"
+                    multiple
+                    className="hidden"
+                  />
                 </div>
               )}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".xlsx"
-                multiple
-                className="hidden"
-              />
-            </div>
-          )}
 
-          {(status === 'reading' || status === 'uploading' || status === 'processing') && (
-            <div className="flex flex-col items-center text-center gap-4 w-full px-4">
-              <Loader2 className="size-8 text-primary animate-spin" />
-              <div className="flex flex-col gap-1 w-full">
-                <span className="text-xs font-bold capitalize text-foreground">
-                  File {currentFileIndex} of {files.length}
-                </span>
-                <span className="text-[0.68rem] text-primary font-semibold truncate max-w-xs block mx-auto font-mono">
-                  {currentFileName}
-                </span>
-                <span className="text-[0.62rem] text-muted-foreground mt-1">
-                  {status === 'reading' ? 'Reading data buffer...' : status === 'uploading' ? 'Transmitting payload to accounting server...' : 'AI compliance auditor indexing ledger details...'}
-                </span>
-              </div>
-              <Progress value={progress} className="w-full h-1 mt-1" />
-            </div>
-          )}
+              {(status === 'reading' || status === 'uploading' || status === 'processing') && (
+                <div className="flex flex-col items-center text-center gap-4 w-full px-4">
+                  <Loader2 className="size-8 text-primary animate-spin" />
+                  <div className="flex flex-col gap-1 w-full">
+                    <span className="text-xs font-bold capitalize text-foreground">
+                      File {currentFileIndex} of {files.length}
+                    </span>
+                    <span className="text-[0.68rem] text-primary font-semibold truncate max-w-xs block mx-auto font-mono">
+                      {currentFileName}
+                    </span>
+                    <span className="text-[0.62rem] text-muted-foreground mt-1">
+                      {status === 'reading' ? 'Reading data buffer...' : status === 'uploading' ? 'Transmitting payload to accounting server...' : 'AI compliance auditor indexing ledger details...'}
+                    </span>
+                  </div>
+                  <Progress value={progress} className="w-full h-1 mt-1" />
+                </div>
+              )}
 
-          {status === 'success' && (
-            <div className="flex flex-col items-center text-center gap-3">
-              <div className="size-12 rounded-full bg-success/15 flex items-center justify-center border border-success/35">
-                <CheckCircle2 className="size-6 text-success animate-bounce" />
-              </div>
-              <span className="text-xs font-bold text-foreground">All Uploads Complete!</span>
-              <span className="text-[0.62rem] text-muted-foreground">Refreshing consolidated dashboard registers</span>
-            </div>
-          )}
+              {status === 'success' && (
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className="size-12 rounded-full bg-success/15 flex items-center justify-center border border-success/35">
+                    <CheckCircle2 className="size-6 text-success animate-bounce" />
+                  </div>
+                  <span className="text-xs font-bold text-foreground">All Uploads Complete!</span>
+                  <span className="text-[0.62rem] text-muted-foreground">Refreshing consolidated dashboard registers</span>
+                </div>
+              )}
 
-          {status === 'error' && (
-            <div className="flex flex-col items-center text-center gap-3">
-              <div className="size-12 rounded-full bg-destructive/10 flex items-center justify-center border border-destructive/20">
-                <AlertCircle className="size-6 text-destructive" />
-              </div>
-              <span className="text-xs font-bold text-destructive">Ingestion Pipeline Failed</span>
-              <span className="text-[0.62rem] text-muted-foreground text-center font-semibold text-foreground/80 font-mono break-all px-2">
-                Failed on: {currentFileName}
-              </span>
-              <span className="text-[0.62rem] text-muted-foreground px-4 leading-normal break-all">
-                {errorMsg || 'An error occurred while compiling summaries.'}
-              </span>
-              <Button variant="outline" size="xs" onClick={reset} className="mt-2 text-[0.62rem] h-7 px-3">
-                Clear & Reset
+              {status === 'error' && (
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className="size-12 rounded-full bg-destructive/10 flex items-center justify-center border border-destructive/20">
+                    <AlertCircle className="size-6 text-destructive" />
+                  </div>
+                  <span className="text-xs font-bold text-destructive">Ingestion Pipeline Failed</span>
+                  <span className="text-[0.62rem] text-muted-foreground text-center font-semibold text-foreground/80 font-mono break-all px-2">
+                    Failed on: {currentFileName}
+                  </span>
+                  <span className="text-[0.62rem] text-muted-foreground px-4 leading-normal break-all">
+                    {errorMsg || 'An error occurred while compiling summaries.'}
+                  </span>
+                  <Button variant="outline" size="xs" onClick={reset} className="mt-2 text-[0.62rem] h-7 px-3">
+                    Clear & Reset
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} disabled={status !== 'idle' && status !== 'error'} className="text-xs">
+                Cancel
               </Button>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} disabled={status !== 'idle' && status !== 'error'} className="text-xs">
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleUpload}
-            disabled={files.length === 0 || (status !== 'idle' && status !== 'error')}
-            className="text-xs cursor-pointer font-semibold"
-          >
-            {status === 'idle' || status === 'error' ? 'Upload & Audit' : 'Processing...'}
-          </Button>
-        </DialogFooter>
+              <Button
+                size="sm"
+                onClick={handleUpload}
+                disabled={files.length === 0 || (status !== 'idle' && status !== 'error')}
+                className="text-xs cursor-pointer font-semibold animate-in fade-in duration-300"
+              >
+                {status === 'idle' || status === 'error' ? 'Upload & Audit' : 'Processing...'}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

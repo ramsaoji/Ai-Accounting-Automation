@@ -13,7 +13,8 @@ import {
   RefreshCw,
   Grid,
   Cloud,
-  Loader2
+  Loader2,
+  Lock
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -52,6 +53,8 @@ import { LedgerSection } from './components/LedgerSection';
 import { AuditorSection } from './components/AuditorSection';
 import { AdvisorSection } from './components/AdvisorSection';
 import { UploadModal } from './components/UploadModal';
+import { LockScreen } from './components/LockScreen';
+import { SecuritySettingsModal } from './components/SecuritySettingsModal';
 import { Button } from '@/components/ui/button';
 import { triggerDriveSync, fetchAccountingData } from './services/api';
 import type { Alert } from './types';
@@ -64,6 +67,7 @@ interface AppSidebarProps {
   activeAlerts: any[];
   theme: any;
   setTheme: (t: any) => void;
+  onOpenSecuritySettings: () => void;
 }
 
 function AppSidebar({
@@ -74,7 +78,8 @@ function AppSidebar({
   businessName,
   activeAlerts,
   theme,
-  setTheme
+  setTheme,
+  onOpenSecuritySettings
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -252,6 +257,22 @@ function AppSidebar({
               <span>{theme === 'dark' ? 'Light Theme' : 'Dark Theme'}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => {
+                onOpenSecuritySettings();
+                if (isMobile) {
+                  setOpenMobile(false);
+                }
+              }}
+              className="text-xs font-semibold"
+              tooltip="Security Settings"
+            >
+              <Lock className="size-4" />
+              <span>Change Security Passcodes</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
@@ -268,6 +289,10 @@ export function App() {
   const [activeView, setActiveView] = useState<'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor'>('portal');
 
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
+
+  // App Session Token & Security settings dialog states
+  const [appSessionToken, setAppSessionToken] = useState(() => sessionStorage.getItem('app_session_token') || '');
+  const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
   const mainRef = useRef<HTMLDivElement>(null);
 
@@ -428,6 +453,21 @@ export function App() {
     toast.info(`Switched Workspace: ${workspace === 'sales' ? 'Sales Register' : 'Customer Debitors'}`);
   };
 
+  // App Passcode Lock Screen verification check
+  if (!appSessionToken) {
+    return (
+      <TooltipProvider>
+        <LockScreen
+          onUnlock={(token) => {
+            sessionStorage.setItem('app_session_token', token);
+            setAppSessionToken(token);
+          }}
+        />
+        <Toaster position="top-right" />
+      </TooltipProvider>
+    );
+  }
+
   // Sync / loading screen placed after hook definitions to respect React Hook guidelines
   if (isLoading) {
     return (
@@ -509,6 +549,7 @@ export function App() {
             activeAlerts={activeAlerts}
             theme={theme}
             setTheme={setTheme}
+            onOpenSecuritySettings={() => setIsSecurityOpen(true)}
           />
 
           {/* Sidebar Main Content Inset Wrapper */}
@@ -621,6 +662,7 @@ export function App() {
 
         </div>
       </SidebarProvider>
+      <SecuritySettingsModal isOpen={isSecurityOpen} onOpenChange={setIsSecurityOpen} />
       <Toaster position="top-right" />
     </TooltipProvider>
   );

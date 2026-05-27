@@ -39,6 +39,14 @@ const envSchema = z.object({
   
   // Scheduler Config
   CRON_SCHEDULE: z.string().default('0 0 * * *'), // Default to every day at 00:00
+  
+  // Authorization Config
+  UPLOAD_PASSWORD: z.string({
+    required_error: 'UPLOAD_PASSWORD must be configured in your .env file to authorize spreadsheet ingestion uploads.',
+  }).min(1, 'UPLOAD_PASSWORD must not be empty inside .env.'),
+  APP_PASSWORD: z.string({
+    required_error: 'APP_PASSWORD must be configured in your .env file to secure the App Lock screen.',
+  }).min(1, 'APP_PASSWORD must not be empty inside .env.'),
 });
 
 // Parse and validate environment variables

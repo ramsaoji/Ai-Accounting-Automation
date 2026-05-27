@@ -86,7 +86,7 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
   ```
-* **Rationalization:** Decouples the frontend dashboard queries from direct disk access. The database layer automatically upserts report payloads (`sales`, `debitors`, and daily aggregates) upon ingestion, supporting high-speed JSON queries and scaling.
+* **Rationalization:** Decouples the frontend dashboard queries from direct disk access. The database layer automatically upserts report payloads (`sales`, `debitors`, daily aggregates, and `security-config` credentials) upon ingestion, supporting high-speed JSON queries, secure configuration storage, and scaling.
 
 ---
 

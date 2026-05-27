@@ -3,6 +3,7 @@ import { handleCorsPreflight, corsHeaders } from './cors.js';
 import { getHealth } from './controllers/health.controller.js';
 import { getSalesReport, getDebitorsReport, triggerPipeline, handleFileUpload } from './controllers/report.controller.js';
 import { handleAdvisorChat } from './controllers/chat.controller.js';
+import { verifyAppPassword, changePasswords } from './controllers/security.controller.js';
 
 /**
  * Directs incoming HTTP requests to their matching controller logic.
@@ -48,6 +49,18 @@ export function handleRequest(req: http.IncomingMessage, res: http.ServerRespons
   // POST: Upload and process Excel spreadsheets
   if ((parsedUrl === '/upload' || parsedUrl === '/api/upload') && req.method === 'POST') {
     handleFileUpload(req, res);
+    return;
+  }
+
+  // POST: Verify App Lock Screen Credentials
+  if (parsedUrl === '/api/security/verify-app' && req.method === 'POST') {
+    verifyAppPassword(req, res);
+    return;
+  }
+
+  // POST: Change App Lock or Ingestion Passwords
+  if (parsedUrl === '/api/security/change' && req.method === 'POST') {
+    changePasswords(req, res);
     return;
   }
 
