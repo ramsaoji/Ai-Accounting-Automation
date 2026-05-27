@@ -180,9 +180,9 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
     : '0';
 
   return (
-    <div className="flex flex-col gap-6 w-full animate-in fade-in duration-300">
+    <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
       {/* Title */}
-      <div className="border-b pb-5">
+      <div className="border-b pb-4 md:pb-5">
         <h1 className="font-heading font-semibold text-xl tracking-tight text-foreground">
           Audit Anomaly Board
         </h1>
@@ -239,10 +239,10 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
       </div>
 
       {/* Datadog / Sentry Split-pane Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-1 items-start" style={{ height: 'calc(100vh - 13rem)' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 mt-1 items-start lg:h-[calc(100vh-13rem)]">
         
         {/* Left Column Pane (2/5 size) */}
-        <div className="lg:col-span-2 flex flex-col border rounded-xl overflow-hidden bg-card/50 h-full min-h-0">
+        <div className="lg:col-span-2 flex flex-col border rounded-xl overflow-hidden bg-card/45 h-[450px] lg:h-full min-h-0 shrink-0 min-w-0">
           {/* Tab Selector Header */}
           <div className="flex border-b bg-muted/20 select-none">
             <button
@@ -283,7 +283,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                     />
                   </div>
                   {/* Severity Pill Buttons */}
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5 select-none">
                     {(['all', 'critical', 'high', 'medium', 'low'] as const).map((sev) => (
                       <button
                         key={sev}
@@ -291,10 +291,10 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                           setSeverityFilter(sev);
                           setSelectedAlertIndex(0);
                         }}
-                        className={`text-[0.65rem] px-2 py-1 rounded border font-semibold capitalize transition-all cursor-pointer ${
+                        className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
                           severityFilter === sev
-                            ? 'bg-foreground text-background border-foreground'
-                            : 'bg-background hover:bg-muted text-muted-foreground'
+                            ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-border/80'
                         }`}
                       >
                         {sev} ({severityCounts[sev]})
@@ -432,7 +432,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
         </div>
 
         {/* Right Column Pane Inspector (3/5 size) */}
-        <Card className="lg:col-span-3 border bg-card/45 h-full min-h-0 overflow-hidden flex flex-col justify-between">
+        <Card className="lg:col-span-3 border bg-card/45 h-auto lg:h-full min-h-[350px] lg:min-h-0 overflow-hidden flex flex-col justify-between min-w-0">
           {!activeSelectedAlert ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 select-none">
               <FileWarning className="size-10 text-muted-foreground/60 mb-3" />
@@ -445,7 +445,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
             // Issue Selected View
             <>
               {/* Header Details */}
-              <div className="p-6 border-b border-border/80 flex flex-col gap-3 select-none">
+              <div className="p-4 md:p-6 border-b border-border/80 flex flex-col gap-2 md:gap-3 select-none">
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest font-mono">
                     ID: {activeSelectedAlert.ruleId || 'ANOMALY_TRACE'}
@@ -470,7 +470,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
               </div>
 
               {/* Inspector Content Panel */}
-              <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-5">
+              <div className="p-4 md:p-6 flex-1 overflow-y-auto flex flex-col gap-4 md:gap-5">
                 {/* Rule Message Box */}
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider select-none">
@@ -496,9 +496,9 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                         setActiveActionModal(activeSelectedAlert);
                         setPasscode('');
                       }}
-                      className="mt-2.5 flex items-center gap-1.5 text-primary hover:text-primary/80 transition-colors text-left font-bold cursor-pointer group focus:outline-none select-none"
+                      className="mt-2.5 flex items-start gap-1.5 text-primary hover:text-primary/80 transition-colors text-left font-bold cursor-pointer group focus:outline-none select-none"
                     >
-                      <ChevronRight className="size-4 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                      <ChevronRight className="size-4 shrink-0 group-hover:translate-x-0.5 transition-transform mt-0.5" />
                       <span className="underline underline-offset-4 decoration-primary/30 group-hover:decoration-primary/80 transition-colors">
                         {getSeverityMeta(activeSelectedAlert.severity).action}
                       </span>

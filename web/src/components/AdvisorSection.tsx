@@ -87,19 +87,19 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
       id: 'revenue' as const,
       name: 'Revenue Optimization',
       desc: 'Evaluate category profit splits and margin expansions.',
-      icon: <TrendingUp className="size-4 text-success" />
+      icon: <TrendingUp className="size-4 text-success shrink-0" />
     },
     {
       id: 'recovery' as const,
       name: 'Dues Recovery Strategy',
       desc: 'Formulate credit limits and collection objectives.',
-      icon: <Zap className="size-4 text-warning" />
+      icon: <Zap className="size-4 text-warning shrink-0" />
     },
     {
       id: 'auditing' as const,
       name: 'Auditing Integrity',
       desc: 'Analyze outlier postings and expense leaks.',
-      icon: <ShieldCheck className="size-4 text-info" />
+      icon: <ShieldCheck className="size-4 text-info shrink-0" />
     }
   ];
 
@@ -194,9 +194,9 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full animate-in fade-in duration-300">
+    <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
       {/* Title */}
-      <div className="border-b pb-5">
+      <div className="border-b pb-4 md:pb-5">
         <h1 className="font-heading font-semibold text-xl tracking-tight text-foreground">
           AI Strategic Advisor
         </h1>
@@ -206,32 +206,32 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
       </div>
 
       {/* Production-grade Split Chat Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch" style={{ height: 'calc(100vh - 13rem)' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 items-stretch lg:h-[calc(100vh-13rem)]">
         
         {/* Playbooks Sidebar (1/4 size) */}
-        <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden h-full select-none">
+        <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden h-auto lg:h-full select-none shrink-0 min-w-0">
           <div className="p-4 border-b bg-muted/20 flex items-center gap-2">
             <Compass className="size-4 text-primary" />
             <span className="text-xs font-bold text-foreground">Advisory Playbooks</span>
           </div>
-          <div className="p-3 flex-1 flex flex-col gap-1 overflow-y-auto">
+          <div className="p-2 md:p-3 flex-1 grid grid-cols-3 lg:flex lg:flex-col gap-2 lg:gap-1 overflow-auto">
             {playbooks.map((p) => {
               const isActive = activePlaybook === p.id;
               return (
                 <button
                   key={p.id}
                   onClick={() => setActivePlaybook(p.id)}
-                  className={`p-3 rounded-lg border text-left cursor-pointer transition-all duration-200 flex flex-col gap-1 ${
+                  className={`p-2.5 md:p-3 rounded-lg border text-left cursor-pointer transition-all duration-200 flex flex-col gap-0.5 md:gap-1 items-center lg:items-start text-center lg:text-left shrink-0 ${
                     isActive
                       ? 'bg-muted border-foreground/20'
                       : 'bg-background hover:bg-muted/40'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col lg:flex-row items-center gap-1.5 md:gap-2">
                     {p.icon}
-                    <span className="text-xs font-bold text-foreground">{p.name}</span>
+                    <span className="text-[0.68rem] sm:text-xs font-bold text-foreground leading-none">{p.name.split(' ')[0]}</span>
                   </div>
-                  <span className="text-[0.65rem] text-muted-foreground leading-normal mt-0.5">
+                  <span className="text-[0.65rem] text-muted-foreground leading-normal mt-0.5 hidden lg:block">
                     {p.desc}
                   </span>
                 </button>
@@ -245,32 +245,31 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
         </div>
 
         {/* Chat Feed Pane (3/4 size) */}
-        <Card className="lg:col-span-3 border bg-card/45 h-full overflow-hidden flex flex-col justify-between">
-          {/* Header */}
-          <CardHeader className="px-6 py-4 border-b bg-muted/20 flex flex-row items-center justify-between space-y-0 select-none">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0">
+        <Card className="lg:col-span-3 border bg-card/45 h-[620px] sm:h-[680px] lg:h-full overflow-hidden flex flex-col justify-between min-w-0">
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between space-y-0 select-none gap-2">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0 mt-0.5">
                 <Bot className="size-4.5" />
               </div>
-              <div>
-                <CardTitle className="text-xs font-bold flex items-center gap-2 leading-none">
+              <div className="flex-1 min-w-0">
+                <CardTitle className="text-xs font-bold flex flex-wrap items-center gap-1.5 sm:gap-2 leading-tight">
                   {businessName} Advisory Agent
-                  <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full leading-none">
+                  <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full leading-none shrink-0">
                     <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse"></span>
                     Online
                   </span>
                 </CardTitle>
-                <p className="text-[0.68rem] text-muted-foreground mt-1">Context: {summary.fileName}</p>
+                <p className="text-[0.68rem] text-muted-foreground mt-1 truncate max-w-[150px] sm:max-w-none">Context: {summary.fileName}</p>
               </div>
             </div>
-            <Button variant="outline" size="xs" onClick={clearChat} className="text-xs h-7.5 px-2.5">
-              <RefreshCw className="size-3.5 mr-1" />
-              Clear Chat
+            <Button variant="outline" size="xs" onClick={clearChat} className="text-[10px] sm:text-xs h-7 sm:h-7.5 px-2 sm:px-2.5 shrink-0">
+              <RefreshCw className="size-3.5 mr-0 sm:mr-1 shrink-0 animate-in spin-in-12 duration-300" />
+              <span className="hidden sm:inline">Clear Chat</span>
             </Button>
           </CardHeader>
 
           {/* Message Thread (Scrollable Viewport) */}
-          <CardContent className="flex-1 min-h-0 px-6 py-4 overflow-y-auto flex flex-col scroll-smooth pr-3">
+          <CardContent className="flex-1 min-h-0 px-4 py-3 sm:px-6 sm:py-4 overflow-y-auto flex flex-col scroll-smooth pr-3">
             <div className="flex flex-col gap-4">
               {messages.map((msg, index) => (
                 <div
@@ -306,7 +305,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
           </CardContent>
 
           {/* Form / Actions */}
-          <CardFooter className="px-6 py-4 border-t bg-muted/10 flex flex-col gap-3">
+          <CardFooter className="px-4 py-3 sm:px-6 sm:py-4 border-t bg-muted/10 flex flex-col gap-3">
             {/* Quick Suggestion Chips */}
             <div className="flex gap-2 overflow-x-auto pb-1 max-w-full no-scrollbar select-none shrink-0">
               {suggestions.map((sug, idx) => (
@@ -318,7 +317,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                   className="text-[0.68rem] text-muted-foreground hover:text-foreground rounded-full flex-shrink-0 flex items-center gap-1 h-7 px-3 border-border/80 hover:bg-muted"
                 >
                   {sug}
-                  <ArrowUpRight className="size-3 text-muted-foreground/80" />
+                  <ArrowUpRight className="size-3 text-muted-foreground/80 shrink-0" />
                 </Button>
               ))}
             </div>

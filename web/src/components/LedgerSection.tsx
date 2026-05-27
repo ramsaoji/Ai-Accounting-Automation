@@ -77,11 +77,47 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     return list;
   }, [summary.topDebitors, searchTerm, statusFilter, maxOutstandingDuesLimit]);
 
+  const parseSheetNameToValue = (sheetName: string) => {
+    const clean = sheetName.trim().toLowerCase();
+    const yearMatch = clean.match(/\b(20\d{2})\b/);
+    if (yearMatch) {
+      const year = parseInt(yearMatch[1], 10);
+      const monthsMap: Record<string, number> = {
+        jan: 0, january: 0,
+        feb: 1, february: 1,
+        mar: 2, march: 2,
+        apr: 3, april: 3,
+        may: 4,
+        jun: 5, june: 5,
+        jul: 6, july: 6,
+        aug: 7, august: 7,
+        sep: 8, sept: 8, september: 8,
+        oct: 9, october: 9,
+        nov: 10, november: 10,
+        dec: 11, december: 11
+      };
+      let monthIdx = 0;
+      for (const [key, value] of Object.entries(monthsMap)) {
+        if (clean.includes(key)) {
+          monthIdx = value;
+          break;
+        }
+      }
+      return year * 12 + monthIdx;
+    }
+    return 0;
+  };
+
   const processedMonths = useMemo(() => {
     if (!summary.months) return [];
-    return summary.months.filter((m) =>
+    const list = summary.months.filter((m) =>
       m.sheetName.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    return [...list].sort((a, b) => {
+      const valA = parseSheetNameToValue(a.sheetName);
+      const valB = parseSheetNameToValue(b.sheetName);
+      return valB - valA;
+    });
   }, [summary.months, searchTerm]);
 
   // Pagination Logic
@@ -149,9 +185,9 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full animate-in fade-in duration-300">
+    <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
       {/* Title */}
-      <div className="border-b pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="border-b pb-4 md:pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-heading font-semibold text-xl tracking-tight text-foreground">
             Transaction Ledger Explorer
@@ -163,10 +199,10 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       </div>
 
       {/* Main Table Card */}
-      <Card className="border shadow-xs bg-card/45 overflow-hidden flex flex-col justify-between" style={{ height: 'calc(100vh - 13rem)' }}>
+      <Card className="border shadow-xs bg-card/45 overflow-hidden flex flex-col justify-between h-[550px] md:h-[calc(100vh-13rem)]">
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Custom Database Toolbar */}
-          <div className="p-4 border-b border-border/80 bg-muted/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0 select-none">
+          <div className="p-4 border-b border-border/80 bg-muted/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shrink-0 select-none">
             <div className="flex flex-wrap items-center gap-3">
               {/* Search Field */}
               <div className="relative w-full sm:w-60">
@@ -189,10 +225,10 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                       <button
                         key={filter}
                         onClick={() => setStatusFilter(filter)}
-                        className={`text-[0.62rem] px-2.5 py-1.5 rounded border font-semibold capitalize transition-all cursor-pointer ${
+                        className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
                           statusFilter === filter
-                            ? 'bg-foreground text-background border-foreground'
-                            : 'bg-background hover:bg-muted text-muted-foreground'
+                            ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-border/80'
                         }`}
                       >
                         {filter}
@@ -213,8 +249,8 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
           </div>
 
           {/* Database Grid */}
-          <div className="flex-1 overflow-y-auto">
-            <Table>
+          <div className="flex-1 overflow-auto">
+            <Table className="min-w-[700px] sm:min-w-full">
               <TableHeader className="bg-muted/15 select-none">
                 <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
                   {isDebitors ? (
@@ -357,7 +393,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
         </div>
 
         {/* Database Pagination Console */}
-        <div className="border-t p-4 bg-muted/15 flex items-center justify-between select-none shrink-0 text-xs font-semibold text-muted-foreground">
+        <div className="border-t p-4 bg-muted/15 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 select-none shrink-0 text-xs font-semibold text-muted-foreground">
           <span>
             Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(totalItems, currentPage * itemsPerPage)} of {totalItems.toLocaleString()} items
           </span>

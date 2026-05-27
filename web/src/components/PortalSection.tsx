@@ -171,9 +171,9 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
   }, [searchQuery, activeFilter, salesAlertCount, debitorsAlertCount]);
 
   return (
-    <div className="flex flex-col gap-6 w-full animate-in fade-in duration-300">
+    <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
       {/* Vercel-style Sub-header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 md:pb-5">
         <div>
           <h1 className="font-heading font-semibold text-xl tracking-tight text-foreground">
             Financial Ledger Consoles
@@ -185,7 +185,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
       </div>
 
       {/* Toolbar / Filters */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
         {/* Search */}
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
@@ -199,15 +199,15 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
         </div>
 
         {/* Console Filters */}
-        <div className="flex items-center gap-1.5 self-start sm:self-auto">
+        <div className="flex items-center gap-1.5 self-start sm:self-auto select-none">
           {(['all', 'flagged', 'audited'] as const).map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
-              className={`text-xs px-3 py-1.5 rounded-lg border font-medium capitalize transition-all cursor-pointer ${
+              className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
                 activeFilter === filter
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-background hover:bg-muted text-muted-foreground'
+                  ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
+                  : 'bg-background hover:bg-muted text-muted-foreground border-border/80'
               }`}
             >
               {filter}
@@ -217,7 +217,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
       </div>
 
       {/* Project Switcher Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mt-1">
         {filteredPortals.length === 0 ? (
           <div className="col-span-2 text-center py-20 border rounded-xl bg-card/20 text-xs text-muted-foreground">
             No active database consoles match your search filter.
@@ -229,11 +229,11 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
               className="border hover:border-primary/50 hover:shadow-sm transition-all duration-300 bg-card/45 overflow-hidden flex flex-col justify-between group cursor-pointer"
               onClick={() => onLaunchWorkspace(portal.id as 'sales' | 'debitors')}
             >
-              <div className="p-6 flex flex-col gap-5">
+              <div className="p-4 md:p-6 flex flex-col gap-4 md:gap-5">
                 {/* Card Title & Icon */}
                 <div className="flex justify-between items-start gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-xl bg-muted/60 flex items-center justify-center border border-border/80 text-muted-foreground group-hover:text-primary group-hover:border-primary/45 group-hover:bg-primary/10 transition-all">
+                    <div className="size-10 rounded-xl bg-muted/60 flex items-center justify-center border border-border/80 text-muted-foreground group-hover:text-primary group-hover:border-primary/45 group-hover:bg-primary/10 transition-all shrink-0">
                       <Database className="size-5" />
                     </div>
                     <div className="flex flex-col gap-0.5">
@@ -254,7 +254,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
                 </div>
 
                 {/* Grid stats */}
-                <div className="grid grid-cols-2 gap-4 bg-muted/20 p-3 rounded-lg border">
+                <div className="grid grid-cols-2 gap-3 md:gap-4 bg-muted/20 p-2.5 md:p-3 rounded-lg border">
                   {portal.stats.map((stat, i) => (
                     <div key={i} className="flex flex-col gap-0.5">
                       <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">
@@ -303,8 +303,8 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
               </div>
 
               {/* Card Footer: Metadata tags + Action button */}
-              <div className="border-t px-6 py-3.5 bg-muted/20 flex items-center justify-between gap-4">
-                <div className="flex gap-1.5 overflow-hidden">
+              <div className="border-t px-4 py-3 md:px-6 md:py-3.5 bg-muted/20 flex items-center justify-between gap-4">
+                <div className="flex flex-wrap gap-1.5">
                   {portal.tags.map((tag, idx) => (
                     <span
                       key={idx}
@@ -325,14 +325,14 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
       </div>
 
       {/* Human-readable Business Protection Guide */}
-      <div className="border border-border/80 rounded-xl p-5 bg-muted/15 flex flex-col gap-4 mt-4 text-xs">
+      <div className="border border-border/80 rounded-xl p-4 md:p-5 bg-muted/15 flex flex-col gap-3 md:gap-4 mt-4 text-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="size-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shrink-0">
               <Cpu className="size-5" />
             </div>
             <div>
-              <h4 className="font-bold text-foreground text-sm">🛡️ Automated Bookkeeping Safety Checks</h4>
+              <h4 className="font-bold text-foreground text-sm">Automated Bookkeeping Safety Checks</h4>
               <p className="text-[0.75rem] text-muted-foreground mt-1 leading-normal max-w-2xl">
                 Every spreadsheet ingestion automatically passes through our <strong>Smart Integrity Engine</strong>. 
                 We scan every transaction to safeguard your finances from manual typing errors, double billing, or cost spikes, sending instant alerts to your AI Strategic Advisor.
