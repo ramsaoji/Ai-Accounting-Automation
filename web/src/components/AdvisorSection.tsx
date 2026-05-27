@@ -81,10 +81,16 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
 
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      // Cap height mathematically at 120px to match standard modern chat input caps
-      const nextHeight = Math.min(120, textareaRef.current.scrollHeight);
-      textareaRef.current.style.height = `${nextHeight}px`;
+      if (!input.trim()) {
+        textareaRef.current.style.height = '36px';
+        textareaRef.current.style.overflowY = 'hidden';
+      } else {
+        textareaRef.current.style.height = 'auto';
+        // Cap height mathematically at 120px to match standard modern chat input caps
+        const nextHeight = Math.min(120, textareaRef.current.scrollHeight);
+        textareaRef.current.style.height = `${nextHeight}px`;
+        textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 120 ? 'auto' : 'hidden';
+      }
     }
   }, [input]);
 
@@ -361,9 +367,9 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about sales, debtor caps, or staff checklists..."
-                className="flex-1 bg-background dark:bg-muted/40 border border-border rounded-md px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 resize-none min-h-[36px] scroll-smooth py-2.5 overflow-y-auto"
-                style={{ height: 'auto' }}
+                placeholder="Ask a financial question..."
+                className="flex-1 bg-background dark:bg-muted/40 border border-border rounded-md px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 resize-none min-h-[36px] scroll-smooth"
+                style={{ height: '36px', overflowY: 'hidden' }}
               />
               <Button
                 type="submit"
