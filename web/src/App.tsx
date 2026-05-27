@@ -324,13 +324,21 @@ export function App() {
   }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
-  const { salesData, debitorsData, connectionMode, cronSchedule, isLoading, sync: fetchRealData } = useAccountingData(!!appSessionToken);
+  const { salesData, debitorsData, connectionMode, cronSchedule, isLoading, sync: fetchRealData } = useAccountingData();
+
+  // Trigger sync on mount if already authenticated
+  useEffect(() => {
+    const cachedToken = sessionStorage.getItem('app_session_token');
+    if (cachedToken) {
+      fetchRealData();
+    }
+  }, [fetchRealData]);
 
   const businessName = useMemo(() => {
     const files = [salesData?.fileName, debitorsData?.fileName].filter(Boolean) as string[];
     for (const f of files) {
       const lower = f.toLowerCase();
-      if (lower.includes('gaurav')) return 'Hotel Gaurav';
+      if (/gaurav/i.test(lower)) return 'Hotel Gaurav';
       
       let name = f.replace(/\.[^/.]+$/, "");
       name = name.replace(/(daily\s*sales\s*register|debitors\s*list|debitors|sales|ledger|list)/gi, '').trim();
@@ -405,9 +413,7 @@ export function App() {
   const maxOutstandingDuesLimit = 15000;
 
   // activeSummary points to the currently active dataset
-  const activeSummary = useMemo(() => {
-    return activeWorkspace === 'sales' ? salesData : debitorsData;
-  }, [activeWorkspace, salesData, debitorsData]);
+  const activeSummary = activeWorkspace === 'sales' ? salesData : debitorsData;
 
   // Baseline Monthly Expense average for anomaly calculations
   const averageMonthlyExpense = useMemo(() => {
@@ -481,6 +487,7 @@ export function App() {
           onUnlock={(token) => {
             sessionStorage.setItem('app_session_token', token);
             setAppSessionToken(token);
+            fetchRealData();
           }}
         />
         <Toaster position="top-right" />
@@ -494,7 +501,7 @@ export function App() {
       <div className="flex h-screen w-screen bg-background text-foreground font-sans antialiased flex-col items-center justify-center p-6">
         <div className="flex flex-col items-center gap-4">
           <RefreshCw className="size-8 text-primary animate-spin" />
-          <p className="text-xs text-muted-foreground font-medium animate-pulse">Syncing accounting console...</p>
+          <p className="text-xs text-muted-foreground font-medium animate-pulse">Syncing accounting console…</p>
         </div>
       </div>
     );
@@ -673,7 +680,7 @@ export function App() {
                         />
                       )}
                       {activeView === 'advisor' && (
-                        <AdvisorSection summary={activeSummary} />
+                        <AdvisorSection key={activeSummary.fileName} summary={activeSummary} />
                       )}
                     </>
                   )}

@@ -83,26 +83,21 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     if (yearMatch) {
       const year = parseInt(yearMatch[1], 10);
       const monthsMap: Record<string, number> = {
-        jan: 0, january: 0,
-        feb: 1, february: 1,
-        mar: 2, march: 2,
-        apr: 3, april: 3,
+        january: 0, jan: 0,
+        february: 1, feb: 1,
+        march: 2, mar: 2,
+        april: 3, apr: 3,
         may: 4,
-        jun: 5, june: 5,
-        jul: 6, july: 6,
-        aug: 7, august: 7,
-        sep: 8, sept: 8, september: 8,
-        oct: 9, october: 9,
-        nov: 10, november: 10,
-        dec: 11, december: 11
+        june: 5, jun: 5,
+        july: 6, jul: 6,
+        august: 7, aug: 7,
+        september: 8, sept: 8, sep: 8,
+        october: 9, oct: 9,
+        november: 10, nov: 10,
+        december: 11, dec: 11
       };
-      let monthIdx = 0;
-      for (const [key, value] of Object.entries(monthsMap)) {
-        if (clean.includes(key)) {
-          monthIdx = value;
-          break;
-        }
-      }
+      const monthMatch = clean.match(/(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)/);
+      const monthIdx = monthMatch ? monthsMap[monthMatch[0]] : 0;
       return year * 12 + monthIdx;
     }
     return 0;
@@ -113,7 +108,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     const list = summary.months.filter((m) =>
       m.sheetName.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    return [...list].sort((a, b) => {
+    return list.toSorted((a, b) => {
       const valA = parseSheetNameToValue(a.sheetName);
       const valB = parseSheetNameToValue(b.sheetName);
       return valB - valA;
@@ -134,10 +129,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     return processedMonths.slice(start, start + itemsPerPage);
   }, [processedMonths, currentPage]);
 
-  // Reset page when search or filters change
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
+  // CurrentPage is reset inside handlers to avoid chained updates
 
   // const handleExportCSV = () => {
   //   try {
@@ -211,7 +203,10 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                   type="text"
                   placeholder="Filter records..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="pl-9 h-9 text-xs"
                 />
               </div>
@@ -223,8 +218,12 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                   <div className="flex gap-1">
                     {(['all', 'breached', 'watch', 'clear'] as const).map((filter) => (
                       <button
+                        type="button"
                         key={filter}
-                        onClick={() => setStatusFilter(filter)}
+                        onClick={() => {
+                          setStatusFilter(filter);
+                          setCurrentPage(1);
+                        }}
                         className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
                           statusFilter === filter
                             ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
@@ -299,7 +298,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                       const statusIcon = isBreach ? <AlertTriangle className="size-3 text-destructive" /> : debtor.pending > 5000 ? <AlertTriangle className="size-3 text-warning" /> : <CheckCircle className="size-3 text-success" />;
 
                       return (
-                        <TableRow key={idx} className="hover:bg-muted/30 transition-colors h-11 border-b">
+                        <TableRow key={debtor.name} className="hover:bg-muted/30 transition-colors h-11 border-b">
                           {/* Name + Initials Avatar */}
                           <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-3">
                             <div className="size-7 rounded-full bg-primary/10 text-primary border flex items-center justify-center font-bold text-[0.68rem] font-mono select-none">
@@ -354,7 +353,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                         : 'bg-destructive/10 text-destructive border-destructive/20';
 
                       return (
-                        <TableRow key={idx} className="hover:bg-muted/30 transition-colors h-11 border-b">
+                        <TableRow key={month.sheetName} className="hover:bg-muted/30 transition-colors h-11 border-b">
                           <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-2">
                             <FolderOpen className="size-4 text-muted-foreground shrink-0" />
                             {month.sheetName}

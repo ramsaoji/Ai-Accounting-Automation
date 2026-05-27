@@ -18,19 +18,7 @@ import {
   Activity,
   Info
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  BarChart,
-  Bar,
-  Cell
-} from 'recharts';
+const OverviewCharts = React.lazy(() => import('./OverviewCharts'));
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -111,7 +99,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger render={
-                  <button className="text-[0.65rem] bg-muted hover:bg-muted/85 text-foreground px-2 py-0.5 rounded border border-border/80 cursor-pointer select-none font-medium flex items-center gap-1">
+                  <button type="button" className="text-[0.65rem] bg-muted hover:bg-muted/85 text-foreground px-2 py-0.5 rounded border border-border/80 cursor-pointer select-none font-medium flex items-center gap-1">
                     <Info className="size-3 text-muted-foreground" />
                     <span>What is Audited?</span>
                   </button>
@@ -288,6 +276,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
           {/* Chart Tabs */}
           <div className="flex items-center gap-1.5 self-start sm:self-auto select-none">
             <button
+              type="button"
               onClick={() => setActiveChartTab('primary')}
               className={`text-[0.7rem] sm:text-xs px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
                 activeChartTab === 'primary'
@@ -298,6 +287,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
               {isDebitors ? 'Top Debitors' : 'Cashflow Timeline'}
             </button>
             <button
+              type="button"
               onClick={() => setActiveChartTab('distribution')}
               className={`text-[0.7rem] sm:text-xs px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
                 activeChartTab === 'distribution'
@@ -311,104 +301,15 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
           <div className="w-full h-80 select-none">
-            <ResponsiveContainer width="100%" height="100%">
-              {activeChartTab === 'primary' ? (
-                // Primary Tab: Top Debitors (Bar) or Sales Timeline (Area)
-                isDebitors && summary.topDebitors ? (
-                  <BarChart
-                    layout="vertical"
-                    data={summary.topDebitors.slice(0, 8)}
-                    margin={{ left: isMobile ? 10 : 5, right: 20, top: 10, bottom: 10 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} horizontal={false} />
-                    <XAxis type="number" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => `₹${v/1000}K`} />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      stroke="var(--muted-foreground)"
-                      fontSize={10}
-                      width={isMobile ? 85 : 110}
-                      tickFormatter={(v) => v.replace(/\s*\(.*?\)\s*/g, '').trim().slice(0, isMobile ? 12 : 22)}
-                    />
-                    <RechartsTooltip
-                      cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
-                      contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }}
-                      itemStyle={{ color: 'var(--foreground)' }}
-                      labelStyle={{ color: 'var(--muted-foreground)' }}
-                      formatter={(value) => [`₹${Number(value).toLocaleString()}`, 'Outstanding Liability']}
-                    />
-                    <Bar dataKey="pending" radius={[0, 4, 4, 0]} barSize={16}>
-                      {summary.topDebitors.slice(0, 8).map((entry, idx) => (
-                        <Cell key={`cell-${idx}`} fill={entry.pending > 15000 ? 'var(--destructive)' : entry.pending > 5000 ? 'var(--warning)' : 'var(--primary)'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                ) : summary.months ? (
-                  <AreaChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
-                    <defs>
-                      <linearGradient id="colorInflows" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25}/>
-                        <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.0}/>
-                      </linearGradient>
-                      <linearGradient id="colorOutflows" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--destructive)" stopOpacity={0.15}/>
-                        <stop offset="95%" stopColor="var(--destructive)" stopOpacity={0.0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
-                    <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile ? v.split(' ')[0] : v} />
-                    <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/100000}L`} />
-                    <RechartsTooltip 
-                      contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
-                      itemStyle={{ color: 'var(--foreground)' }}
-                      labelStyle={{ color: 'var(--muted-foreground)' }}
-                      formatter={(v) => `₹${Number(v).toLocaleString()}`} 
-                    />
-                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                    <Area type="monotone" name="Inflow Receipts" dataKey="inflows" stroke="var(--primary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorInflows)" />
-                    <Area type="monotone" name="Outflow Expenditures" dataKey="outflows" stroke="var(--destructive)" strokeWidth={1} strokeDasharray="4 4" fillOpacity={1} fill="url(#colorOutflows)" />
-                  </AreaChart>
-                ) : null
-              ) : (
-                // Secondary Tab: Ageing Splits (Bar) or Outflow splits
-                isDebitors ? (
-                  <BarChart data={debitorsAgeingData} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
-                    <XAxis dataKey="range" stroke="var(--muted-foreground)" fontSize={10} />
-                    <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
-                    <RechartsTooltip 
-                      cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
-                      contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
-                      itemStyle={{ color: 'var(--foreground)' }}
-                      labelStyle={{ color: 'var(--muted-foreground)' }}
-                      formatter={(v) => `₹${Number(v).toLocaleString()}`} 
-                    />
-                    <Bar dataKey="amount" radius={[4, 4, 0, 0]} barSize={40}>
-                      {debitorsAgeingData.map((entry, idx) => (
-                        <Cell key={`cell-${idx}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                ) : summary.months ? (
-                  <BarChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
-                    <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile ? v.split(' ')[0] : v} />
-                    <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
-                    <RechartsTooltip 
-                      cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
-                      contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
-                      itemStyle={{ color: 'var(--foreground)' }}
-                      labelStyle={{ color: 'var(--muted-foreground)' }}
-                      formatter={(v) => `₹${Number(v).toLocaleString()}`} 
-                    />
-                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                    <Bar dataKey="liquor" name="Liquor Split" stackId="a" fill="var(--chart-2)" />
-                    <Bar dataKey="food" name="Food Split" stackId="a" fill="var(--primary)" />
-                    <Bar dataKey="expenses" name="Operational Outflows" stackId="a" fill="var(--destructive)" />
-                  </BarChart>
-                ) : null
-              )}
-            </ResponsiveContainer>
+            <React.Suspense fallback={<div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground animate-pulse">        Loading charts…</div>}>
+              <OverviewCharts
+                isDebitors={isDebitors}
+                summary={summary}
+                isMobile={isMobile}
+                activeChartTab={activeChartTab}
+                debitorsAgeingData={debitorsAgeingData}
+              />
+            </React.Suspense>
           </div>
         </CardContent>
       </Card>
@@ -418,7 +319,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
           {/* Recovery Strategy Board */}
           <Card className="border bg-card/45 shadow-xs overflow-hidden flex flex-col justify-between">
             <div>
-              <CardHeader className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-border/80 flex flex-row items-center gap-3 space-y-0 select-none">
+              <CardHeader className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-border/80 flex flex-row items-center gap-3 select-none">
                 <div className="size-10 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive border border-destructive/20 shrink-0">
                   <Zap className="size-5" />
                 </div>
@@ -448,19 +349,19 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
                     return (
                       <div
                         key={debtor.name}
-                        className="relative overflow-hidden p-4 pl-5 border border-border/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 bg-card/25 hover:bg-card/50 hover:border-primary/25 group/card select-none shadow-xs"
+                        className="relative overflow-hidden p-4 pl-5 border border-border/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 bg-card/25 hover:bg-card/50 hover:border-primary/25 group select-none shadow-xs"
                       >
                         {/* Subtle left status indicator bar */}
-                        <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-md transition-all duration-300 ${statusColorMap} opacity-60 group-hover/card:opacity-100`} />
+                        <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-md transition-all duration-300 ${statusColorMap} opacity-60 group-hover:opacity-100`} />
 
                         {/* Profile initials, Name, and Risk Level */}
                         <div className="flex items-center gap-3.5 min-w-0">
                           <div className={`size-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 font-mono transition-all duration-300 select-none shadow-sm ${
                             debtor.pending > 15000
-                              ? 'bg-destructive/10 text-destructive border border-destructive/20 group-hover/card:bg-destructive/15'
+                              ? 'bg-destructive/10 text-destructive border border-destructive/20 group-hover:bg-destructive/15'
                               : debtor.pending > 5000
-                                ? 'bg-warning/10 text-warning border border-warning/20 group-hover/card:bg-warning/15'
-                                : 'bg-success/10 text-success border border-success/20 group-hover/card:bg-success/15'
+                                ? 'bg-warning/10 text-warning border border-warning/20 group-hover:bg-warning/15'
+                                : 'bg-success/10 text-success border border-success/20 group-hover:bg-success/15'
                           }`}>
                             {(() => {
                               const p = debtor.name.trim().split(/\s+/);
@@ -469,7 +370,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
                           </div>
                           <div className="flex flex-col gap-1 min-w-0">
                             <div className="flex items-center gap-2.5 flex-wrap">
-                              <span className="text-sm font-semibold text-foreground tracking-tight group-hover/card:text-primary transition-colors truncate">{debtor.name}</span>
+                              <span className="text-sm font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors truncate">{debtor.name}</span>
                               <span className={`text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border shrink-0 font-sans leading-none ${riskColor}`}>
                                 {riskLevel}
                               </span>
@@ -544,7 +445,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger render={
-                  <button 
+                  <button
+                    type="button"
                     className={`text-[0.62rem] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 border transition-all duration-300 select-none cursor-pointer ${
                       connectionMode === 'empty'
                         ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/25'
@@ -593,7 +495,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
 
             return (
               <div
-                key={idx}
+                key={intel.slice(0, 40)}
                 className="border rounded-xl p-4 bg-card/45 hover:border-primary/30 hover:shadow-xs transition-all duration-300 flex flex-col justify-between gap-3.5 relative group"
               >
                 <div className="flex flex-col gap-2">
@@ -602,7 +504,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
                       {meta.label}
                     </span>
                     <span className="text-[0.62rem] font-bold text-muted-foreground font-mono flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${idx === 0 ? 'bg-success' : idx === 1 ? 'bg-info' : 'bg-destructive'}`}></span>
+                      <span className={`size-1.5 rounded-full shrink-0 ${idx === 0 ? 'bg-success' : idx === 1 ? 'bg-info' : 'bg-destructive'}`}></span>
                       {meta.impact}
                     </span>
                   </div>

@@ -138,15 +138,17 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-2 mt-2">
             {/* Verify Current Password (Required for either action) */}
             <div className="flex flex-col gap-1 text-left">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <label htmlFor="current-app-passcode" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                 Verify Current App Passcode *
               </label>
               <div className="relative w-full">
                 <input
+                  id="current-app-passcode"
                   type={showCurrent ? 'text' : 'password'}
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current app passcode to authorize..."
+                  placeholder="Enter current app passcode to authorize…"
+                  aria-label="Current app passcode"
                   className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                   required
                   disabled={isUpdating}
@@ -154,6 +156,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowCurrent(!showCurrent)}
+                  aria-label={showCurrent ? 'Hide current password' : 'Show current password'}
                   className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                   tabIndex={-1}
                 >
@@ -168,15 +171,17 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
               <div className="flex flex-col gap-4">
                 {/* New App Lock Password */}
                 <div className="flex flex-col gap-1 text-left">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor="new-app-lock-passcode" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     New App Lock Passcode *
                   </label>
                   <div className="relative w-full">
                     <input
+                      id="new-app-lock-passcode"
                       type={showNew ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new app lock passcode..."
+                      placeholder="Enter new app lock passcode…"
+                      aria-label="New app lock passcode"
                       className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                       disabled={isUpdating}
                       required={activeTab === 'app-lock'}
@@ -184,6 +189,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowNew(!showNew)}
+                      aria-label={showNew ? 'Hide new password' : 'Show new password'}
                       className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                       tabIndex={-1}
                     >
@@ -194,15 +200,17 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
 
                 {/* Confirm New App Lock Password */}
                 <div className="flex flex-col gap-1 text-left">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor="confirm-app-lock-passcode" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     Confirm New App Lock Passcode *
                   </label>
                   <div className="relative w-full">
                     <input
+                      id="confirm-app-lock-passcode"
                       type={showConfirm ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Re-type new app lock passcode..."
+                      placeholder="Re-type new app lock passcode…"
+                      aria-label="Confirm new app lock passcode"
                       className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                       disabled={isUpdating}
                       required={activeTab === 'app-lock'}
@@ -210,6 +218,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowConfirm(!showConfirm)}
+                      aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
                       className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                       tabIndex={-1}
                     >
@@ -224,15 +233,17 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
               <div className="flex flex-col gap-4">
                 {/* New Upload Password */}
                 <div className="flex flex-col gap-1 text-left">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor="new-upload-passcode" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     New Upload Passcode *
                   </label>
                   <div className="relative w-full">
                     <input
+                      id="new-upload-passcode"
                       type={showNew ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new upload passcode..."
+                      placeholder="Enter new upload passcode…"
+                      aria-label="New upload passcode"
                       className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                       disabled={isUpdating}
                       required={activeTab === 'upload'}
@@ -240,6 +251,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowNew(!showNew)}
+                      aria-label={showNew ? 'Hide new password' : 'Show new password'}
                       className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                       tabIndex={-1}
                     >
@@ -250,15 +262,17 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
 
                 {/* Confirm New Upload Password */}
                 <div className="flex flex-col gap-1 text-left">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor="confirm-upload-passcode" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     Confirm New Upload Passcode *
                   </label>
                   <div className="relative w-full">
                     <input
+                      id="confirm-upload-passcode"
                       type={showConfirm ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Re-type new upload passcode..."
+                      placeholder="Re-type new upload passcode…"
+                      aria-label="Confirm new upload passcode"
                       className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                       disabled={isUpdating}
                       required={activeTab === 'upload'}
@@ -266,6 +280,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowConfirm(!showConfirm)}
+                      aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
                       className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                       tabIndex={-1}
                     >
@@ -296,7 +311,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                 {isUpdating ? (
                   <span className="flex items-center gap-1.5">
                     <Loader2 className="size-3.5 animate-spin" />
-                    Updating...
+                    Updating…
                   </span>
                 ) : (
                   activeTab === 'app-lock' ? 'Update App Lock Passcode' : 'Update Upload Passcode'

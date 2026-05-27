@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { marked } from 'marked';
 import type { MasterSummary, ChatMessage } from '../types';
 import { sendAdvisorChatMessage } from '../services/api';
 import {
@@ -21,14 +20,75 @@ interface AdvisorSectionProps {
   summary: MasterSummary;
 }
 
-const renderMessageText = (text: string, isUser = false) => {
-  const htmlContent = marked.parse(text) as string;
+interface MessageTextProps {
+  text: string;
+  isUser?: boolean;
+}
+
+function parseInlineStyles(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g);
+  return parts.map((part) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={part} className="font-bold">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={part} className="italic">{part.slice(1, -1)}</em>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={part} className="bg-muted px-1.5 py-0.5 rounded font-mono text-[0.85em]">{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
+}
+
+const SafeMarkdown: React.FC<{ text: string }> = ({ text }) => {
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-1.5">
+      {lines.map((line) => {
+        if (line.startsWith('### ')) {
+          return <h3 key={line} className="text-sm font-bold mt-2 mb-1">{parseInlineStyles(line.slice(4))}</h3>;
+        }
+        if (line.startsWith('## ')) {
+          return <h2 key={line} className="text-base font-bold mt-3 mb-1">{parseInlineStyles(line.slice(3))}</h2>;
+        }
+        if (line.startsWith('# ')) {
+          return <h1 key={line} className="text-lg font-bold mt-4 mb-1.5">{parseInlineStyles(line.slice(2))}</h1>;
+        }
+        
+        if (line.startsWith('* ') || line.startsWith('- ')) {
+          return (
+            <ul key={line} className="list-disc list-inside ml-2 my-0.5">
+              <li>{parseInlineStyles(line.slice(2))}</li>
+            </ul>
+          );
+        }
+        
+        const orderedListMatch = line.match(/^(\d+)\.\s(.*)/);
+        if (orderedListMatch) {
+          return (
+            <ol key={line} className="list-decimal list-inside ml-2 my-0.5">
+              <li>{parseInlineStyles(orderedListMatch[2])}</li>
+            </ol>
+          );
+        }
+
+        if (!line.trim()) {
+          return <div key={line || ' '} className="h-1" />;
+        }
+
+        return <p key={line} className="leading-relaxed">{parseInlineStyles(line)}</p>;
+      })}
+    </div>
+  );
+};
+
+const MessageText: React.FC<MessageTextProps> = ({ text, isUser = false }) => {
   const textColor = isUser ? 'text-white' : 'text-foreground/90';
   return (
-    <div 
-      className={`markdown-content ${textColor}`}
-      dangerouslySetInnerHTML={{ __html: htmlContent }}
-    />
+    <div className={`markdown-content ${textColor}`}>
+      <SafeMarkdown text={text} />
+    </div>
   );
 };
 
@@ -51,17 +111,13 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
   // Active playbook selection
   const [activePlaybook, setActivePlaybook] = useState<'revenue' | 'recovery' | 'auditing'>('revenue');
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-
-  useEffect(() => {
-    setMessages([
-      {
-        sender: 'ai',
-        text: `Namaskar! 🙏 I am your ${businessName} Financial Advisor. I have analyzed your parsed spreadsheet "${summary.fileName}". How can I help you optimize your business cashflows or recover customer dues today?`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }
-    ]);
-  }, [businessName, summary.fileName]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    {
+      sender: 'ai',
+      text: `Namaskar! 🙏 I am your ${businessName} Financial Advisor. I have analyzed your parsed spreadsheet "${summary.fileName}". How can I help you optimize your business cashflows or recover customer dues today?`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }
+  ]);
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -248,6 +304,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
               const isActive = activePlaybook === p.id;
               return (
                 <button
+                  type="button"
                   key={p.id}
                   onClick={() => setActivePlaybook(p.id)}
                   className={`p-2 lg:p-3 rounded-lg border cursor-pointer transition-all duration-200 flex flex-row lg:flex-col gap-1.5 md:gap-1 items-center lg:items-start justify-center lg:justify-start text-center lg:text-left shrink-0 ${
@@ -276,7 +333,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
         {/* Chat Feed Pane (3/4 size) */}
         <Card className="lg:col-span-3 border bg-card/45 h-[650px] sm:h-[720px] flex flex-col overflow-hidden min-w-0">
           {/* Chat card header — compact on mobile */}
-          <CardHeader className="px-3 py-2 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between space-y-0 select-none gap-2">
+          <CardHeader className="px-3 py-2 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between select-none gap-2">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0">
                 <Bot className="size-4" />
@@ -287,7 +344,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                     {businessName} Advisory Agent
                   </CardTitle>
                   <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-1.5 py-0.5 rounded-full leading-none shrink-0">
-                    <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse"></span>
+                    <span className="size-1.5 bg-success rounded-full animate-pulse"></span>
                     Online
                   </span>
                 </div>
@@ -303,9 +360,9 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
           {/* Message Thread (Scrollable Viewport) */}
           <CardContent ref={scrollContainerRef} className="flex-1 min-h-0 px-4 py-3 sm:px-6 sm:py-4 overflow-y-auto flex flex-col scroll-smooth pr-3">
             <div className="flex flex-col gap-4">
-              {messages.map((msg, index) => (
+              {messages.map((msg) => (
                 <div
-                  key={index}
+                  key={`${msg.sender}-${msg.timestamp}`}
                   className={`flex max-w-[85%] flex-col gap-1.5 ${
                     msg.sender === 'user' ? 'self-end items-end' : 'self-start items-start'
                   }`}
@@ -317,7 +374,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                         : 'bg-muted border text-foreground rounded-tl-none font-medium'
                     }`}
                   >
-                    {renderMessageText(msg.text, msg.sender === 'user')}
+                    <MessageText text={msg.text} isUser={msg.sender === 'user'} />
                   </div>
                   <span className="text-[0.65rem] font-medium text-muted-foreground/60 px-1 select-none">{msg.timestamp}</span>
                 </div>
@@ -326,9 +383,9 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
               {isTyping && (
                 <div className="self-start flex flex-col gap-1.5 items-start select-none">
                   <div className="bg-muted border rounded-lg rounded-tl-none px-4 py-3 flex gap-1 items-center">
-                    <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    <span className="size-1.5 bg-muted-foreground/60 rounded-full" style={{ animation: 'typing-dot 0.9s cubic-bezier(0.16,1,0.3,1) infinite', animationDelay: '0ms' }}></span>
+                    <span className="size-1.5 bg-muted-foreground/60 rounded-full" style={{ animation: 'typing-dot 0.9s cubic-bezier(0.16,1,0.3,1) infinite', animationDelay: '180ms' }}></span>
+                    <span className="size-1.5 bg-muted-foreground/60 rounded-full" style={{ animation: 'typing-dot 0.9s cubic-bezier(0.16,1,0.3,1) infinite', animationDelay: '360ms' }}></span>
                   </div>
                 </div>
               )}
@@ -340,9 +397,9 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
           <CardFooter className="px-3 py-2.5 sm:px-6 sm:py-4 border-t bg-muted/10 flex flex-col gap-2 sm:gap-3 flex-shrink-0">
             {/* Quick Suggestion Chips */}
             <div className="flex gap-1.5 overflow-x-auto max-w-full no-scrollbar select-none flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
-              {suggestions.map((sug, idx) => (
+              {suggestions.map((sug) => (
                 <Button
-                  key={idx}
+                  key={sug}
                   variant="outline"
                   size="xs"
                   onClick={() => handleSend(sug)}
@@ -368,6 +425,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask a financial question..."
+                aria-label="Ask a financial question..."
                 className="flex-1 bg-background dark:bg-muted/40 border border-border rounded-md px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 resize-none min-h-[36px] scroll-smooth"
                 style={{ height: '36px', overflowY: 'hidden' }}
               />

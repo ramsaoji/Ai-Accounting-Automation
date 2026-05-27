@@ -37,7 +37,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
   const [currentFileName, setCurrentFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
-  const [sessionToken, setSessionToken] = useState('');
+  const sessionTokenRef = useRef('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +52,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
     setCurrentFileName('');
     setErrorMsg(null);
     setPasswordInput('');
-    setSessionToken('');
+    sessionTokenRef.current = '';
     setIsAuthorized(false);
     setIsVerifying(false);
     setShowPassword(false);
@@ -64,14 +64,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
     try {
       const token = await verifyUploadPassword(passwordInput);
       if (token) {
-        setSessionToken(token);
+        sessionTokenRef.current = token;
         setIsAuthorized(true);
         setPasswordInput(''); // COMPLETELY ERASE THE PASSWORD FROM STATE IMMEDIATELY!
         toast.success("Security authorization accepted.");
       } else {
         toast.error("Invalid upload password. Access denied.");
       }
-    } catch (err) {
+    } catch (_) {
       toast.error("Security verification request failed.");
     } finally {
       setIsVerifying(false);
@@ -133,6 +133,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
     setErrorMsg(null);
     
     try {
+      // Sequential processing is required here to show step-by-step progress tracking for
+      // each individual file in the UI, and to preserve database transactional order.
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         setCurrentFileIndex(i + 1);
@@ -154,7 +156,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
         // 3. AI Ingestion & DB Upsert
         setStatus('processing');
         setProgress(Math.round(overallProgressStart + overallProgressWeight * 0.75));
-        await uploadSpreadsheet(file.name, base64Data, sessionToken);
+        await uploadSpreadsheet(file.name, base64Data, sessionTokenRef.current);
         
         // Finished file i
         setProgress(Math.round(((i + 1) / files.length) * 100));
@@ -169,11 +171,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
         handleOpenChange(false);
       }, 1500);
 
-    } catch (err: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An error occurred during file ingestion';
       setStatus('error');
       setProgress(0);
-      setErrorMsg(err.message || 'An error occurred during file ingestion');
-      toast.error(`Ingestion failed: ${err.message}`);
+      setErrorMsg(message);
+      toast.error(`Ingestion failed: ${message}`);
     }
   };
 
@@ -202,11 +205,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
             </DialogHeader>
 
             <div className="flex flex-col gap-1.5 py-4 w-full select-none text-left">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+              <label htmlFor="upload-auth-password" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
                 Authorization Password
               </label>
               <div className="relative w-full">
                 <input
+                  id="upload-auth-password"
                   type={showPassword ? 'text' : 'password'}
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
@@ -216,13 +220,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                       handleAuthorize();
                     }
                   }}
-                  placeholder="Enter security key to unlock..."
+                  placeholder="Enter security key to unlock…"
+                  aria-label="Authorization password"
                   className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                   disabled={isVerifying}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                   tabIndex={-1}
                 >
@@ -244,7 +250,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                 {isVerifying ? (
                   <span className="flex items-center gap-1.5">
                     <Loader2 className="size-3.5 animate-spin" />
-                    Verifying...
+                    Verifying…
                   </span>
                 ) : 'Verify & Proceed'}
               </Button>
@@ -296,7 +302,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                       {/* Scrollable file queue list */}
                       <div className="flex flex-col gap-1.5 w-full max-h-36 overflow-y-auto pr-1 no-scrollbar my-1.5">
                         {files.map((f, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-2 rounded-lg border bg-background text-xs select-none">
+                          <div key={f.name} className="flex items-center justify-between p-2 rounded-lg border bg-background text-xs select-none">
                             <div className="flex items-center gap-2 min-w-0">
                               <FileSpreadsheet className="size-4 text-primary shrink-0" />
                               <span className="font-semibold truncate text-foreground pr-2 text-left">{f.name}</span>
@@ -304,8 +310,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                             <div className="flex items-center gap-3 shrink-0">
                               <span className="text-[0.58rem] text-muted-foreground font-mono">{(f.size / 1024).toFixed(1)} KB</span>
                               <button
+                                type="button"
                                 onClick={() => removeFile(idx)}
                                 className="text-muted-foreground hover:text-destructive cursor-pointer p-0.5 rounded hover:bg-muted"
+                                aria-label="Remove file"
                               >
                                 <X className="size-3.5" />
                               </button>
@@ -331,6 +339,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                     accept=".xlsx"
                     multiple
                     className="hidden"
+                    aria-label="Upload spreadsheets"
                   />
                 </div>
               )}
@@ -356,7 +365,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
               {status === 'success' && (
                 <div className="flex flex-col items-center text-center gap-3">
                   <div className="size-12 rounded-full bg-success/15 flex items-center justify-center border border-success/35">
-                    <CheckCircle2 className="size-6 text-success animate-bounce" />
+                    <CheckCircle2 className="size-6 text-success" style={{ animation: 'scale-in 0.5s cubic-bezier(0.16,1,0.3,1) both' }} />
                   </div>
                   <span className="text-xs font-bold text-foreground">All Uploads Complete!</span>
                   <span className="text-[0.62rem] text-muted-foreground">Refreshing consolidated dashboard registers</span>

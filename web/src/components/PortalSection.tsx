@@ -10,11 +10,7 @@ import {
   TrendingUp,
   Cpu
 } from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  ResponsiveContainer
-} from 'recharts';
+const PortalCharts = React.lazy(() => import('./PortalCharts'));
 
 interface PortalSectionProps {
   salesData: any;
@@ -108,55 +104,55 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
     return parsed.toLocaleString();
   };
 
-  const portals: PortalItem[] = [
-    {
-      id: 'sales',
-      title: salesData ? salesData.fileName.replace(/\.[^/.]+$/, "") : 'Daily Sales Register',
-      type: 'Sales cash register',
-      filename: salesData ? salesData.fileName : 'No spreadsheet uploaded',
-      lastUpdated: salesData ? formatTimestamp(salesData.runTimestamp) : 'Never',
-      stats: [
-        { label: 'Consolidated Inflows', value: salesData ? formatINRValue(salesData.masterTotals?.totalInflows) : '—' },
-        { label: 'Net Cash Surplus', value: salesData ? formatINRValue(salesData.masterTotals?.netCashflow) : '—', positive: salesData ? (salesData.masterTotals?.netCashflow >= 0) : undefined },
-      ],
-      alertCount: salesAlertCount,
-      tags: salesData 
-        ? ['Sales Registry', `${salesData.totalMonths || 0} Months`, `${(salesData.totalTransactions || 0).toLocaleString()} Transactions`]
-        : ['Sales Registry', 'Awaiting Ingestion'],
-      sparkline: salesData?.months?.map((m: any) => ({ net: m.net })) || [],
-      dataKey: 'net',
-      stroke: 'var(--primary)'
-    },
-    {
-      id: 'debitors',
-      title: debitorsData ? debitorsData.fileName.replace(/\.[^/.]+$/, "") : 'Customer Debitors Outstanding',
-      type: 'Debitors Ledger',
-      filename: debitorsData ? debitorsData.fileName : 'No spreadsheet uploaded',
-      lastUpdated: debitorsData ? formatTimestamp(debitorsData.runTimestamp) : 'Never',
-      stats: [
-        { label: 'Outstanding Balance', value: debitorsData ? formatINRValue(debitorsData.aggregates?.totalPendingSum) : '—', critical: true },
-        { 
-          label: 'Recovery Success', 
-          value: debitorsData 
-            ? (String(debitorsData.aggregates?.collectionSuccessRate).endsWith('%') 
-                ? debitorsData.aggregates?.collectionSuccessRate 
-                : `${debitorsData.aggregates?.collectionSuccessRate}%`) 
-            : '—' 
-        },
-      ],
-      alertCount: debitorsAlertCount,
-      tags: debitorsData
-        ? ['Debitors Ledger', `${debitorsData.aggregates?.activeDebitorsCount || 0} Customers`, 'Udhari Register']
-        : ['Debitors Ledger', 'Awaiting Ingestion'],
-      sparkline: debitorsData?.topDebitors?.map((d: any) => ({ pending: d.pending })) || [],
-      dataKey: 'pending',
-      stroke: 'var(--destructive)'
-    }
-  ];
-
-  // Filter logic
+  // Filter & Portals logic combined
   const filteredPortals = useMemo(() => {
-    return portals.filter(p => {
+    const portalsList: PortalItem[] = [
+      {
+        id: 'sales',
+        title: salesData ? salesData.fileName.replace(/\.[^/.]+$/, "") : 'Daily Sales Register',
+        type: 'Sales cash register',
+        filename: salesData ? salesData.fileName : 'No spreadsheet uploaded',
+        lastUpdated: salesData ? formatTimestamp(salesData.runTimestamp) : 'Never',
+        stats: [
+          { label: 'Consolidated Inflows', value: salesData ? formatINRValue(salesData.masterTotals?.totalInflows) : '—' },
+          { label: 'Net Cash Surplus', value: salesData ? formatINRValue(salesData.masterTotals?.netCashflow) : '—', positive: salesData ? (salesData.masterTotals?.netCashflow >= 0) : undefined },
+        ],
+        alertCount: salesAlertCount,
+        tags: salesData 
+          ? ['Sales Registry', `${salesData.totalMonths || 0} Months`, `${(salesData.totalTransactions || 0).toLocaleString()} Transactions`]
+          : ['Sales Registry', 'Awaiting Ingestion'],
+        sparkline: salesData?.months?.map((m: any) => ({ net: m.net })) || [],
+        dataKey: 'net',
+        stroke: 'var(--primary)'
+      },
+      {
+        id: 'debitors',
+        title: debitorsData ? debitorsData.fileName.replace(/\.[^/.]+$/, "") : 'Customer Debitors Outstanding',
+        type: 'Debitors Ledger',
+        filename: debitorsData ? debitorsData.fileName : 'No spreadsheet uploaded',
+        lastUpdated: debitorsData ? formatTimestamp(debitorsData.runTimestamp) : 'Never',
+        stats: [
+          { label: 'Outstanding Balance', value: debitorsData ? formatINRValue(debitorsData.aggregates?.totalPendingSum) : '—', critical: true },
+          { 
+            label: 'Recovery Success', 
+            value: debitorsData 
+              ? (String(debitorsData.aggregates?.collectionSuccessRate).endsWith('%') 
+                  ? debitorsData.aggregates?.collectionSuccessRate 
+                  : `${debitorsData.aggregates?.collectionSuccessRate}%`) 
+              : '—' 
+          },
+        ],
+        alertCount: debitorsAlertCount,
+        tags: debitorsData
+          ? ['Debitors Ledger', `${debitorsData.aggregates?.activeDebitorsCount || 0} Customers`, 'Udhari Register']
+          : ['Debitors Ledger', 'Awaiting Ingestion'],
+        sparkline: debitorsData?.topDebitors?.map((d: any) => ({ pending: d.pending })) || [],
+        dataKey: 'pending',
+        stroke: 'var(--destructive)'
+      }
+    ];
+
+    return portalsList.filter(p => {
       const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             p.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             p.type.toLowerCase().includes(searchQuery.toLowerCase());
@@ -168,7 +164,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
 
       return matchesSearch && matchesFilter;
     });
-  }, [searchQuery, activeFilter, salesAlertCount, debitorsAlertCount]);
+  }, [salesData, debitorsData, salesAlertCount, debitorsAlertCount, searchQuery, activeFilter]);
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
@@ -202,6 +198,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
         <div className="flex items-center gap-1.5 self-start sm:self-auto select-none">
           {(['all', 'flagged', 'audited'] as const).map((filter) => (
             <button
+              type="button"
               key={filter}
               onClick={() => setActiveFilter(filter)}
               className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
@@ -248,15 +245,15 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
 
                   {/* Active badge */}
                   <span className="flex items-center gap-1 text-[0.62rem] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
+                    <span className="size-1.5 rounded-full bg-success"></span>
                     Active
                   </span>
                 </div>
 
                 {/* Grid stats */}
                 <div className="grid grid-cols-2 gap-3 md:gap-4 bg-muted/20 p-2.5 md:p-3 rounded-lg border">
-                  {portal.stats.map((stat, i) => (
-                    <div key={i} className="flex flex-col gap-0.5">
+                  {portal.stats.map((stat) => (
+                    <div key={stat.label} className="flex flex-col gap-0.5">
                       <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">
                         {stat.label}
                       </span>
@@ -282,17 +279,9 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
                   {/* Sparkline Graph */}
                   <div className="w-24 h-8 select-none opacity-80 group-hover:opacity-100 transition-opacity">
                     {portal.sparkline && portal.sparkline.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={portal.sparkline as any}>
-                          <Line
-                            type="monotone"
-                            dataKey={portal.dataKey}
-                            stroke={portal.stroke}
-                            strokeWidth={1.5}
-                            dot={false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      <React.Suspense fallback={<div className="w-full h-full border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[0.58rem] text-muted-foreground font-mono bg-muted/5 animate-pulse select-none">Loading…</div>}>
+                        <PortalCharts data={portal.sparkline} dataKey={portal.dataKey} stroke={portal.stroke} />
+                      </React.Suspense>
                     ) : (
                       <div className="w-full h-full border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[0.58rem] text-muted-foreground font-mono bg-muted/5 select-none">
                         No trend data
@@ -305,9 +294,9 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
               {/* Card Footer: Metadata tags + Action button */}
               <div className="border-t px-4 py-3 md:px-6 md:py-3.5 bg-muted/20 flex items-center justify-between gap-4">
                 <div className="flex flex-wrap gap-1.5">
-                  {portal.tags.map((tag, idx) => (
+                  {portal.tags.map((tag) => (
                     <span
-                      key={idx}
+                      key={tag}
                       className="text-[0.6rem] font-bold text-muted-foreground border px-2 py-0.5 rounded bg-background shrink-0 font-mono"
                     >
                       {tag}

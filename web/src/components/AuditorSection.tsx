@@ -246,6 +246,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
           {/* Tab Selector Header */}
           <div className="flex border-b bg-muted/20 select-none">
             <button
+              type="button"
               onClick={() => setActiveLeftTab('feed')}
               className={`flex-1 text-xs py-3 font-bold border-r transition-all cursor-pointer ${
                 activeLeftTab === 'feed'
@@ -256,6 +257,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
               Exceptions Feed ({filteredAlerts.length})
             </button>
             <button
+              type="button"
               onClick={() => setActiveLeftTab('policies')}
               className={`flex-1 text-xs py-3 font-bold transition-all cursor-pointer ${
                 activeLeftTab === 'policies'
@@ -286,6 +288,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                   <div className="flex flex-wrap gap-1.5 select-none">
                     {(['all', 'critical', 'high', 'medium', 'low'] as const).map((sev) => (
                       <button
+                        type="button"
                         key={sev}
                         onClick={() => {
                           setSeverityFilter(sev);
@@ -316,10 +319,11 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                       const meta = getSeverityMeta(anomaly.severity);
 
                       return (
-                        <div
-                          key={idx}
+                        <button
+                          key={anomaly.message}
+                          type="button"
                           onClick={() => setSelectedAlertIndex(idx)}
-                          className={`p-3 rounded-lg border text-left cursor-pointer transition-all duration-200 border-l-4 select-none relative ${meta.border} ${
+                          className={`w-full p-3 rounded-lg border text-left cursor-pointer transition-all duration-200 border-l-4 select-none relative ${meta.border} ${
                             isSelected
                               ? 'bg-muted border-r-foreground/20'
                               : 'bg-background hover:bg-muted/40'
@@ -342,7 +346,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                               <CheckCircle className="size-3" /> Resolved
                             </span>
                           )}
-                        </div>
+                        </button>
                       );
                     })
                   )}
@@ -492,6 +496,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                       {getSeverityMeta(activeSelectedAlert.severity).logic}
                     </p>
                     <button
+                      type="button"
                       onClick={() => {
                         setActiveActionModal(activeSelectedAlert);
                         setPasscode('');
@@ -566,22 +571,26 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
               {/* Roles Flow */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Primary Signer</span>
+                  <label htmlFor="primary-signer" className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Primary Signer</label>
                   <input
+                    id="primary-signer"
                     type="text"
                     value={primarySigner}
                     onChange={(e) => setPrimarySigner(e.target.value)}
+                    aria-label="Primary Signer (Senior Accountant)"
                     className="h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-muted/40 cursor-not-allowed select-none text-foreground"
                     disabled
                   />
                   <span className="text-[0.55rem] text-muted-foreground mt-0.5">Senior Accountant</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Secondary Signer</span>
+                  <label htmlFor="secondary-signer" className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Secondary Signer</label>
                   <input
+                    id="secondary-signer"
                     type="text"
                     value={secondarySigner}
                     onChange={(e) => setSecondarySigner(e.target.value)}
+                    aria-label="Secondary Signer (Authorizing Manager)"
                     className="h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-background text-foreground"
                     required
                   />
@@ -591,15 +600,16 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
 
               {/* PIN / Code Input */}
               <div className="flex flex-col gap-1">
-                <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Manager Authorization PIN</span>
+                <label htmlFor="manager-pin" className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Manager Authorization PIN</label>
                 <input
+                  id="manager-pin"
                   type="password"
                   placeholder="Enter 4-digit security PIN (e.g. 1234)"
                   value={passcode}
                   onChange={(e) => setPasscode(e.target.value)}
+                  aria-label="Manager Authorization PIN"
                   className="h-9.5 border rounded-lg px-3 text-xs bg-background text-foreground"
                   required
-                  autoFocus
                 />
               </div>
 
