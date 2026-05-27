@@ -488,7 +488,7 @@ export function App() {
   return (
     <TooltipProvider>
       <SidebarProvider defaultOpen={true}>
-        <div className="flex min-h-svh md:h-screen w-full md:overflow-hidden bg-background text-foreground font-sans antialiased">
+        <div className="flex h-svh w-full overflow-hidden bg-background text-foreground font-sans antialiased">
           
           {/* Official ShadCN Sidebar */}
           <AppSidebar
@@ -503,7 +503,7 @@ export function App() {
           />
 
           {/* Sidebar Main Content Inset Wrapper */}
-          <SidebarInset className="flex flex-col flex-1 min-h-0 md:overflow-hidden">
+          <SidebarInset className="flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Top Header Navbar */}
             <header className="h-16 border-b border-border/80 px-4 md:px-6 flex items-center justify-between bg-card select-none">
               <div className="flex items-center gap-3">
@@ -551,9 +551,8 @@ export function App() {
             </header>
 
             {/* Main Content Area — sections with fixed-height panels manage scroll internally */}
-            <main className="flex-1 md:overflow-hidden bg-background">
-              <div className="h-auto md:h-full overflow-y-auto">
-                <div className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8">
+            <main className="flex-1 overflow-y-auto bg-background">
+              <div className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8">
                   {activeView === 'portal' ? (
                     <PortalSection
                       salesData={salesData}
@@ -608,7 +607,6 @@ export function App() {
                     </>
                   )}
                 </div>
-              </div>
             </main>
           </SidebarInset>
 
