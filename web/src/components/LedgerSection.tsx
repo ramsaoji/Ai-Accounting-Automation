@@ -284,7 +284,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedDebitors.map((debtor, idx) => {
+                    paginatedDebitors.map((debtor) => {
                       const contribution = summary.aggregates?.totalPendingSum ? ((debtor.pending / summary.aggregates.totalPendingSum) * 100).toFixed(1) : '0';
                       const isBreach = debtor.pending > maxOutstandingDuesLimit;
                       
@@ -345,7 +345,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedMonths.map((month, idx) => {
+                    paginatedMonths.map((month) => {
                       const isProfit = month.net >= 0;
                       const netColor = isProfit ? 'text-success' : 'text-destructive';
                       const badgeStyles = isProfit 
