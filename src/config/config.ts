@@ -7,6 +7,7 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(8080),
+  DATABASE_URL: z.string().optional(),
   
   // AI Config
   AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'ollama', 'groq']).default('gemini'),
@@ -21,20 +22,23 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string().optional(),
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
   
-  // Google Config
-  GOOGLE_CLIENT_EMAIL: z.string().email('GOOGLE_CLIENT_EMAIL must be a valid email'),
-  GOOGLE_PRIVATE_KEY: z.string().transform((val) => {
+  // Google Config (optional — falls back to local file mode if absent/placeholder)
+  GOOGLE_CLIENT_EMAIL: z.string().default('accounting-worker@your-project-id.iam.gserviceaccount.com'),
+  GOOGLE_PRIVATE_KEY: z.string().default('MIIEvgIBADANBgkqhkiG9w0').transform((val) => {
     // Replace escaped newlines with actual newline characters
     return val.replace(/\\n/g, '\n');
   }),
-  GOOGLE_DRIVE_FOLDER_ID: z.string().min(1, 'GOOGLE_DRIVE_FOLDER_ID is required'),
+  GOOGLE_DRIVE_FOLDER_ID: z.string().default('your_google_drive_folder_id_here'),
   
-  // Telegram Config
-  TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
-  TELEGRAM_CHAT_ID: z.string().min(1, 'TELEGRAM_CHAT_ID is required'),
+  // Telegram Config (optional — skips bot/notifications if absent/placeholder)
+  TELEGRAM_BOT_TOKEN: z.string().default('1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ'),
+  // Comma-separated list of authorized chat IDs (e.g. "123456789,987654321")
+  TELEGRAM_CHAT_ID: z.string().default('-1001234567890').transform((val) =>
+    val.split(',').map((id) => id.trim()).filter(Boolean)
+  ),
   
   // Scheduler Config
-  CRON_SCHEDULE: z.string().default('0 * * * *'), // Default to every hour
+  CRON_SCHEDULE: z.string().default('0 0 * * *'), // Default to every day at 00:00
 });
 
 // Parse and validate environment variables

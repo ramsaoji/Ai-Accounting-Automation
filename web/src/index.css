@@ -328,3 +328,42 @@
 .dark .markdown-content input[type="checkbox"] {
   accent-color: oklch(0.72 0.16 277.366);
 }
+
+/* Custom Destructive Close Button for Toast Alerts positioned at top-right */
+[data-sonner-toast], .cn-toast {
+  position: relative !important;
+}
+
+[data-close-button] {
+  left: auto !important;
+  right: -6px !important;
+  top: -6px !important;
+  transform: none !important;
+  background: oklch(0.577 0.245 27.325) !important; /* Matches --destructive theme color */
+  color: #ffffff !important;
+  border: 1px solid oklch(0.577 0.245 27.325) !important;
+  border-radius: 9999px !important;
+  width: 18px !important;
+  height: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease-in-out !important;
+  opacity: 1 !important;
+}
+
+[data-close-button]:hover {
+  background: oklch(0.48 0.2 27) !important; /* Darker red on hover */
+  transform: scale(1.1) !important;
+}
+
+/* Ensure cross icon fits correctly and is perfectly centered */
+[data-close-button] svg {
+  width: 8px !important;
+  height: 8px !important;
+  stroke: #ffffff !important;
+  stroke-width: 3 !important;
+  display: block !important;
+}

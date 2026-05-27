@@ -7,10 +7,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "test-flow": "tsx src/scripts/test-flow.ts",
-    "audit": "tsx src/scripts/test-flow.ts",
-    "audit-sales": "tsx src/scripts/test-flow.ts --file \"data/input/Hotel Gaurav Daily Sales Register.xlsx\"",
-    "audit-debitors": "tsx src/scripts/test-flow.ts --file \"data/input/DEBITORS LIST.xlsx\" --limit 15",
+    "process-local": "tsx src/scripts/process-local.ts",
+    "process-sales": "tsx src/scripts/process-local.ts --file \"data/input/Hotel Gaurav Daily Sales Register.xlsx\"",
+    "process-debitors": "tsx src/scripts/process-local.ts --file \"data/input/DEBITORS LIST.xlsx\" --limit 15",
     "chat": "tsx src/scripts/chat-ledger.ts",
     "generate-sample": "tsx src/scripts/generate-sample.ts"
   },
@@ -20,12 +19,14 @@
     "exceljs": "^4.4.0",
     "googleapis": "^137.0.0",
     "node-cron": "^3.0.3",
+    "pg": "^8.21.0",
     "pino": "^9.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
     "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.20.0",
     "pino-pretty": "^11.1.0",
     "tsx": "^4.10.5",
     "typescript": "^5.4.5"

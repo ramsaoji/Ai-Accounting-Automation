@@ -49,7 +49,7 @@ If all external AI keys are unavailable or expired, the service **does not crash
 * **Problem:** Large transaction sets exceed the model's Context Token limits.
 * **Resolution:** The orchestrator trims transaction inputs to the most significant rows (e.g. anomalously flagged entries or consolidated monthly statistics matrices) before forwarding the prompt to the AI provider. Additionally, the CLI accepts an optional `--limit` flag to safely configure debtor leaderboards:
   ```bash
-  npm run audit-debitors -- --limit 10
+  npm run process-debitors -- --limit 10
   ```
 
 ---
@@ -58,4 +58,25 @@ If all external AI keys are unavailable or expired, the service **does not crash
 
 If outputs are not appearing in `data/output/`:
 1. **Local Folders Exist Check:** The service automatically runs folder creation checks (`fs.mkdirSync`) during boot. Verify the project root has adequate read/write permissions on Windows/Linux environments.
-2. **Isolated Directory Cleanup:** The orchestrator is designed to work file-wise. Running an audit on a workbook (e.g. `npm run audit-sales`) will **not** delete folders belonging to other ledger targets (like `DEBITORS LIST/`). If you wish to purge the outputs folder manually, delete the respective subfolders directly.
+2. **Isolated Directory Cleanup:** The orchestrator is designed to work file-wise. Running the pipeline on a workbook (e.g. `npm run process-sales`) will **not** delete folders belonging to other ledger targets (like `DEBITORS LIST/`). If you wish to purge the outputs folder manually, delete the respective subfolders directly.
+
+---
+
+## 💾 5. Neon DB & PostgreSQL Errors
+
+### A. Relation "financial_reports" does not exist
+* **Problem:** Database queries fail when attempting to read or write reports because the target table has not been initialized. This occurs if the server process was booted before a valid `DATABASE_URL` was supplied, or if the database server was experiencing cold starts and timed out.
+* **Resolution:** 
+  1. Manually trigger the database structure builder by executing the workspace script:
+     ```bash
+     npx tsx src/scripts/test-db-init.ts
+     ```
+  2. Alternatively, restart the backend server process (`npm run dev`) to trigger the dynamic database guard check during server boot.
+
+### B. SSL Mode & Connection Failures
+* **Problem:** Connecting to Neon DB rejects the transaction due to missing SSL or certificate mismatch.
+* **Resolution:** Neon DB requires TLS. Verify that your `.env` connection string has `?sslmode=require` appended to the end of the URL. The backend client utilizes `{ ssl: { rejectUnauthorized: false } }` to accept secure connections dynamically.
+
+### C. Environment Reload Delays
+* **Problem:** Setting `DATABASE_URL` in `.env` while `npm run dev` is running does not reload the database connection pool in the active Node memory namespace.
+* **Resolution:** Stop the backend server in the console (Ctrl+C) and run `npm run dev` again to force Node.js to load the updated environment variables. Use `npx tsx src/scripts/check-db.ts` to inspect the connection live.

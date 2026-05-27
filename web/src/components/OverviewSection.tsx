@@ -13,7 +13,10 @@ import {
   BarChart3,
   CalendarDays,
   LineChart as LineIcon,
-  MessageSquare
+  MessageSquare,
+  WifiOff,
+  Activity,
+  Info
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -22,7 +25,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   BarChart,
   Bar,
@@ -30,23 +33,50 @@ import {
 } from 'recharts';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 interface OverviewSectionProps {
   summary: MasterSummary;
+  connectionMode: 'live' | 'static' | 'empty';
 }
 
-export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => {
+export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, connectionMode }) => {
   const isDebitors = summary.isDebitorsList === true;
   const [activeChartTab, setActiveChartTab] = useState<'primary' | 'distribution'>('primary');
 
+  const businessName = React.useMemo(() => {
+    const fn = summary.fileName;
+    const lower = fn.toLowerCase();
+    if (lower.includes('gaurav')) return 'Hotel Gaurav';
+    let name = fn.replace(/\.[^/.]+$/, "");
+    name = name.replace(/(daily\s*sales\s*register|debitors\s*list|debitors|sales|ledger|list)/gi, '').trim();
+    name = name.replace(/[_\-]+/g, ' ').trim();
+    if (name.length > 2) {
+      return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+    return 'Hotel Gaurav';
+  }, [summary.fileName]);
+
   const triggerReminderCopy = (debtor: any) => {
-    const text = `Dear ${debtor.name},\n\nThis is a friendly reminder from Hotel Gaurav accounts management. Your pending account balance of ₹${debtor.pending.toLocaleString('en-IN')} (total credit purchases: ₹${debtor.debit.toLocaleString('en-IN')}, cleared: ₹${debtor.credit.toLocaleString('en-IN')}) is currently due.\n\nPlease settle this amount at your earliest convenience via UPI, cash, or card.\n\nThank you!`;
+    const text = `Dear ${debtor.name},\n\nThis is a friendly reminder from ${businessName} accounts management. Your pending account balance of ₹${debtor.pending.toLocaleString('en-IN')} (total credit purchases: ₹${debtor.debit.toLocaleString('en-IN')}, cleared: ₹${debtor.credit.toLocaleString('en-IN')}) is currently due.\n\nPlease settle this amount at your earliest convenience via UPI, cash, or card.\n\nThank you!`;
     navigator.clipboard.writeText(text);
     toast.success(`Outreach draft for ${debtor.name} copied to clipboard!`);
   };
 
   const formatINR = (val: number) => {
     return '₹' + Math.round(val).toLocaleString('en-IN');
+  };
+
+  const formatTimestamp = (ts?: string) => {
+    if (!ts) return 'N/A';
+    if (ts.includes(',') || ts.toLowerCase().includes('am') || ts.toLowerCase().includes('pm')) {
+      return ts;
+    }
+    const parsed = new Date(ts);
+    if (isNaN(parsed.getTime())) {
+      return ts;
+    }
+    return parsed.toLocaleString();
   };
 
   // Safe mapping for debitors ageing buckets
@@ -68,14 +98,31 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => 
           <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>Spreadsheet: <code className="font-mono text-primary font-semibold">{summary.fileName}</code></span>
             <span className="text-muted-foreground/40">•</span>
-            <span>Generation: {new Date(summary.runTimestamp).toLocaleString()}</span>
+            <span>Generation: {formatTimestamp(summary.runTimestamp)}</span>
             <span className="text-muted-foreground/40">•</span>
-            <span 
-              className="text-[0.65rem] bg-muted hover:bg-muted/85 text-foreground px-2 py-0.5 rounded border border-border/80 cursor-help transition-colors select-none font-medium flex items-center gap-1"
-              title="Our Smart Integrity Engine automatically scans every spreadsheet transaction to protect your business from:&#10;1. Duplicate Bill entries&#10;2. Large payments over ₹50,000&#10;3. Suspicious category cost spikes (over 3x average)&#10;4. Off-hours/late-night booking log delays&#10;5. Corrupt zero-value or negative ledger entries."
-            >
-              ℹ️ What is Audited?
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger render={
+                  <button className="text-[0.65rem] bg-muted hover:bg-muted/85 text-foreground px-2 py-0.5 rounded border border-border/80 cursor-pointer select-none font-medium flex items-center gap-1">
+                    <Info className="size-3 text-muted-foreground" />
+                    <span>What is Audited?</span>
+                  </button>
+                } />
+                <TooltipContent className="block max-w-[280px] p-3 text-[0.72rem] leading-relaxed border bg-popover text-popover-foreground shadow-md rounded-lg">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-bold text-foreground">Smart Integrity Engine</span>
+                    <span>Automatically scans spreadsheet transactions to protect from:</span>
+                    <ol className="list-decimal pl-4 flex flex-col gap-0.5">
+                      <li>Duplicate Bill entries</li>
+                      <li>Large payments over ₹50,000</li>
+                      <li>Suspicious cost spikes (&gt;3x avg)</li>
+                      <li>Late-night booking delays</li>
+                      <li>Negative ledger entries</li>
+                    </ol>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold text-success bg-success/10 border border-success/20 px-3 py-1.5 rounded-full select-none shrink-0 w-fit self-start sm:self-auto">
@@ -267,7 +314,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => 
                   <BarChart
                     layout="vertical"
                     data={summary.topDebitors.slice(0, 8)}
-                    margin={{ left: 35, right: 30, top: 10, bottom: 10 }}
+                    margin={{ left: 5, right: 30, top: 10, bottom: 10 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} horizontal={false} />
                     <XAxis type="number" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => `₹${v/1000}K`} />
@@ -276,10 +323,10 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => 
                       type="category"
                       stroke="var(--muted-foreground)"
                       fontSize={10}
-                      width={150}
+                      width={110}
                       tickFormatter={(v) => v.replace(/\s*\(.*?\)\s*/g, '').trim().slice(0, 22)}
                     />
-                    <Tooltip
+                    <RechartsTooltip
                       cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
                       contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }}
                       itemStyle={{ color: 'var(--foreground)' }}
@@ -307,7 +354,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => 
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
                     <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} />
                     <YAxis stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => `₹${v/100000}L`} />
-                    <Tooltip 
+                    <RechartsTooltip 
                       contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
                       itemStyle={{ color: 'var(--foreground)' }}
                       labelStyle={{ color: 'var(--muted-foreground)' }}
@@ -325,7 +372,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => 
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
                     <XAxis dataKey="range" stroke="var(--muted-foreground)" fontSize={10} />
                     <YAxis stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => `₹${v/1000}K`} />
-                    <Tooltip 
+                    <RechartsTooltip 
                       cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
                       contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
                       itemStyle={{ color: 'var(--foreground)' }}
@@ -343,7 +390,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => 
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
                     <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} />
                     <YAxis stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => `₹${v/1000}K`} />
-                    <Tooltip 
+                    <RechartsTooltip 
                       cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
                       contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
                       itemStyle={{ color: 'var(--foreground)' }}
@@ -451,13 +498,58 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary }) => 
             </div>
             <div>
               <CardTitle className="text-sm font-semibold">AI Recommendation Queue</CardTitle>
-              <CardDescription className="text-xs">Identified strategic action plans derived from accounting metrics.</CardDescription>
+              <CardDescription className="text-xs">
+                Identified strategic action plans derived from accounting metrics.
+                <span className="ml-1.5 opacity-90 hidden lg:inline text-muted-foreground/80 font-medium">
+                  ({connectionMode === 'empty' 
+                    ? 'Showing offline simulated demo recommendations for display purposes.' 
+                    : summary.aiGenerated === true 
+                      ? 'Dynamically generated in real-time by the LLM advisor.' 
+                      : 'Calculated deterministically by our local rules engine due to LLM timeout.'
+                  })
+                </span>
+              </CardDescription>
             </div>
           </div>
-          <span className="text-[0.62rem] font-bold text-warning bg-warning/10 border border-warning/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-            <Zap className="size-3 animate-pulse" />
-            Active Advice
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button 
+                  className={`text-[0.62rem] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 border transition-all duration-300 select-none cursor-pointer ${
+                    connectionMode === 'empty'
+                      ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/25'
+                      : summary.aiGenerated === true
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 dark:border-emerald-500/20 shadow-[0_0_12px_-3px_rgba(16,185,129,0.25)]'
+                        : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25'
+                  }`}
+                >
+                  {connectionMode === 'empty' ? (
+                    <WifiOff className="size-3" />
+                  ) : summary.aiGenerated === true ? (
+                    <Sparkles className="size-3 text-emerald-500 animate-pulse" />
+                  ) : (
+                    <Activity className="size-3 text-indigo-500" />
+                  )}
+                  <span>
+                    {connectionMode === 'empty'
+                      ? 'Simulated Demo'
+                      : summary.aiGenerated === true
+                        ? 'Live AI Generated'
+                        : 'Rule Engine (Fallback)'
+                    }
+                  </span>
+                </button>
+              } />
+              <TooltipContent className="max-w-[260px] p-2.5 text-[0.72rem] leading-relaxed border bg-popover text-popover-foreground shadow-md rounded-lg">
+                {connectionMode === 'empty'
+                  ? 'Showing offline simulated demo recommendations for display purposes. Connect a database to trigger live insights.'
+                  : summary.aiGenerated === true
+                    ? 'This recommendation was dynamically generated in real-time by the LLM advisor from your sheet details.'
+                    : 'Calculated deterministically by our local accounting heuristics rules engine due to LLM provider timeout or error.'
+                }
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </CardHeader>
         <CardContent className="p-6 grid grid-cols-1 md:grid-cols-3 gap-5">
           {summary.intelligence.map((intel, idx) => {

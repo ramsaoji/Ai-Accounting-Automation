@@ -75,10 +75,25 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 * **Technique:** Throttling client queues and long polling.
 * **Rationale:** To comply with Telegram API's rate limits (maximum 30 messages/second), a throttled queue in `telegram.client.ts` buffers notifications and distributes them across safe delivery intervals. In addition, `telegram.bot.ts` runs a persistent background long-polling loop to respond to interactive user queries (e.g., fetching summaries, triggering a sync, or asking natural language questions to the AI advisor).
 
+### 7. PostgreSQL Neon DB Layer (`src/db/db.client.ts`)
+* **Role:** Relational persistence for processed compliance summaries.
+* **Technique:** Connection pool management via **pg** library with strict SSL requirements.
+* **Schema:** Creates and updates the `financial_reports` table dynamically:
+  ```sql
+  CREATE TABLE IF NOT EXISTS financial_reports (
+    report_type VARCHAR(50) PRIMARY KEY,
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+  ```
+* **Rationalization:** Decouples the frontend dashboard queries from direct disk access. The database layer automatically upserts report payloads (`sales`, `debitors`, and daily aggregates) upon ingestion, supporting high-speed JSON queries and scaling.
+
 ---
 
-## 🔑 Stateless Executions & Concurrency
+## 🔑 Stateless Executions & Persistence
 
-The background worker stores no local persistent state between runs. When a workbook is scanned, it downloads the buffer, extracts columns, runs local mathematical audits, queries the LLM, writes HTML dashboards inside `data/output/<workbook_name>/`, and signs off. 
+While the backend daemon operates on stateless ETL principles, it supports dual persistence:
+1. **Relational Database**: If `DATABASE_URL` is set in the environment, summaries are written directly to PostgreSQL, allowing the dashboard UI to operate DB-first.
+2. **Local File Mirroring**: It writes markdown summaries, HTML dashboards, and raw JSON logs inside the `data/output/<workbook_name>/` directory, serving as offline assets when database integration is bypassed.
 
-This pure stateless quality allows deploying the background worker safely as multiple concurrent replica containers behind load balancers without transaction locks or session state synchronization issues.
+This decoupled architecture allows you to scale the API server independently or run it as a pure serverless daemon.

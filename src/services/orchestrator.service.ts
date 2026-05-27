@@ -7,6 +7,52 @@ import { aiService } from '../ai/ai.service.js';
 import { telegramService } from '../telegram/telegram.service.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
+import { saveReport, getReport } from '../db/db.client.js';
+
+export interface SyncMetadata {
+  files: {
+    [fileName: string]: string; // fileName -> modifiedTime ISO string
+  };
+}
+
+export async function getSyncMetadata(inputDir: string): Promise<SyncMetadata> {
+  if (config.DATABASE_URL) {
+    try {
+      const data = await getReport('sync-metadata');
+      return data || { files: {} };
+    } catch (err: any) {
+      logger.error({ err: err.message }, 'Failed to read sync-metadata from Neon DB');
+      return { files: {} };
+    }
+  } else {
+    const metaPath = path.resolve(inputDir, '..', 'output', 'sync-metadata.json');
+    if (fs.existsSync(metaPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      } catch {
+        return { files: {} };
+      }
+    }
+    return { files: {} };
+  }
+}
+
+export async function saveSyncMetadata(inputDir: string, metadata: SyncMetadata): Promise<void> {
+  if (config.DATABASE_URL) {
+    try {
+      await saveReport('sync-metadata', metadata);
+    } catch (err: any) {
+      logger.error({ err: err.message }, 'Failed to save sync-metadata to Neon DB');
+    }
+  } else {
+    const outputDir = path.resolve(inputDir, '..', 'output');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    const metaPath = path.resolve(outputDir, 'sync-metadata.json');
+    fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
+  }
+}
 
 function resolveTargetFile(inputFilePath: string, inputDir: string): string {
   // 1. Try raw input path
@@ -38,6 +84,64 @@ function resolveTargetFile(inputFilePath: string, inputDir: string): string {
 }
 
 export class OrchestratorService {
+  /**
+   * Checks if there are any new or modified Excel spreadsheets on Google Drive or local input directory.
+   */
+  async checkNewFiles(): Promise<{ hasNew: boolean; newFilesCount: number }> {
+    const inputDir = path.resolve(process.cwd(), 'data', 'input');
+    const isMockDrive = 
+      config.GOOGLE_CLIENT_EMAIL.includes('your-project-id') || 
+      config.GOOGLE_PRIVATE_KEY.includes('MIIEvgIBADANBgkqhkiG9w0');
+
+    // 1. Load sync metadata
+    const metadata = await getSyncMetadata(inputDir);
+    let newFilesCount = 0;
+
+    // Check if a specific file was passed via command line parameter `--file`
+    const fileArgIndex = process.argv.indexOf('--file');
+    const specificFilePath = fileArgIndex !== -1 && process.argv[fileArgIndex + 1] ? process.argv[fileArgIndex + 1] : undefined;
+
+    if (specificFilePath) {
+      // In targeted file mode, we always consider it "new" to ensure it runs
+      return { hasNew: true, newFilesCount: 1 };
+    }
+
+    if (isMockDrive) {
+      if (!fs.existsSync(inputDir)) {
+        return { hasNew: false, newFilesCount: 0 };
+      }
+      const localFiles = fs.readdirSync(inputDir).filter(f => f.endsWith('.xlsx'));
+      for (const f of localFiles) {
+        const filePath = path.join(inputDir, f);
+        const stat = fs.statSync(filePath);
+        const mtimeStr = new Date(stat.mtimeMs).toISOString();
+        const lastMtime = metadata.files[f];
+        if (!lastMtime || lastMtime !== mtimeStr) {
+          newFilesCount++;
+        }
+      }
+    } else {
+      try {
+        const driveFiles = await driveService.getAllExcelFiles();
+        for (const f of driveFiles) {
+          const mtimeStr = f.modifiedTime || f.createdTime || '';
+          const lastMtime = metadata.files[f.name];
+          if (!lastMtime || lastMtime !== mtimeStr) {
+            newFilesCount++;
+          }
+        }
+      } catch (err) {
+        logger.error({ err }, 'Failed to check new files in Google Drive. Assuming new files exist to be safe.');
+        return { hasNew: true, newFilesCount: 1 };
+      }
+    }
+
+    return {
+      hasNew: newFilesCount > 0,
+      newFilesCount,
+    };
+  }
+
   /**
    * Runs the complete end-to-end accounting ingestion, audit rules, AI reporting, and Telegram notification pipeline.
    */
@@ -72,6 +176,7 @@ export class OrchestratorService {
         name: string;
         buffer: Buffer;
         path?: string;
+        modifiedTime?: string;
       }
 
       const filesToProcess: FileToProcess[] = [];
@@ -99,25 +204,11 @@ export class OrchestratorService {
             const stat = fs.statSync(filePath);
             return { name: f, path: filePath, mtime: stat.mtimeMs };
           })
-          .sort((a, b) => b.mtime - a.mtime);
+          .sort((a, b) => a.mtime - b.mtime); // Sort ascending (oldest first) so newest wins in DB upsert
 
         if (files.length === 0) {
-          logger.info(`No Excel spreadsheets found in '${inputDir}'. Automatically seeding a 'sample_ledger.xlsx' template...`);
-          
-          const { generateSampleExcel } = await import('../scripts/generate-sample.js');
-          await generateSampleExcel();
-
-          const sampleSource = path.resolve(process.cwd(), 'sample_ledger.xlsx');
-          const sampleDest = path.join(inputDir, 'sample_ledger.xlsx');
-          
-          fs.copyFileSync(sampleSource, sampleDest);
-          fs.unlinkSync(sampleSource);
-          
-          files = [{
-            name: 'sample_ledger.xlsx',
-            path: sampleDest,
-            mtime: Date.now()
-          }];
+          logger.warn(`No Excel spreadsheets found in '${inputDir}'. Skipping local batch execution.`);
+          return;
         }
 
         for (const fileInfo of files) {
@@ -125,29 +216,51 @@ export class OrchestratorService {
             name: fileInfo.name,
             path: fileInfo.path,
             buffer: fs.readFileSync(fileInfo.path),
+            modifiedTime: new Date(fileInfo.mtime).toISOString(),
           });
         }
         logger.info(`Loaded ${filesToProcess.length} local file(s) for batch processing.`);
       } else {
-        // 1. Google Drive: Fetch latest Excel workbook
-        const fileInfo = await driveService.getLatestExcelFile();
-        if (!fileInfo) {
+        // 1. Google Drive: Fetch all Excel workbooks
+        const driveFiles = await driveService.getAllExcelFiles();
+        if (driveFiles.length === 0) {
           logger.warn('[WARN] Pipeline aborted: No accounting spreadsheets found in target Google Drive folder.');
           return;
         }
 
-        logger.info({ fileId: fileInfo.id, fileName: fileInfo.name }, 'Processing target Excel sheet from Google Drive');
+        logger.info(`Loaded ${driveFiles.length} file(s) from Google Drive for batch processing.`);
 
-        // 2. Google Drive: Download file contents as a buffer
-        const buffer = await driveService.downloadFile(fileInfo.id, fileInfo.name);
-        filesToProcess.push({
-          name: fileInfo.name,
-          buffer,
-        });
+        // 2. Google Drive: Download all file contents sequentially
+        for (const fileInfo of driveFiles) {
+          logger.info({ fileId: fileInfo.id, fileName: fileInfo.name }, 'Downloading target Excel sheet from Google Drive');
+          const buffer = await driveService.downloadFile(fileInfo.id, fileInfo.name);
+          filesToProcess.push({
+            name: fileInfo.name,
+            buffer,
+            modifiedTime: fileInfo.modifiedTime || fileInfo.createdTime || new Date().toISOString(),
+          });
+        }
       }
 
+      // Load sync metadata
+      const metadata = await getSyncMetadata(inputDir);
+
+      // Filter out files that are already synced and unchanged
+      const filesToIngest = filesToProcess.filter(fileItem => {
+        if (!fileItem.modifiedTime) return true; // targeted file / CLI mode has no modifiedTime set, always process
+        const lastMtime = metadata.files[fileItem.name];
+        return !lastMtime || lastMtime !== fileItem.modifiedTime;
+      });
+
+      if (filesToIngest.length === 0) {
+        logger.info('All spreadsheets are already synced and up-to-date. Skipping pipeline execution.');
+        return;
+      }
+
+      logger.info(`Processing ${filesToIngest.length} of ${filesToProcess.length} file(s) that are new or modified.`);
+
       // Process loaded files sequentially
-      for (const fileItem of filesToProcess) {
+      for (const fileItem of filesToIngest) {
         const { name: fileName, buffer } = fileItem;
         logger.info(`Ingesting file: "${fileName}"`);
 
@@ -174,8 +287,8 @@ export class OrchestratorService {
 
           // Parse limit if passed via CLI argument `--limit`
           const limitArgIndex = process.argv.indexOf('--limit');
-          const customLimit = limitArgIndex !== -1 && process.argv[limitArgIndex + 1] ? parseInt(process.argv[limitArgIndex + 1], 10) : undefined;
-          const debitorsLimit = customLimit && !isNaN(customLimit) ? customLimit : 10;
+          const customLimit = limitArgIndex !== -1 && process.argv[limitArgIndex + 1] ? process.argv[limitArgIndex + 1] : undefined;
+          const debitorsLimit = customLimit && !isNaN(parseInt(customLimit, 10)) ? parseInt(customLimit, 10) : 10;
 
           // 5. AI Service: Request swappable LLM provider to compile all three report layouts
           const timestamp = new Date().toLocaleString();
@@ -191,24 +304,10 @@ export class OrchestratorService {
             debitorsLimit
           });
 
-          // 6. Telegram/Local Output: Save MD, HTML, and JSON locally unconditionally
           const cleanFileName = fileName.replace(/\.[^/.]+$/, ""); // Strip extension
-          const fileOutputDir = path.resolve(outputDir, cleanFileName);
-          if (!fs.existsSync(fileOutputDir)) {
-            fs.mkdirSync(fileOutputDir, { recursive: true });
-          }
-          
-          const mdPath = path.resolve(fileOutputDir, 'summary.md');
-          const htmlPath = path.resolve(fileOutputDir, 'summary.html');
-          const jsonPath = path.resolve(fileOutputDir, 'summary.json');
-          
-          fs.writeFileSync(mdPath, reports.markdownReport);
-          fs.writeFileSync(htmlPath, reports.htmlReport);
-          fs.writeFileSync(jsonPath, reports.jsonSummary);
-          
-          logger.info({ mdPath, htmlPath, jsonPath }, 'Unified reports package successfully compiled and written locally.');
 
-          // If it is daily sales, compile and save daily-sales.json grouping by calendar date
+          // If it is daily sales, compile daily-sales array
+          let dailySalesArray: any[] | undefined = undefined;
           if (!parseResult.isDebitorsList) {
             const dailyMap = new Map<string, {
               date: string;
@@ -221,53 +320,54 @@ export class OrchestratorService {
 
             for (const t of allTransactions) {
               if (!t.date || isNaN(t.date.getTime())) continue;
-              
               const dateStr = t.date.toISOString().split('T')[0];
               if (!dailyMap.has(dateStr)) {
-                dailyMap.set(dateStr, {
-                  date: dateStr,
-                  liquor: 0,
-                  food: 0,
-                  creditRecovery: 0,
-                  expenses: 0,
-                  creditExtended: 0
-                });
+                dailyMap.set(dateStr, { date: dateStr, liquor: 0, food: 0, creditRecovery: 0, expenses: 0, creditExtended: 0 });
               }
-              
               const dayData = dailyMap.get(dateStr)!;
               const amt = t.amount || 0;
-              if (t.category === 'Liquor Revenue') {
-                dayData.liquor += amt;
-              } else if (t.category === 'Food Revenue') {
-                dayData.food += amt;
-              } else if (t.category === 'Credit Recovery') {
-                dayData.creditRecovery += amt;
-              } else if (t.category === 'Operational Expense') {
-                dayData.expenses += amt;
-              } else if (t.category === 'Credit Extended') {
-                dayData.creditExtended += amt;
-              }
+              if (t.category === 'Liquor Revenue') dayData.liquor += amt;
+              else if (t.category === 'Food Revenue') dayData.food += amt;
+              else if (t.category === 'Credit Recovery') dayData.creditRecovery += amt;
+              else if (t.category === 'Operational Expense') dayData.expenses += amt;
+              else if (t.category === 'Credit Extended') dayData.creditExtended += amt;
             }
-            
-            const dailySalesArray = Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-            const dailySalesPath = path.resolve(fileOutputDir, 'daily-sales.json');
-            fs.writeFileSync(dailySalesPath, JSON.stringify(dailySalesArray, null, 2));
-            logger.info({ dailySalesPath }, 'Compiled daily-sales list written locally.');
+            dailySalesArray = Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
           }
 
-          // Also copy to frontend public directory for offline static sync
-          try {
-            const frontendDataDir = path.resolve(process.cwd(), 'web', 'public', 'data');
-            if (!fs.existsSync(frontendDataDir)) {
-              fs.mkdirSync(frontendDataDir, { recursive: true });
+          if (config.DATABASE_URL) {
+            // DB mode: persist to Neon DB only — no local disk output
+            try {
+              const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
+              const reportType = isDebtors ? 'debitors' : 'sales';
+              const summaryObj = JSON.parse(reports.jsonSummary);
+              await saveReport(reportType, summaryObj);
+              if (reportType === 'sales' && dailySalesArray) {
+                await saveReport('daily-sales', dailySalesArray);
+              }
+              logger.info({ reportType }, 'Persisted ingestion report to Neon DB.');
+            } catch (dbErr: any) {
+              logger.error({ err: dbErr.message }, 'Failed to persist parsed output to Neon DB');
             }
-            const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
-            const frontendJsonName = isDebtors ? 'debitors-summary.json' : 'sales-summary.json';
-            const frontendJsonPath = path.resolve(frontendDataDir, frontendJsonName);
-            fs.writeFileSync(frontendJsonPath, reports.jsonSummary);
-            logger.info({ frontendJsonPath }, 'Synced latest static JSON to web public directory.');
-          } catch (syncErr) {
-            logger.warn({ syncErr }, 'Failed to sync static JSON to frontend public folder');
+          } else {
+            // Local mode: write to disk only
+            const fileOutputDir = path.resolve(outputDir, cleanFileName);
+            if (!fs.existsSync(fileOutputDir)) {
+              fs.mkdirSync(fileOutputDir, { recursive: true });
+            }
+            const mdPath = path.resolve(fileOutputDir, 'summary.md');
+            const htmlPath = path.resolve(fileOutputDir, 'summary.html');
+            const jsonPath = path.resolve(fileOutputDir, 'summary.json');
+            fs.writeFileSync(mdPath, reports.markdownReport);
+            fs.writeFileSync(htmlPath, reports.htmlReport);
+            fs.writeFileSync(jsonPath, reports.jsonSummary);
+            logger.info({ mdPath, htmlPath, jsonPath }, 'Unified reports package written to local disk.');
+
+            if (dailySalesArray) {
+              const dailySalesPath = path.resolve(fileOutputDir, 'daily-sales.json');
+              fs.writeFileSync(dailySalesPath, JSON.stringify(dailySalesArray, null, 2));
+              logger.info({ dailySalesPath }, 'Compiled daily-sales list written locally.');
+            }
           }
 
           if (!isMockTelegram) {
@@ -334,6 +434,12 @@ export class OrchestratorService {
               await telegramService.sendReport(reports.markdownReport);
             }
           }
+
+          // Update and save sync metadata
+          if (fileItem.modifiedTime) {
+            metadata.files[fileName] = fileItem.modifiedTime;
+            await saveSyncMetadata(inputDir, metadata);
+          }
         } catch (fileError) {
           const fileErrMessage = fileError instanceof Error ? fileError.message : String(fileError);
           logger.error({ fileName, error: fileErrMessage }, `[ERROR] Error processing spreadsheet in batch list`);
@@ -374,6 +480,113 @@ export class OrchestratorService {
       logger.error({ error }, '[ERROR] Critical failure in orchestrator runPipeline');
       throw error;
     }
+  }
+
+  /**
+   * Process an uploaded file buffer dynamically through the parsing, rules auditing, AI summary compilation,
+   * Neon DB updating, and local file storage pipeline.
+   */
+  async processFileBuffer(buffer: Buffer, fileName: string): Promise<any> {
+    const startTime = Date.now();
+    logger.info(`Orchestrator ingesting file buffer for "${fileName}"`);
+    
+    // 1. Ingest/Parse the Excel sheet rows
+    const parseResult = await excelParser.parseBuffer(buffer, fileName);
+    
+    // Consolidate sheets
+    const allTransactions = parseResult.sheets.flatMap(s => s.transactions);
+    const allErrors = parseResult.sheets.flatMap(s => s.errors);
+
+    if (allTransactions.length === 0) {
+      throw new Error(`Workbook "${fileName}" contains zero valid transactions.`);
+    }
+
+    logger.info(
+      { sheets: parseResult.sheets.length, transactions: allTransactions.length }, 
+      'Auditing and generating upload summary report'
+    );
+
+    // 2. Rules Engine: Run modular business validations
+    const alerts = rulesEngine.evaluate(allTransactions);
+
+    // 3. AI Service: Request LLM provider to compile summary
+    const timestamp = new Date().toLocaleString();
+    const reports = await aiService.generateFinancialSummary({
+      fileName,
+      runTimestamp: timestamp,
+      transactions: allTransactions,
+      alerts,
+      parsingErrors: allErrors,
+      sheets: parseResult.sheets,
+      isDebitorsList: parseResult.isDebitorsList,
+      debitors: parseResult.sheets.find(s => s.debitors !== undefined)?.debitors,
+      debitorsLimit: 10
+    });
+
+    const summaryObj = JSON.parse(reports.jsonSummary);
+
+    // 4. Save JSON report payload to Neon DB
+    try {
+      const isDebtors = parseResult.isDebitorsList || fileName.toUpperCase().includes('DEBITORS');
+      const reportType = isDebtors ? 'debitors' : 'sales';
+      await saveReport(reportType, summaryObj);
+
+      if (reportType === 'sales') {
+        // Compile and save daily-sales list
+        const dailyMap = new Map<string, any>();
+        for (const t of allTransactions) {
+          if (!t.date || isNaN(t.date.getTime())) continue;
+          const dateStr = t.date.toISOString().split('T')[0];
+          if (!dailyMap.has(dateStr)) {
+            dailyMap.set(dateStr, {
+              date: dateStr,
+              liquor: 0,
+              food: 0,
+              creditRecovery: 0,
+              expenses: 0,
+              creditExtended: 0
+            });
+          }
+          const dayData = dailyMap.get(dateStr)!;
+          const amt = t.amount || 0;
+          if (t.category === 'Liquor Revenue') {
+            dayData.liquor += amt;
+          } else if (t.category === 'Food Revenue') {
+            dayData.food += amt;
+          } else if (t.category === 'Credit Recovery') {
+            dayData.creditRecovery += amt;
+          } else if (t.category === 'Operational Expense') {
+            dayData.expenses += amt;
+          } else if (t.category === 'Credit Extended') {
+            dayData.creditExtended += amt;
+          }
+        }
+        const dailySalesArray = Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+        await saveReport('daily-sales', dailySalesArray);
+      }
+    } catch (dbErr: any) {
+      logger.error({ err: dbErr.message }, 'Failed to persist uploaded report to Neon DB');
+    }
+
+    // 5. Write outputs to local disk only if DATABASE_URL is not configured
+    if (!config.DATABASE_URL) {
+      try {
+        const cleanFileName = fileName.replace(/\.[^/.]+$/, "");
+        const outputDir = path.resolve(process.cwd(), 'data', 'output', cleanFileName);
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+        fs.writeFileSync(path.resolve(outputDir, 'summary.json'), reports.jsonSummary);
+        logger.info({ outputDir }, 'Summary JSON written to local disk (no-DB mode).');
+      } catch (err) {
+        logger.warn({ err }, 'Failed to write local output during upload');
+      }
+    }
+
+    const durationMs = Date.now() - startTime;
+    logger.info({ durationSec: (durationMs / 1000).toFixed(2) }, 'Successfully processed uploaded file buffer!');
+    
+    return summaryObj;
   }
 }
 

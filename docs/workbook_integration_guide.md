@@ -122,7 +122,7 @@ if (isInventory) {
 
 Run the integration suite using the targeted `--file` parameter. Your folder name resolver will automatically find the mock workbook and output the isolated files:
 ```bash
-npm run audit -- --file "INVENTORY LIST"
+npm run process-local -- --file "INVENTORY LIST"
 ```
 The modular pipeline outputs:
 * 🖥️ `data/output/INVENTORY LIST/summary.html`

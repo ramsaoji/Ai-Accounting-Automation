@@ -329,7 +329,9 @@ ${mdAlertsList || '> * All balances and daily registers are cleanly matching wit
       const jsonSummary = JSON.stringify({
         fileName,
         timestamp: runTimestamp,
+        runTimestamp,
         isDebitorsList: true,
+        aiGenerated,
         aggregates: {
           totalDebitSum: Math.round(totalDebitSum),
           totalCreditSum: Math.round(totalCreditSum),
@@ -771,6 +773,7 @@ ${mdAlertsList || '> [!NOTE]\n> ✅ No alerts or exceptions detected across the 
     const jsonSummary = JSON.stringify({
       fileName,
       runTimestamp,
+      aiGenerated,
       totalMonths: sortedSheets.length,
       totalTransactions: transactions.length,
       masterTotals: {

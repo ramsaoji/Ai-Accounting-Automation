@@ -11,14 +11,16 @@ export class TelegramClient {
   }
 
   /**
-   * Sends a message to the configured Telegram chat with auto-fallback for markdown parsing errors.
+   * Sends a message to ALL configured Telegram chats with auto-fallback for markdown parsing errors.
+   * Supports comma-separated multi-user TELEGRAM_CHAT_ID.
    */
   async sendMessage(
     text: string, 
     parseMode: 'Markdown' | 'HTML' | 'Plain' = 'Markdown',
-    replyMarkup?: Record<string, any>
+    replyMarkup?: Record<string, any>,
+    targetChatId?: string  // Optional: send to a specific chat only (e.g. bot replies)
   ): Promise<boolean> {
-    const chatId = config.TELEGRAM_CHAT_ID;
+    const chatIds = targetChatId ? [targetChatId] : config.TELEGRAM_CHAT_ID;
     const url = `${this.baseUrl}/sendMessage`;
 
     let processedText = text;
@@ -26,56 +28,63 @@ export class TelegramClient {
       processedText = this.formatForTelegram(text);
     }
 
-    logger.info({ chatId, parseMode, messageLen: processedText.length }, 'Sending message via Telegram Client');
+    logger.info({ chatIds, parseMode, messageLen: processedText.length }, 'Sending message via Telegram Client');
 
-    try {
-      const payload: Record<string, any> = {
-        chat_id: chatId,
-        text: processedText,
-      };
+    let allSucceeded = true;
+    for (const chatId of chatIds) {
+      try {
+        const payload: Record<string, any> = {
+          chat_id: chatId,
+          text: processedText,
+        };
 
-      if (parseMode !== 'Plain') {
-        payload.parse_mode = parseMode;
-      }
-
-      if (replyMarkup) {
-        payload.reply_markup = replyMarkup;
-      }
-
-      await axios.post(url, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 15000, // 15s timeout
-      });
-
-      logger.info('Telegram message sent successfully');
-      return true;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorData = error.response?.data;
-        const description = errorData?.description || '';
-
-        logger.error(
-          { 
-            status: error.response?.status, 
-            data: errorData, 
-            message: error.message 
-          }, 
-          'Telegram API delivery failed'
-        );
-
-        // Fallback Strategy: If Telegram fails due to strict markdown parsing errors, retry as plain text!
-        const descLower = description.toLowerCase();
-        if (parseMode === 'Markdown' && (descLower.includes('bad request') || descLower.includes("can't find end of") || descLower.includes("can't parse entities"))) {
-          logger.warn('Failed to parse Markdown formatting. Attempting delivery in PLAIN TEXT fallback mode...');
-          return this.sendMessage(text, 'Plain');
+        if (parseMode !== 'Plain') {
+          payload.parse_mode = parseMode;
         }
-        
-        throw new Error(`Telegram Bot API delivery failed: ${description || error.message}`);
+
+        if (replyMarkup) {
+          payload.reply_markup = replyMarkup;
+        }
+
+        await axios.post(url, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000, // 15s timeout
+        });
+
+        logger.info({ chatId }, 'Telegram message sent successfully');
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const errorData = error.response?.data;
+          const description = errorData?.description || '';
+
+          logger.error(
+            { 
+              chatId,
+              status: error.response?.status, 
+              data: errorData, 
+              message: error.message 
+            }, 
+            'Telegram API delivery failed'
+          );
+
+          // Fallback Strategy: If Telegram fails due to strict markdown parsing errors, retry as plain text!
+          const descLower = description.toLowerCase();
+          if (parseMode === 'Markdown' && (descLower.includes('bad request') || descLower.includes("can't find end of") || descLower.includes("can't parse entities"))) {
+            logger.warn({ chatId }, 'Failed to parse Markdown formatting. Attempting delivery in PLAIN TEXT fallback mode...');
+            await this.sendMessage(text, 'Plain', undefined, chatId);
+            continue;
+          }
+          
+          allSucceeded = false;
+          logger.error({ chatId }, `Telegram Bot API delivery failed: ${description || error.message}`);
+        } else {
+          allSucceeded = false;
+        }
       }
-      throw error;
     }
+    return allSucceeded;
   }
 
   /**
@@ -174,8 +183,12 @@ export class TelegramClient {
   }
 
   private balanceMarkdownTags(text: string): string {
-    const stars = (text.match(/\*/g) || []).length;
-    const underscores = (text.match(/_/g) || []).length;
+    // Strip content inside backtick code spans before counting — asterisks/underscores
+    // inside code spans (e.g. `0 0 * * *`) are NOT markdown and must not affect the balance count.
+    const textWithoutCode = text.replace(/`[^`]*`/g, '``');
+
+    const stars = (textWithoutCode.match(/\*/g) || []).length;
+    const underscores = (textWithoutCode.match(/_/g) || []).length;
 
     let balanced = text;
     if (stars % 2 !== 0) {

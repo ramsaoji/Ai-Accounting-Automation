@@ -6,17 +6,19 @@ import { logger } from '../logger/logger.js';
 import { telegramClient } from './telegram.client.js';
 import { orchestratorService } from '../services/orchestrator.service.js';
 import { AiProviderFactory } from '../ai/ai.factory.js';
+import { getReport } from '../db/db.client.js';
 
 export class TelegramBot {
   private baseUrl: string;
   private offset: number = 0;
   private polling: boolean = false;
-  private authorizedChatId: string;
+  private authorizedChatIds: string[];
 
   constructor() {
     const token = config.TELEGRAM_BOT_TOKEN;
     this.baseUrl = `https://api.telegram.org/bot${token}`;
-    this.authorizedChatId = config.TELEGRAM_CHAT_ID;
+    // config.TELEGRAM_CHAT_ID is already parsed as string[] by config.ts
+    this.authorizedChatIds = config.TELEGRAM_CHAT_ID;
   }
 
   /**
@@ -28,13 +30,13 @@ export class TelegramBot {
       return;
     }
     
-    // Detect if Telegram credentials are at their mock defaults
+    // Detect if Telegram credentials are at their mock/placeholder defaults
     const isMockTelegram = 
       config.TELEGRAM_BOT_TOKEN === '1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ' ||
-      config.TELEGRAM_CHAT_ID === '-1001234567890';
+      this.authorizedChatIds.includes('-1001234567890');
 
     if (isMockTelegram) {
-      logger.warn('[Telegram Bot] Bot is in MOCK mode. Listening loop will not start to prevent crashing on mock token. Set valid credentials in .env to enable the interactive bot.');
+      logger.warn('[Telegram Bot] Bot is in MOCK mode. Listening loop will not start. Set valid credentials in .env to enable the interactive bot.');
       return;
     }
 
@@ -44,6 +46,17 @@ export class TelegramBot {
     // Non-blocking background loop trigger
     this.pollUpdates().catch((err) => {
       logger.error({ err }, 'Critical error in Telegram Bot loop initiation');
+    });
+
+    // Send startup online notification to all authorized users
+    const startupMsg =
+      `🟢 *Hotel Gaurav AI — Accounting Service Online*\n\n` +
+      `🤖 *AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\` (${config.AI_MODEL})\n` +
+      `📅 *Auto-Sync Schedule*: \`${config.CRON_SCHEDULE}\`\n` +
+      `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n\n` +
+      `_Tap any button below to get started!_`;
+    telegramClient.sendMessage(startupMsg, 'Markdown', this.getMainMenuKeyboard()).catch((err) => {
+      logger.warn({ err }, 'Failed to send startup notification to Telegram');
     });
   }
 
@@ -149,14 +162,14 @@ export class TelegramBot {
 
     logger.info({ chatId, text, username }, '[Telegram Bot] Received message');
 
-    // Security Authorization Check
-    if (chatId !== this.authorizedChatId) {
-      logger.warn({ chatId, expectedChatId: this.authorizedChatId }, '[Telegram Bot] Unauthorized chat access blocked');
+    // Security Authorization Check — supports multiple authorized users
+    if (!this.authorizedChatIds.includes(chatId)) {
+      logger.warn({ chatId, authorizedChatIds: this.authorizedChatIds }, '[Telegram Bot] Unauthorized chat access blocked');
       try {
         const warningUrl = `${this.baseUrl}/sendMessage`;
         await axios.post(warningUrl, {
           chat_id: chatId,
-          text: `🔒 *Access Restricted*\n\nYour Chat ID (\`${chatId}\`) is not authorized to access Hotel Gaurav's financial ledger summaries.\n\nIf you are the owner, please configure this chat ID in your server's \`.env\` configuration.`,
+          text: `🔒 *Access Restricted*\n\nYour Chat ID (\`${chatId}\`) is not authorized to access Hotel Gaurav's financial ledger summaries.\n\nIf you are the owner, please add this Chat ID to \`TELEGRAM_CHAT_ID\` in your server's \`.env\` configuration.`,
           parse_mode: 'Markdown'
         });
       } catch (err: any) {
@@ -179,10 +192,12 @@ export class TelegramBot {
     } catch (error: any) {
       logger.error({ error: error.message, text }, 'Error processing Telegram message action');
       try {
+        // Reply only to the person who sent the message, not broadcast to all users
         await telegramClient.sendMessage(
           this.formatBotError(error),
           'Markdown',
-          this.getMainMenuKeyboard()
+          this.getMainMenuKeyboard(),
+          chatId
         );
       } catch (err) {
         logger.error({ err }, 'Failed to send crash message back to chat');
@@ -224,7 +239,8 @@ export class TelegramBot {
       await telegramClient.sendMessage(
         `❓ *Unknown Command*\n\nI didn't recognize that command. Tap the keyboard buttons or type /help to see the available command panel.`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId  // Reply only to sender
       );
     }
   }
@@ -238,7 +254,7 @@ export class TelegramBot {
       `🔄 *Sync Ledger* - Manually trigger Google Drive sync & ingestion pipeline.\n` +
       `🩺 *Service Health* - Check accounting service health & active AI engine.\n\n` +
       `💬 *Or just text me any question!* (e.g., 'Compare food vs liquor sales' or 'Who is our top debtor and what is their pending balance?')`;
-    await telegramClient.sendMessage(welcomeText, 'Markdown', this.getMainMenuKeyboard());
+    await telegramClient.sendMessage(welcomeText, 'Markdown', this.getMainMenuKeyboard(), chatId);
   }
 
   private async sendHealth(chatId: string): Promise<void> {
@@ -247,8 +263,9 @@ export class TelegramBot {
       `🤖 *Active AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\`\n` +
       `🧠 *LLM Model*: \`${config.AI_MODEL}\`\n` +
       `📅 *Sync Schedule*: \`${config.CRON_SCHEDULE}\`\n` +
+      `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n` +
       `🕒 *Server Time*: \`${new Date().toLocaleString()}\``;
-    await telegramClient.sendMessage(healthText, 'Markdown', this.getMainMenuKeyboard());
+    await telegramClient.sendMessage(healthText, 'Markdown', this.getMainMenuKeyboard(), chatId);
   }
 
   private async triggerSync(chatId: string): Promise<void> {
@@ -291,33 +308,45 @@ export class TelegramBot {
     await telegramClient.sendMessage(
       `📊 *Hotel Gaurav - Sales Performance Portal*\n\nPlease select the timeframe you wish to view below:`,
       'Markdown',
-      inlineKeyboard
+      inlineKeyboard,
+      chatId
     );
   }
 
-  private async sendTodaySales(chatId: string): Promise<void> {
-    const filePath = path.resolve(process.cwd(), 'data', 'output', 'Hotel Gaurav Daily Sales Register', 'daily-sales.json');
+  private async loadReport(reportType: 'sales' | 'debitors' | 'daily-sales', folderName: string, fileName: string): Promise<any | null> {
+    try {
+      const dbData = await getReport(reportType);
+      if (dbData) return dbData;
+    } catch (err: any) {
+      logger.error({ err: err.message, reportType }, 'Failed to fetch report from Neon DB in Telegram Bot');
+    }
+
+    const filePath = path.resolve(process.cwd(), 'data', 'output', folderName, fileName);
     if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(raw);
+    } catch (err) {
+      logger.error({ err, filePath }, 'Failed to read local report file in Telegram Bot');
+      return null;
+    }
+  }
+
+  private async sendTodaySales(chatId: string): Promise<void> {
+    const dailyData = await this.loadReport('daily-sales', 'Hotel Gaurav Daily Sales Register', 'daily-sales.json');
+    if (!dailyData || !Array.isArray(dailyData) || dailyData.length === 0) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*\n\nPlease trigger a sync first using /sync to ingest spreadsheets.`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
       return;
     }
 
     try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      const dailyData = JSON.parse(raw);
-      if (!Array.isArray(dailyData) || dailyData.length === 0) {
-        await telegramClient.sendMessage(
-          `⚠️ *No daily transaction logs found in register.*`,
-          'Markdown',
-          this.getMainMenuKeyboard()
-        );
-        return;
-      }
-
       // The daily data is sorted chronologically with the latest date first!
       const latestDay = dailyData[0];
       
@@ -334,50 +363,51 @@ export class TelegramBot {
       const statusLabel = net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
       const summaryText = `📅 *Hotel Gaurav - Daily Sales Summary*\n` +
-        `📆 *Date*: *${formattedDate}*\n\n` +
-        `• 🍷 *Liquor Counter*: ₹${Math.round(latestDay.liquor || 0).toLocaleString()}\n` +
-        `• 🍲 *Food Counter*: ₹${Math.round(latestDay.food || 0).toLocaleString()}\n` +
-        `• 📥 *Credit Recovery (Udhari Jama)*: ₹${Math.round(latestDay.creditRecovery || 0).toLocaleString()}\n` +
-        `• 🛠️ *Daily Expenses*: ₹${Math.round(latestDay.expenses || 0).toLocaleString()}\n` +
-        `• 📤 *Credit Extended (Udhari)*: ₹${Math.round(latestDay.creditExtended || 0).toLocaleString()}\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `• 📥 *Total Inflow*: ₹${Math.round(inflow).toLocaleString()}\n` +
-        `• 📤 *Total Outflow*: ₹${Math.round(outflow).toLocaleString()}\n` +
-        `• 💵 *Net Balance*: *₹${Math.round(net).toLocaleString()}* (${statusLabel})\n\n` +
-        `💡 _Note: This represents the latest fully reconciled business day on record._`;
+         `📆 *Date*: *${formattedDate}*\n\n` +
+         `• 🍷 *Liquor Counter*: ₹${Math.round(latestDay.liquor || 0).toLocaleString()}\n` +
+         `• 🍲 *Food Counter*: ₹${Math.round(latestDay.food || 0).toLocaleString()}\n` +
+         `• 📥 *Credit Recovery (Udhari Jama)*: ₹${Math.round(latestDay.creditRecovery || 0).toLocaleString()}\n` +
+         `• 🛠️ *Daily Expenses*: ₹${Math.round(latestDay.expenses || 0).toLocaleString()}\n` +
+         `• 📤 *Credit Extended (Udhari)*: ₹${Math.round(latestDay.creditExtended || 0).toLocaleString()}\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `• 📥 *Total Inflow*: ₹${Math.round(inflow).toLocaleString()}\n` +
+         `• 📤 *Total Outflow*: ₹${Math.round(outflow).toLocaleString()}\n` +
+         `• 💵 *Net Balance*: *₹${Math.round(net).toLocaleString()}* (${statusLabel})\n\n` +
+         `💡 _Note: This represents the latest fully reconciled business day on record._`;
 
-      await telegramClient.sendMessage(summaryText, 'Markdown', this.getMainMenuKeyboard());
+      await telegramClient.sendMessage(summaryText, 'Markdown', this.getMainMenuKeyboard(), chatId);
     } catch (err: any) {
       logger.error({ err }, 'Failed to read daily sales data');
       await telegramClient.sendMessage(
         `❌ *Failed to read daily sales:*\n\n\`${err.message}\``,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
     }
   }
 
   private async sendMonthSelectionMenu(chatId: string): Promise<void> {
-    const filePath = path.resolve(process.cwd(), 'data', 'output', 'Hotel Gaurav Daily Sales Register', 'summary.json');
-    if (!fs.existsSync(filePath)) {
+    const data = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*\n\nPlease trigger a sync first using /sync to ingest spreadsheets.`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
       return;
     }
 
     try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      const data = JSON.parse(raw);
       const months = data.months || [];
 
       if (months.length === 0) {
         await telegramClient.sendMessage(
           `⚠️ *No monthly sheets found in register.*`,
           'Markdown',
-          this.getMainMenuKeyboard()
+          this.getMainMenuKeyboard(),
+          chatId
         );
         return;
       }
@@ -408,32 +438,33 @@ export class TelegramBot {
       await telegramClient.sendMessage(
         `📅 *Hotel Gaurav - Select Month*\n\nPlease tap a month below to view its performance summary:`,
         'Markdown',
-        { inline_keyboard: buttons }
+        { inline_keyboard: buttons },
+        chatId
       );
     } catch (err: any) {
       logger.error({ err }, 'Failed to generate month selection menu');
       await telegramClient.sendMessage(
         `❌ *Error generating month menu:*\n\n\`${err.message}\``,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
     }
   }
 
   private async sendSpecificMonthSales(chatId: string, targetMonth: string): Promise<void> {
-    const filePath = path.resolve(process.cwd(), 'data', 'output', 'Hotel Gaurav Daily Sales Register', 'summary.json');
-    if (!fs.existsSync(filePath)) {
+    const data = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
       return;
     }
 
     try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      const data = JSON.parse(raw);
       const months = data.months || [];
 
       const cleanTarget = targetMonth.replace(/_/g, ' ').toLowerCase().trim();
@@ -443,7 +474,8 @@ export class TelegramBot {
         await telegramClient.sendMessage(
           `⚠️ *Month not found in ledger database: "${targetMonth.replace(/_/g, ' ')}"*`,
           'Markdown',
-          this.getMainMenuKeyboard()
+          this.getMainMenuKeyboard(),
+          chatId
         );
         return;
       }
@@ -474,20 +506,21 @@ export class TelegramBot {
         ]
       };
 
-      await telegramClient.sendMessage(summaryText, 'Markdown', inlineKeyboard);
+      await telegramClient.sendMessage(summaryText, 'Markdown', inlineKeyboard, chatId);
     } catch (err: any) {
       logger.error({ err }, 'Failed to read specific month sales');
       await telegramClient.sendMessage(
         `❌ *Error loading month sales:*\n\n\`${err.message}\``,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
     }
   }
 
   private async sendSalesSummary(chatId: string): Promise<void> {
-    const filePath = path.resolve(process.cwd(), 'data', 'output', 'Hotel Gaurav Daily Sales Register', 'summary.json');
-    if (!fs.existsSync(filePath)) {
+    const data = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
         'Markdown',
@@ -497,9 +530,6 @@ export class TelegramBot {
     }
 
     try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      const data = JSON.parse(raw);
-      
       const summaryText = `📊 *Hotel Gaurav - Daily Sales Summary*\n` +
         `📅 *Audited Months*: ${data.totalMonths} months (${data.totalTransactions} transactions)\n` +
         `🕒 *Last Ingested*: ${data.runTimestamp || data.timestamp || 'N/A'}\n\n` +
@@ -511,31 +541,30 @@ export class TelegramBot {
         `• 🌟 *Best Month*: ${data.benchmarks?.bestRevenueMonth} (₹${Math.round(data.benchmarks?.bestRevenueValue || 0).toLocaleString()})\n\n` +
         `💬 _Tip: Ask me 'Compare sales across months' or 'Explain cashflow surplus' for an AI breakdown!_`;
 
-      await telegramClient.sendMessage(summaryText, 'Markdown', this.getMainMenuKeyboard());
+      await telegramClient.sendMessage(summaryText, 'Markdown', this.getMainMenuKeyboard(), chatId);
     } catch (err: any) {
       await telegramClient.sendMessage(
         `❌ *Failed to Read Sales Summary:*\n\n\`${err.message}\``,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
     }
   }
 
   private async sendDebitorsSummary(chatId: string): Promise<void> {
-    const filePath = path.resolve(process.cwd(), 'data', 'output', 'DEBITORS LIST', 'summary.json');
-    if (!fs.existsSync(filePath)) {
+    const data = await this.loadReport('debitors', 'DEBITORS LIST', 'summary.json');
+    if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Debitors Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
       return;
     }
 
     try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      const data = JSON.parse(raw);
-      
       const agg = data.aggregates || {};
       const top = data.topDebitors || [];
 
@@ -550,43 +579,41 @@ export class TelegramBot {
         `🔥 *Top Outstanding Debits:*\n`;
 
       if (top.length > 0) {
-        top.slice(0, 5).forEach((d: any, i: number) => {
-          const pendingVal = d.pending ?? d.pendingBalance ?? 0;
-          const riskLevel = pendingVal > 20000 ? 'High Risk 🚨' : pendingVal > 5000 ? 'Medium Alert ⚠️' : 'Healthy ✅';
-          debitorsText += `${i + 1}. *${d.name}*: ₹${Math.round(pendingVal).toLocaleString()} (Risk: _${riskLevel}_)\n`;
-        });
+         top.slice(0, 5).forEach((d: any, i: number) => {
+           const pendingVal = d.pending ?? d.pendingBalance ?? 0;
+           const riskLevel = pendingVal > 20000 ? 'High Risk 🚨' : pendingVal > 5000 ? 'Medium Alert ⚠️' : 'Healthy ✅';
+           debitorsText += `${i + 1}. *${d.name}*: ₹${Math.round(pendingVal).toLocaleString()} (Risk: _${riskLevel}_)\n`;
+         });
       } else {
         debitorsText += `_No pending debtor accounts found!_\n`;
       }
 
       debitorsText += `\n💬 _Tip: Ask me 'Suggest a recovery plan for ${top[0]?.name || 'debtors'}' for AI strategic advice!_`;
 
-      await telegramClient.sendMessage(debitorsText, 'Markdown', this.getMainMenuKeyboard());
+      await telegramClient.sendMessage(debitorsText, 'Markdown', this.getMainMenuKeyboard(), chatId);
     } catch (err: any) {
       await telegramClient.sendMessage(
         `❌ *Failed to Read Debitors Summary:*\n\n\`${err.message}\``,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
     }
   }
 
   private async handleAiQuery(query: string, chatId: string): Promise<void> {
-    // Send standard analysis acknowledgement to user
+    // Send standard analysis acknowledgement only to the querying user
     await telegramClient.sendMessage(
       `🤖 *Analyzing ledger data. Just a moment...*`,
       'Markdown',
-      this.getMainMenuKeyboard()
+      this.getMainMenuKeyboard(),
+      chatId
     );
-
-    const salesPath = path.resolve(process.cwd(), 'data', 'output', 'Hotel Gaurav Daily Sales Register', 'summary.json');
-    const debitorsPath = path.resolve(process.cwd(), 'data', 'output', 'DEBITORS LIST', 'summary.json');
 
     let combinedContext = '';
 
-    if (fs.existsSync(salesPath)) {
-      const salesData = JSON.parse(fs.readFileSync(salesPath, 'utf8'));
-      
+    const salesData = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    if (salesData) {
       // Prune list items to avoid token overflow while preserving master numbers
       const prunedSales = {
         fileName: salesData.fileName,
@@ -608,9 +635,8 @@ export class TelegramBot {
         JSON.stringify(prunedSales, null, 2) + '\n';
     }
 
-    if (fs.existsSync(debitorsPath)) {
-      const debitorsData = JSON.parse(fs.readFileSync(debitorsPath, 'utf8'));
-      
+    const debitorsData = await this.loadReport('debitors', 'DEBITORS LIST', 'summary.json');
+    if (debitorsData) {
       const prunedDebitors = {
         fileName: debitorsData.fileName,
         timestamp: debitorsData.timestamp || debitorsData.runTimestamp || 'N/A',
@@ -637,7 +663,8 @@ export class TelegramBot {
       await telegramClient.sendMessage(
         `⚠️ *No Financial Records Found*\n\nUnable to access ledger summaries. Please run /sync first to ingest spreadsheets.`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId
       );
       return;
     }
@@ -686,8 +713,8 @@ ${combinedContext}
 
     const cleanResponse = response.trim();
     
-    // We send this formatted response via telegramClient which auto-handles length chunking and markdown fallbacks
-    await telegramClient.sendMessage(cleanResponse, 'Markdown', this.getMainMenuKeyboard());
+    // Reply only to the user who asked the question
+    await telegramClient.sendMessage(cleanResponse, 'Markdown', this.getMainMenuKeyboard(), chatId);
   }
 
   private formatBotError(err: any): string {

@@ -84,6 +84,7 @@ export interface MasterSummary {
   alerts: Alert[];
   errors: ParsingError[];
   intelligence: string[];
+  aiGenerated?: boolean;
 }
 
 export interface ChatMessage {

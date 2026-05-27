@@ -17,9 +17,13 @@ import {
 } from 'recharts';
 
 interface PortalSectionProps {
+  salesData: any;
+  debitorsData: any;
   salesAlertCount: number;
   debitorsAlertCount: number;
   onLaunchWorkspace: (workspace: 'sales' | 'debitors') => void;
+  cronSchedule: string;
+  connectionMode: 'live' | 'static' | 'empty';
 }
 
 interface PortalStat {
@@ -44,73 +48,107 @@ interface PortalItem {
 }
 
 export const PortalSection: React.FC<PortalSectionProps> = ({
+  salesData,
+  debitorsData,
   salesAlertCount,
   debitorsAlertCount,
   onLaunchWorkspace,
+  cronSchedule,
+  connectionMode,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'flagged' | 'audited'>('all');
 
-  const nextScanTime = useMemo(() => {
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const nextMark = minutes < 30 ? 30 : 60;
-    const diff = nextMark - minutes;
-    const nextScan = new Date(now.getTime() + diff * 60 * 1000);
-    return `today, ${nextScan.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  }, []);
+  const scanScheduleLabel = useMemo(() => {
+    if (connectionMode === 'empty') {
+      return 'Manual Sync Only';
+    }
+    if (connectionMode === 'static') {
+      return 'Static Offline Sync';
+    }
+    
+    // Parse common patterns
+    const clean = cronSchedule.trim().replace(/\s+/g, ' ');
+    if (clean === '0 0 * * *') {
+      return 'Daily at 12:00 AM (Midnight)';
+    }
+    if (clean === '*/30 * * * *') {
+      return 'Every 30 Minutes';
+    }
+    if (clean === '0 * * * *') {
+      return 'Every Hour';
+    }
+    return `Scheduled: ${cronSchedule}`;
+  }, [cronSchedule, connectionMode]);
 
-  // Mini sparkline data derived from actual/mock variables
-  const salesSparkline = [
-    { net: 1373130 },
-    { net: 1284630 },
-    { net: 1486750 },
-    { net: 1349165 },
-    { net: 1441845 },
-    { net: 1321645 },
-    { net: 1615090 }
-  ];
+  const formatINRValue = (value: number | undefined) => {
+    if (value === undefined || value === null) return '—';
+    const isNegative = value < 0;
+    const absVal = Math.abs(value);
+    let formatted = '';
+    if (absVal >= 10000000) {
+      formatted = `₹${parseFloat((absVal / 10000000).toFixed(2))} Cr`;
+    } else if (absVal >= 100000) {
+      formatted = `₹${parseFloat((absVal / 100000).toFixed(2))} L`;
+    } else {
+      formatted = `₹${absVal.toLocaleString('en-IN')}`;
+    }
+    return isNegative ? `-${formatted}` : formatted;
+  };
 
-  const debitorsSparkline = [
-    { pending: 20690 },
-    { pending: 15650 },
-    { pending: 8600 },
-    { pending: 8540 },
-    { pending: 7100 },
-    { pending: 5620 },
-    { pending: 5280 }
-  ];
+  const formatTimestamp = (ts?: string) => {
+    if (!ts) return 'Never';
+    if (ts.includes(',') || ts.toLowerCase().includes('am') || ts.toLowerCase().includes('pm')) {
+      return ts;
+    }
+    const parsed = new Date(ts);
+    if (isNaN(parsed.getTime())) {
+      return ts;
+    }
+    return parsed.toLocaleString();
+  };
 
   const portals: PortalItem[] = [
     {
       id: 'sales',
-      title: 'Hotel Gaurav Daily Sales',
+      title: salesData ? salesData.fileName.replace(/\.[^/.]+$/, "") : 'Daily Sales Register',
       type: 'Sales cash register',
-      filename: 'Hotel Gaurav Daily Sales Register.xlsx',
-      lastUpdated: 'May 25, 2:09 PM',
+      filename: salesData ? salesData.fileName : 'No spreadsheet uploaded',
+      lastUpdated: salesData ? formatTimestamp(salesData.runTimestamp) : 'Never',
       stats: [
-        { label: 'Consolidated Inflows', value: '₹4.84 Cr' },
-        { label: 'Net Cash Surplus', value: '₹3.75 Cr', positive: true },
+        { label: 'Consolidated Inflows', value: salesData ? formatINRValue(salesData.masterTotals?.totalInflows) : '—' },
+        { label: 'Net Cash Surplus', value: salesData ? formatINRValue(salesData.masterTotals?.netCashflow) : '—', positive: salesData ? (salesData.masterTotals?.netCashflow >= 0) : undefined },
       ],
       alertCount: salesAlertCount,
-      tags: ['Sales Registry', '25 Months', '3.5K Transactions'],
-      sparkline: salesSparkline,
+      tags: salesData 
+        ? ['Sales Registry', `${salesData.totalMonths || 0} Months`, `${(salesData.totalTransactions || 0).toLocaleString()} Transactions`]
+        : ['Sales Registry', 'Awaiting Ingestion'],
+      sparkline: salesData?.months?.map((m: any) => ({ net: m.net })) || [],
       dataKey: 'net',
       stroke: 'var(--primary)'
     },
     {
       id: 'debitors',
-      title: 'Customer Debitors Outstanding',
+      title: debitorsData ? debitorsData.fileName.replace(/\.[^/.]+$/, "") : 'Customer Debitors Outstanding',
       type: 'Debitors Ledger',
-      filename: 'DEBITORS LIST.xlsx',
-      lastUpdated: 'May 25, 2:09 PM',
+      filename: debitorsData ? debitorsData.fileName : 'No spreadsheet uploaded',
+      lastUpdated: debitorsData ? formatTimestamp(debitorsData.runTimestamp) : 'Never',
       stats: [
-        { label: 'Outstanding Balance', value: '₹1,75,370', critical: true },
-        { label: 'Recovery Success', value: '96.7%' },
+        { label: 'Outstanding Balance', value: debitorsData ? formatINRValue(debitorsData.aggregates?.totalPendingSum) : '—', critical: true },
+        { 
+          label: 'Recovery Success', 
+          value: debitorsData 
+            ? (String(debitorsData.aggregates?.collectionSuccessRate).endsWith('%') 
+                ? debitorsData.aggregates?.collectionSuccessRate 
+                : `${debitorsData.aggregates?.collectionSuccessRate}%`) 
+            : '—' 
+        },
       ],
       alertCount: debitorsAlertCount,
-      tags: ['Debitors Ledger', '137 Customers', 'Udhari Register'],
-      sparkline: debitorsSparkline,
+      tags: debitorsData
+        ? ['Debitors Ledger', `${debitorsData.aggregates?.activeDebitorsCount || 0} Customers`, 'Udhari Register']
+        : ['Debitors Ledger', 'Awaiting Ingestion'],
+      sparkline: debitorsData?.topDebitors?.map((d: any) => ({ pending: d.pending })) || [],
       dataKey: 'pending',
       stroke: 'var(--destructive)'
     }
@@ -243,17 +281,23 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
 
                   {/* Sparkline Graph */}
                   <div className="w-24 h-8 select-none opacity-80 group-hover:opacity-100 transition-opacity">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={portal.sparkline as any}>
-                        <Line
-                          type="monotone"
-                          dataKey={portal.dataKey}
-                          stroke={portal.stroke}
-                          strokeWidth={1.5}
-                          dot={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {portal.sparkline && portal.sparkline.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={portal.sparkline as any}>
+                          <Line
+                            type="monotone"
+                            dataKey={portal.dataKey}
+                            stroke={portal.stroke}
+                            strokeWidth={1.5}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="w-full h-full border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[0.58rem] text-muted-foreground font-mono bg-muted/5 select-none">
+                        No trend data
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -297,7 +341,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
           </div>
           <div className="flex items-center gap-2 text-[0.68rem] text-muted-foreground font-mono bg-background border px-3 py-1.5 rounded-lg shrink-0 self-start sm:self-auto select-none">
             <Calendar className="size-3.5" />
-            <span>Next Scan: {nextScanTime}</span>
+            <span>Scan Schedule: {scanScheduleLabel}</span>
           </div>
         </div>
 

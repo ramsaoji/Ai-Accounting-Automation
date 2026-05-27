@@ -1,13 +1,14 @@
 # Telegram Bot Integration & Interactive Command Center
 
-Turn your Telegram Bot into a secure, mobile-friendly **Financial Command Center** for "Hotel Gaurav". The integration enables the restaurant owner to execute ledger operations, view outstanding customer balances, sync spreadsheets in real-time, and converse directly with the **AI Financial Advisor** from anywhere in the world.
+Turn your Telegram Bot into a secure, mobile-friendly **Financial Command Center** for "Hotel Gaurav". The integration enables the restaurant owner (and any trusted team members) to execute ledger operations, view outstanding customer balances, sync spreadsheets in real-time, and converse directly with the **AI Financial Advisor** from anywhere in the world.
 
 ---
 
 ## 🛠️ Step-by-Step Onboarding Setup
 
 ### Step 1: Create Your Telegram Bot
-To talk to Telegram, you need to create a bot account and obtain a unique API Token.
+
+You only need **one bot** for the whole setup — the bot token identifies the bot itself and is shared by all authorized users.
 
 1. Open Telegram and search for the official [@BotFather](https://t.me/BotFather).
 2. Start a chat and send the command:
@@ -21,12 +22,15 @@ To talk to Telegram, you need to create a bot account and obtain a unique API To
 
 ---
 
-### Step 2: Retrieve Your Personal Chat ID
-For security, the bot **only** responds to you. You need to retrieve your unique numeric Chat ID.
+### Step 2: Retrieve Chat IDs (for each authorized user)
+
+The bot enforces a strict **allowlist** — only users whose Chat IDs are listed in `TELEGRAM_CHAT_ID` can interact with it.
+
+For **each person** who should have access:
 
 1. Search for [@userinfobot](https://t.me/userinfobot) on Telegram.
 2. Send any message or `/start`.
-3. Locate the `id` field under the `chat` object in the JSON reply:
+3. Locate the `id` field in the reply:
    ```json
    "chat": {
      "id": 987654321,
@@ -40,94 +44,138 @@ For security, the bot **only** responds to you. You need to retrieve your unique
 
 ### Step 3: Configure Environment Variables
 
-Open your project's `.env` file at the root directory (`/ai-accounting-automation/.env`) and update the mock values with your authentic credentials:
+Open your project's `.env` file at the root directory (`/ai-accounting-automation/.env`) and update with your credentials:
 
-```bash
+```env
 # ====================================================================
 # Telegram Interactive Bot Configuration
 # ====================================================================
-# Paste the API Token from @BotFather
-TELEGRAM_BOT_TOKEN="your_copied_bot_token_here"
+# The bot token from @BotFather — one token shared by all users
+TELEGRAM_BOT_TOKEN="1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ"
 
-# Paste your personal numeric Chat ID from @userinfobot (e.g. 987654321)
-TELEGRAM_CHAT_ID="your_personal_chat_id_here"
+# Comma-separated list of authorized Chat IDs
+# Single user:
+TELEGRAM_CHAT_ID="987654321"
+
+# Multiple users (owner + accountant, for example):
+# TELEGRAM_CHAT_ID="987654321,112233445"
 ```
 
+> [!IMPORTANT]
+> `TELEGRAM_BOT_TOKEN` is always a single value — it is the identity of the bot, not of any user. `TELEGRAM_CHAT_ID` is the list of people allowed to use it.
+
 > [!WARNING]
-> Keep your `TELEGRAM_BOT_TOKEN` secure! Do not commit it to version control systems like GitHub. The `.gitignore` is already configured to exclude `.env` files.
+> Keep your `TELEGRAM_BOT_TOKEN` secret! Do not commit it to GitHub. The `.gitignore` is already configured to exclude `.env` files.
+
+---
+
+## 👥 Multi-User Access
+
+Multiple people can use the same bot simultaneously. Each authorized user:
+- Receives the **startup online notification** when the backend server starts.
+- Receives the **sync summary** broadcast after every Drive sync (cron or manual).
+- Gets their **own private replies** — if Person A asks `/summary`, Person B does not see A's response.
+- Gets **blocked** if their Chat ID is not in the list, with a message explaining how to request access.
+
+To add a second user (e.g., your accountant):
+```env
+TELEGRAM_CHAT_ID=987654321,112233445
+```
 
 ---
 
 ## 🛡️ Security Architecture
 
-Ledger data is highly confidential. To prevent unauthorized users from querying "Hotel Gaurav's" restaurant sales, profit margins, or debtor records, we have implemented a **Strict Chat ID Verification Policy**:
+Ledger data is confidential. The bot implements a **strict Chat ID allowlist**:
 
 ```mermaid
 sequenceDiagram
-    actor Owner as Restaurant Owner (Authorized)
-    actor Attacker as Unauthorized User
+    actor Owner as Owner (ID: 987654321) ✅
+    actor Acct as Accountant (ID: 112233445) ✅
+    actor Attacker as Unauthorized User ❌
     participant Bot as Telegram Bot (Long Polling)
     participant Core as Accounting Core & AI Engine
 
-    Owner->>Bot: /summary (Chat ID: 987654321)
-    Bot->>Bot: Verify: Chat ID == TELEGRAM_CHAT_ID?
-    Note over Bot: Match Found (True)
-    Bot->>Core: Fetch Local Sales Summary
-    Core-->>Bot: Financial Metrics JSON
-    Bot-->>Owner: 📊 Summary Markdown Table Delivered
+    Owner->>Bot: /summary
+    Bot->>Bot: ID in allowlist? ✅
+    Bot->>Core: Fetch Sales Summary
+    Core-->>Bot: Financial Metrics
+    Bot-->>Owner: 📊 Summary (private reply)
 
-    Attacker->>Bot: /debitors (Chat ID: 111222333)
-    Bot->>Bot: Verify: Chat ID == TELEGRAM_CHAT_ID?
-    Note over Bot: Access Denied (False)
-    Bot-->>Attacker: 🔒 "Access Restricted" Notice Sent
-    Bot->>Bot: Log Warning: Blocked Access Attempt
+    Acct->>Bot: /debitors
+    Bot->>Bot: ID in allowlist? ✅
+    Bot->>Core: Fetch Debitors Summary
+    Core-->>Bot: Credit Data
+    Bot-->>Acct: 👥 Debitors (private reply)
+
+    Attacker->>Bot: /summary
+    Bot->>Bot: ID in allowlist? ❌
+    Bot-->>Attacker: 🔒 Access Restricted notice
 ```
-
-If an unauthorized user attempts to message the bot, the bot logs a warning block on the server and replies to the attacker with an **Access Restricted** card, withholding all ledger details.
 
 ---
 
 ## 📱 Interactive Command Panel
 
-Our bot includes custom slash commands that respond instantly with formatted financial data.
-
-| Command | Action | Output Style | Description |
+| Command | Keyboard Button | Action | Description |
 | :--- | :--- | :--- | :--- |
-| `/start` or `/help` | Onboarding Card | Rich Text + Emojis | Displays welcome card and a pocket guide of all available commands. |
-| `/summary` | Sales Summary | Premium Key-Value list | Extracts audited Daily Sales, Food/Liquor revenue splits, cashflow position, and best months. |
-| `/debitors` | Outstanding Debts | Ranked Markdown Table | Extracts outstanding debit aggregates (Udhari) and ranks top 5 debtors with risk flags. |
-| `/sync` | Force Ingestion | Dynamic Status + Alert | Fetches latest spreadsheets from Google Drive, triggers rules-audits, compiles models, and updates web portal. |
-| `/status` or `/health` | Server Inspection | Diagnostics Card | Inspects active AI Provider (e.g. Groq), model version, cron scheduler pattern, and server health. |
+| `/start` or `/help` | — | Onboarding Card | Welcome card with all commands |
+| `/summary` | 📊 Sales Summary | Sub-menu | Opens timeframe selector (today / month / master) |
+| `/debitors` | 👥 Debitors List | Ranked Table | Top 5 outstanding debtors with risk flags |
+| `/sync` | 🔄 Sync Ledger | Drive Pipeline | Downloads Drive files → audits → updates DB → notifies all users |
+| `/status` or `/health` | 🩺 Service Health | Diagnostics | AI provider, model, cron schedule, user count, server time |
+
+### Sales Sub-menu (inline buttons after `/summary`)
+
+| Button | What it shows |
+| :--- | :--- |
+| 📅 Today's Sales Summary | Latest reconciled business day (Liquor, Food, Expenses, Net) |
+| 📅 View Specific Month | Dynamic grid of all months in the ledger, newest first |
+| 📊 Master Cumulative Summary | Totals across all audited months |
 
 ---
 
-## 🤖 Natural Language AI Chat Companion
+## 🤖 Natural Language AI Chat
 
-You don't need to memorize commands! If you type a standard question, the bot redirects your query to the **AI Financial Advisor**, backed by Groq or Gemini:
+You don't need commands — type any question and the bot routes it to the **AI Financial Advisor**:
 
-### Try Asking:
-* *“How did liquor sales do compared to food sales last month?”*
-* *“Who is our top debtor and what is their collection risk?”*
-* *“Suggest a recovery strategy for [Customer Name]”*
-* *...
-* *“Compare sales trends across all months parsed”*
+* *"How did liquor sales compare to food sales last month?"*
+* *"Who is our top debtor and what is their collection risk?"*
+* *"Suggest a recovery strategy for [Customer Name]"*
+* *"Compare sales trends across all months"*
 
-The AI engine automatically loads the **latest daily sales registers** and **debtors lists**, performs a strict mathematical verification, formats comparisons as clean Markdown tables, and outputs actionable business recommendations!
+The AI loads the latest sales and debitors summaries, performs mathematical verification, and formats answers as clean Markdown tables in monospaced blocks (properly aligned on Telegram mobile).
 
 ---
 
-## 🚀 Execution & Management
+## 🟢 Startup Notification
 
-### Local Development
-The bot is fully integrated into the backend service boot sequence. To run the app locally in development watch mode:
-```powershell
+When the backend server starts with valid Telegram credentials, all authorized users receive:
+```
+🟢 Hotel Gaurav AI — Accounting Service Online
+
+🤖 AI Engine: `GROQ` (llama-3.3-70b-versatile)
+📅 Auto-Sync Schedule: `30 17 * * *`
+👥 Authorized Users: 2
+
+Tap any button below to get started!
+```
+
+This confirms the service is live and shows the active configuration at a glance.
+
+---
+
+## 🚀 Running the Bot
+
+The bot is fully integrated into the backend service and starts automatically with:
+```bash
 npm run dev
 ```
+
 The console will output:
 ```text
 [Telegram Bot] Starting interactive bot listener loop (Long Polling)...
 [SERVER] HTTP health-check server listening for requests on port 8080
 ```
 
-### Production Deployment
-When deploying to cloud providers like Railway, Render, or Heroku, the long polling loop runs continuously in the background alongside the lightweight HTTP health check endpoint, eliminating the need for complex SSL certificates or reverse tunnels (like `ngrok`).
+On cloud providers like Render, the long polling loop runs continuously in the background alongside the health check endpoint — no SSL certificates or `ngrok` tunnels needed.

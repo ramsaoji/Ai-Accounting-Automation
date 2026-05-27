@@ -18,13 +18,13 @@ export class DriveService {
   }
 
   /**
-   * Lists the latest .xlsx accounting files inside the configured Google Drive folder.
-   * Returns metadata for the newest file or null if no matching files are found.
+   * Lists all .xlsx accounting files inside the configured Google Drive folder.
+   * Returns metadata for the files sorted by modifiedTime ascending, or an empty array if none are found.
    */
-  async getLatestExcelFile(): Promise<DriveFileInfo | null> {
+  async getAllExcelFiles(): Promise<DriveFileInfo[]> {
     try {
       const folderId = config.GOOGLE_DRIVE_FOLDER_ID;
-      logger.info({ folderId }, 'Searching for the latest Excel file in Google Drive');
+      logger.info({ folderId }, 'Searching for all Excel files in Google Drive');
 
       // Query to search for files inside specific folder, matching Excel mimeType, not trashed
       const q = `'${folderId}' in parents and mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' and trashed = false`;
@@ -33,33 +33,24 @@ export class DriveService {
         q,
         spaces: 'drive',
         fields: 'files(id, name, createdTime, modifiedTime)',
-        orderBy: 'modifiedTime desc', // Get the latest modified file
-        pageSize: 5,                  // Retrieve a small batch to inspect
+        orderBy: 'modifiedTime asc', // Fetch in ascending order so older files are processed first and newer files overwrite them
+        pageSize: 100,               // Retrieve a larger batch to process all
       });
 
       const files = response.data.files;
       if (!files || files.length === 0) {
         logger.warn({ folderId }, 'No Excel files found in the configured folder');
-        return null;
+        return [];
       }
 
-      // Return the most recently modified file
-      const latestFile = files[0];
-      logger.info(
-        { 
-          fileId: latestFile.id, 
-          fileName: latestFile.name, 
-          modifiedTime: latestFile.modifiedTime 
-        }, 
-        'Found latest accounting Excel file'
-      );
+      logger.info({ count: files.length }, 'Found Excel file(s) in Google Drive');
 
-      return {
-        id: latestFile.id!,
-        name: latestFile.name!,
-        createdTime: latestFile.createdTime || undefined,
-        modifiedTime: latestFile.modifiedTime || undefined,
-      };
+      return files.map(file => ({
+        id: file.id!,
+        name: file.name!,
+        createdTime: file.createdTime || undefined,
+        modifiedTime: file.modifiedTime || undefined,
+      }));
     } catch (error) {
       logger.error({ error }, 'Failed to retrieve files from Google Drive');
       throw new Error(`Google Drive list failed: ${(error as Error).message}`);
