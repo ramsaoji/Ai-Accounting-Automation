@@ -239,7 +239,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
       </div>
 
       {/* Datadog / Sentry Split-pane Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 mt-1 items-start lg:h-[calc(100vh-13rem)]">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 mt-1 items-start lg:h-[calc(100dvh-13rem)]">
         
         {/* Left Column Pane (2/5 size) */}
         <div className="lg:col-span-2 flex flex-col border rounded-xl overflow-hidden bg-card/45 h-[450px] lg:h-full min-h-0 shrink-0 min-w-0">

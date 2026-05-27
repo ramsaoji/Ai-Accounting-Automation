@@ -37,7 +37,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'breached' | 'watch' | 'clear'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 12;
+  const itemsPerPage = 10;
 
   const formatINR = (val: number) => {
     return '₹' + Math.round(val).toLocaleString('en-IN');
@@ -199,11 +199,11 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       </div>
 
       {/* Main Table Card */}
-      <Card className="border shadow-xs bg-card/45 overflow-hidden flex flex-col justify-between h-[550px] md:h-[calc(100vh-13rem)]">
+      <Card className="border shadow-xs bg-card/45 overflow-hidden flex flex-col justify-between">
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Custom Database Toolbar */}
           <div className="p-4 border-b border-border/80 bg-muted/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shrink-0 select-none">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="w-full flex flex-wrap items-center justify-between gap-3">
               {/* Search Field */}
               <div className="relative w-full sm:w-60">
                 <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
@@ -240,12 +240,12 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
             </div>
 
             {/* Export Actions */}
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleExportCSV} className="text-xs h-9">
                 <Download className="size-3.5 mr-1.5" />
                 Export CSV
               </Button>
-            </div>
+            </div> */}
           </div>
 
           {/* Database Grid */}

@@ -194,22 +194,22 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
   };
 
   return (
-    <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
+    <div className="flex flex-col gap-3 w-full animate-in fade-in duration-300">
       {/* Title */}
-      <div className="border-b pb-3 md:pb-5">
+      <div className="border-b pb-2.5 md:pb-4">
         <h1 className="font-heading font-semibold text-lg sm:text-xl tracking-tight text-foreground">
           AI Strategic Advisor
         </h1>
-        <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+        <p className="text-xs text-muted-foreground mt-0.5">
           Ask questions, compare margins, or generate objectives using context-aware ledger modeling.
         </p>
       </div>
 
       {/* Production-grade Split Chat Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 items-stretch lg:h-[calc(100vh-13rem)]">
+      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-3 md:gap-4 ">
         
-        {/* Playbooks Sidebar (1/4 size) */}
-        <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden h-auto lg:h-full select-none shrink-0 min-w-0">
+        {/* Playbooks Sidebar */}
+        <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden shrink-0 lg:h-full select-none min-w-0">
           <div className="hidden lg:flex p-4 border-b bg-muted/20 items-center gap-2">
             <Compass className="size-4 text-primary" />
             <span className="text-xs font-bold text-foreground">Advisory Playbooks</span>
@@ -245,26 +245,29 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
         </div>
 
         {/* Chat Feed Pane (3/4 size) */}
-        <Card className="lg:col-span-3 border bg-card/45 h-[440px] sm:h-[580px] lg:h-full overflow-hidden flex flex-col justify-between min-w-0">
-          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between space-y-0 select-none gap-2">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0 mt-0.5">
-                <Bot className="size-4.5" />
+        <Card className="lg:col-span-3 border bg-card/45 min-h-[95dvh] flex-1 overflow-hidden flex flex-col min-w-0">
+          {/* Chat card header — compact on mobile */}
+          <CardHeader className="px-3 py-2 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between space-y-0 select-none gap-2">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0">
+                <Bot className="size-4" />
               </div>
-              <div className="flex-1 min-w-0">
-                <CardTitle className="text-xs font-bold flex flex-wrap items-center gap-1.5 sm:gap-2 leading-tight">
-                  {businessName} Advisory Agent
-                  <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full leading-none shrink-0">
+              <div className="flex-1 min-w-0 flex flex-col sm:block">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <CardTitle className="text-xs font-bold leading-tight">
+                    {businessName} Advisory Agent
+                  </CardTitle>
+                  <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-1.5 py-0.5 rounded-full leading-none shrink-0">
                     <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse"></span>
                     Online
                   </span>
-                </CardTitle>
-                <p className="text-[0.68rem] text-muted-foreground mt-1 truncate max-w-[150px] sm:max-w-none">Context: {summary.fileName}</p>
+                </div>
+                <p className="text-[0.65rem] text-muted-foreground truncate hidden sm:block mt-0.5">Context: {summary.fileName}</p>
               </div>
             </div>
-            <Button variant="outline" size="xs" onClick={clearChat} className="text-[10px] sm:text-xs h-7 sm:h-7.5 px-2 sm:px-2.5 shrink-0">
-              <RefreshCw className="size-3.5 mr-0 sm:mr-1 shrink-0 animate-in spin-in-12 duration-300" />
-              <span className="hidden sm:inline">Clear Chat</span>
+            <Button variant="outline" size="xs" onClick={clearChat} className="text-[10px] sm:text-xs h-7 px-2 sm:px-2.5 shrink-0">
+              <RefreshCw className="size-3.5 shrink-0" />
+              <span className="hidden sm:inline ml-1">Clear Chat</span>
             </Button>
           </CardHeader>
 
@@ -305,19 +308,19 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
           </CardContent>
 
           {/* Form / Actions */}
-          <CardFooter className="px-4 py-3 sm:px-6 sm:py-4 border-t bg-muted/10 flex flex-col gap-3">
+          <CardFooter className="px-3 py-2.5 sm:px-6 sm:py-4 border-t bg-muted/10 flex flex-col gap-2 sm:gap-3 flex-shrink-0">
             {/* Quick Suggestion Chips */}
-            <div className="flex gap-2 overflow-x-auto pb-1 max-w-full no-scrollbar select-none shrink-0">
+            <div className="flex gap-1.5 overflow-x-auto max-w-full no-scrollbar select-none flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
               {suggestions.map((sug, idx) => (
                 <Button
                   key={idx}
                   variant="outline"
                   size="xs"
                   onClick={() => handleSend(sug)}
-                  className="text-[0.68rem] text-muted-foreground hover:text-foreground rounded-full flex-shrink-0 flex items-center gap-1 h-7 px-3 border-border/80 hover:bg-muted"
+                  className="text-[0.65rem] text-muted-foreground hover:text-foreground rounded-full flex-shrink-0 flex items-center gap-1 h-6 sm:h-7 px-2.5 sm:px-3 border-border/80 hover:bg-muted whitespace-nowrap"
                 >
                   {sug}
-                  <ArrowUpRight className="size-3 text-muted-foreground/80 shrink-0" />
+                  <ArrowUpRight className="size-2.5 sm:size-3 text-muted-foreground/80 shrink-0" />
                 </Button>
               ))}
             </div>
