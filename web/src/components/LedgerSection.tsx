@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import type { MasterSummary } from '../types';
 import {
   Search,
-  Download,
+  // Download,
   Filter,
   ChevronLeft,
   ChevronRight,
@@ -139,50 +139,50 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
 
-  const handleExportCSV = () => {
-    try {
-      let csvContent = "\uFEFF"; // Unicode BOM for Excel compatibility
+  // const handleExportCSV = () => {
+  //   try {
+  //     let csvContent = "\uFEFF"; // Unicode BOM for Excel compatibility
       
-      if (isDebitors) {
-        // Header
-        csvContent += "Customer Name,Total Credit purchases,Cleared Amount,Outstanding Balance,Risk Category\n";
-        // Rows
-        processedDebitors.forEach((debtor) => {
-          const isBreach = debtor.pending > maxOutstandingDuesLimit;
-          const risk = isBreach ? "Breached Credit Limit" : debtor.pending > 5000 ? "Watchlist" : "Good Standing";
-          const row = `"${debtor.name.replace(/"/g, '""')}",${debtor.debit},${debtor.credit},${debtor.pending},"${risk}"`;
-          csvContent += row + "\n";
-        });
-      } else {
-        // Header
-        csvContent += "Sheet Month,Consolidated Inflows,Operational Outflows,Net Surplus,Liquor Split,Food Split,Other Expenses\n";
-        // Rows
-        processedMonths.forEach((m) => {
-          const row = `"${m.sheetName.replace(/"/g, '""')}",${m.inflows},${m.outflows},${m.net},${m.liquor},${m.food},${m.expenses}`;
-          csvContent += row + "\n";
-        });
-      }
+  //     if (isDebitors) {
+  //       // Header
+  //       csvContent += "Customer Name,Total Credit purchases,Cleared Amount,Outstanding Balance,Risk Category\n";
+  //       // Rows
+  //       processedDebitors.forEach((debtor) => {
+  //         const isBreach = debtor.pending > maxOutstandingDuesLimit;
+  //         const risk = isBreach ? "Breached Credit Limit" : debtor.pending > 5000 ? "Watchlist" : "Good Standing";
+  //         const row = `"${debtor.name.replace(/"/g, '""')}",${debtor.debit},${debtor.credit},${debtor.pending},"${risk}"`;
+  //         csvContent += row + "\n";
+  //       });
+  //     } else {
+  //       // Header
+  //       csvContent += "Sheet Month,Consolidated Inflows,Operational Outflows,Net Surplus,Liquor Split,Food Split,Other Expenses\n";
+  //       // Rows
+  //       processedMonths.forEach((m) => {
+  //         const row = `"${m.sheetName.replace(/"/g, '""')}",${m.inflows},${m.outflows},${m.net},${m.liquor},${m.food},${m.expenses}`;
+  //         csvContent += row + "\n";
+  //       });
+  //     }
       
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const filename = isDebitors 
-        ? `Debitors_Outstanding_Ledger_Report_${new Date().toISOString().slice(0,10)}.csv`
-        : `Daily_Sales_Consolidated_Report_${new Date().toISOString().slice(0,10)}.csv`;
+  //     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  //     const url = URL.createObjectURL(blob);
+  //     const link = document.createElement("a");
+  //     const filename = isDebitors 
+  //       ? `Debitors_Outstanding_Ledger_Report_${new Date().toISOString().slice(0,10)}.csv`
+  //       : `Daily_Sales_Consolidated_Report_${new Date().toISOString().slice(0,10)}.csv`;
         
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+  //     link.setAttribute("href", url);
+  //     link.setAttribute("download", filename);
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     document.body.removeChild(link);
+  //     URL.revokeObjectURL(url);
       
-      toast.success("CSV file downloaded successfully.");
-    } catch (err) {
-      toast.error("Failed to generate CSV export.");
-      console.error(err);
-    }
-  };
+  //     toast.success("CSV file downloaded successfully.");
+  //   } catch (err) {
+  //     toast.error("Failed to generate CSV export.");
+  //     console.error(err);
+  //   }
+  // };
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
