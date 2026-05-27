@@ -13,25 +13,35 @@ if (!fs.existsSync(logDir)) {
 
 const logFilePath = path.join(logDir, 'system.log');
 
+const streams: pino.StreamEntry[] = [
+  {
+    // Append raw JSON logs persistently to a file on disk
+    stream: fs.createWriteStream(logFilePath, { flags: 'a' }),
+  },
+];
+
+if (isDevelopment) {
+  streams.push({
+    // Pretty-printed console logs for local terminal visibility
+    stream: pino.transport({
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        ignore: 'pid,hostname',
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
+      },
+    }) as any,
+  });
+} else {
+  streams.push({
+    // High-performance raw JSON logs for production aggregators
+    stream: process.stdout,
+  });
+}
+
 export const logger = pino(
   {
     level: isDevelopment ? 'debug' : 'info',
   },
-  pino.multistream([
-    {
-      // Pretty-printed console logs for terminal visibility
-      stream: pino.transport({
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          ignore: 'pid,hostname',
-          translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
-        },
-      }) as any,
-    },
-    {
-      // Append raw JSON logs persistently to a file on disk
-      stream: fs.createWriteStream(logFilePath, { flags: 'a' }),
-    },
-  ])
+  pino.multistream(streams)
 );
