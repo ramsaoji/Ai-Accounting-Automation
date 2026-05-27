@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 
