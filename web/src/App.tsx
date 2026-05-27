@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   Table,
@@ -268,6 +268,15 @@ export function App() {
   const [activeView, setActiveView] = useState<'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor'>('portal');
 
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
+
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top on activeView or activeWorkspace change
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+  }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
   const { salesData, debitorsData, connectionMode, cronSchedule, isLoading, sync: fetchRealData } = useAccountingData();
@@ -551,8 +560,8 @@ export function App() {
             </header>
 
             {/* Main Content Area — sections with fixed-height panels manage scroll internally */}
-            <main className="flex-1 overflow-y-auto bg-background">
-              <div className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8">
+            <main ref={mainRef} className="flex-1 overflow-y-auto bg-background">
+              <div className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8 flex flex-col">
                   {activeView === 'portal' ? (
                     <PortalSection
                       salesData={salesData}

@@ -67,9 +67,15 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
   const [isTyping, setIsTyping] = useState(false);
   const isInitialMount = useRef(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   };
 
   useEffect(() => {
@@ -206,10 +212,10 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
       </div>
 
       {/* Production-grade Split Chat Layout */}
-      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-3 md:gap-4 ">
+      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-3 md:gap-4">
         
         {/* Playbooks Sidebar */}
-        <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden shrink-0 lg:h-full select-none min-w-0">
+        <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden shrink-0 select-none min-w-0">
           <div className="hidden lg:flex p-4 border-b bg-muted/20 items-center gap-2">
             <Compass className="size-4 text-primary" />
             <span className="text-xs font-bold text-foreground">Advisory Playbooks</span>
@@ -221,13 +227,13 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
                 <button
                   key={p.id}
                   onClick={() => setActivePlaybook(p.id)}
-                  className={`p-2 lg:p-3 rounded-lg border text-left cursor-pointer transition-all duration-200 flex flex-col gap-0.5 md:gap-1 items-center lg:items-start text-center lg:text-left shrink-0 ${
+                  className={`p-2 lg:p-3 rounded-lg border cursor-pointer transition-all duration-200 flex flex-row lg:flex-col gap-1.5 md:gap-1 items-center lg:items-start justify-center lg:justify-start text-center lg:text-left shrink-0 ${
                     isActive
                       ? 'bg-muted border-foreground/20'
                       : 'bg-background hover:bg-muted/40'
                   }`}
                 >
-                  <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-2">
+                  <div className="flex flex-row lg:flex-row items-center gap-1.5 lg:gap-2">
                     {p.icon}
                     <span className="text-[10px] sm:text-xs font-bold text-foreground leading-none">{p.name.split(' ')[0]}</span>
                   </div>
@@ -238,14 +244,14 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
               );
             })}
           </div>
-          <div className="p-3 border-t bg-muted/15 flex items-center gap-2 text-[0.62rem] font-bold text-muted-foreground font-mono">
+          <div className="hidden lg:flex p-3 border-t bg-muted/15 items-center gap-2 text-[0.62rem] font-bold text-muted-foreground font-mono">
             <Activity className="size-3 text-success animate-pulse" />
             LLM Layer: Local Ingestion
           </div>
         </div>
 
         {/* Chat Feed Pane (3/4 size) */}
-        <Card className="lg:col-span-3 border bg-card/45 min-h-[95dvh] flex-1 overflow-hidden flex flex-col min-w-0">
+        <Card className="lg:col-span-3 border bg-card/45 h-[650px] sm:h-[720px] flex flex-col overflow-hidden min-w-0">
           {/* Chat card header — compact on mobile */}
           <CardHeader className="px-3 py-2 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between space-y-0 select-none gap-2">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -272,7 +278,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
           </CardHeader>
 
           {/* Message Thread (Scrollable Viewport) */}
-          <CardContent className="flex-1 min-h-0 px-4 py-3 sm:px-6 sm:py-4 overflow-y-auto flex flex-col scroll-smooth pr-3">
+          <CardContent ref={scrollContainerRef} className="flex-1 min-h-0 px-4 py-3 sm:px-6 sm:py-4 overflow-y-auto flex flex-col scroll-smooth pr-3">
             <div className="flex flex-col gap-4">
               {messages.map((msg, index) => (
                 <div
