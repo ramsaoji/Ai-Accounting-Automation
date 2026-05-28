@@ -103,24 +103,26 @@ export function App() {
     setIsSyncingDrive(true);
     const toastId = toast.loading('Initiating Google Drive sync...');
 
-    try {
-      const initialSalesTime = salesData?.runTimestamp;
-      const initialDebitorsTime = debitorsData?.runTimestamp;
+    // Capture timestamps before sync to detect changes
+    const initialSalesTime = salesData?.runTimestamp;
+    const initialDebitorsTime = debitorsData?.runTimestamp;
 
+    try {
       const result = await triggerDriveSync();
-      
+
+      // Edge case 1: Drive is already up-to-date — no new files, no need to refresh data
       if (result.status === 'up-to-date') {
         setIsSyncingDrive(false);
-        await fetchRealData();
-        toast.success('Google Drive is already up-to-date!', { id: toastId });
+        toast.success('Drive is up-to-date. No changes detected since last sync.', { id: toastId });
         return;
       }
 
-      toast.loading('Google Drive sync requested. Ingesting worksheets...', { id: toastId });
+      // Backend confirmed new files found — start background ingestion polling
+      toast.loading('Ingesting new spreadsheets from Google Drive...', { id: toastId });
 
       let attempts = 0;
-      const maxAttempts = 48; // 2 minutes max (48 * 2.5s)
-      
+      const maxAttempts = 48; // 2 minutes max (48 × 2.5s)
+
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
@@ -132,40 +134,45 @@ export function App() {
           const newSalesTime = syncResult.sales?.runTimestamp;
           const newDebitorsTime = syncResult.debitors?.runTimestamp;
 
+          // Detect if backend has finished writing new data to DB
           const salesUpdated = !!(newSalesTime && newSalesTime !== initialSalesTime);
           const debitorsUpdated = !!(newDebitorsTime && newDebitorsTime !== initialDebitorsTime);
+          // Edge case 2: Dashboard was previously empty, now has data
           const emptyGotData = !(salesData || debitorsData) && !!(syncResult.sales || syncResult.debitors);
 
           if (salesUpdated || debitorsUpdated || emptyGotData) {
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
+            // Success: new data detected — silently refresh dashboard state without loading spinner
+            clearInterval(intervalRef.current!);
+            intervalRef.current = null;
             setIsSyncingDrive(false);
-            await fetchRealData();
-            toast.success('Google Drive sync completed successfully!', { id: toastId });
+            await fetchRealData(true); // silent refresh — no spinner, no duplicate toast
+            toast.success('Google Drive sync completed! Dashboard updated.', { id: toastId });
+
           } else if (attempts >= maxAttempts) {
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
+            // Edge case 3: Timeout — ingestion is taking too long
+            clearInterval(intervalRef.current!);
+            intervalRef.current = null;
             setIsSyncingDrive(false);
-            await fetchRealData();
-            toast.info('Sync request completed. Refreshing dashboard...', { id: toastId });
+            await fetchRealData(true); // silent refresh — show whatever is in DB now
+            toast.info('Sync is still processing. Dashboard refreshed with latest available data.', { id: toastId });
           }
+          // Otherwise: still waiting — no action, polling continues silently
+
         } catch {
+          // Edge case 4: Polling network error
           if (attempts >= maxAttempts) {
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
+            clearInterval(intervalRef.current!);
+            intervalRef.current = null;
             setIsSyncingDrive(false);
-            await fetchRealData();
-            toast.error('Sync polling timed out. Check backend logs.', { id: toastId });
+            // No fetchRealData here — last fetch already failed, avoid another bad request
+            toast.error('Sync polling timed out due to a network error. Please retry.', { id: toastId });
           }
+          // Otherwise: transient error — will retry on next interval tick
         }
       }, 2500);
+
     } catch (err: unknown) {
+      // Edge case 5: triggerDriveSync itself threw (network down, server error)
       setIsSyncingDrive(false);
       const errMsg = err instanceof Error ? err.message : String(err);
       toast.error(`Drive sync failed: ${errMsg}`, { id: toastId });
