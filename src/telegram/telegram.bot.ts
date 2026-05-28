@@ -7,6 +7,7 @@ import { telegramClient } from './telegram.client.js';
 import { orchestratorService } from '../services/orchestrator.service.js';
 import { AiProviderFactory } from '../ai/ai.factory.js';
 import { getReport } from '../db/db.client.js';
+import { formatCronExpression } from '../utils/cron.js';
 
 export class TelegramBot {
   private baseUrl: string;
@@ -52,7 +53,7 @@ export class TelegramBot {
     const startupMsg =
       `🟢 *Hotel Gaurav AI — Accounting Service Online*\n\n` +
       `🤖 *AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\` (${config.AI_MODEL})\n` +
-      `📅 *Auto-Sync Schedule*: \`${config.CRON_SCHEDULE}\`\n` +
+      `📅 *Auto-Sync Schedule*: \`${formatCronExpression(config.CRON_SCHEDULE)}\`\n` +
       `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n\n` +
       `_Tap any button below to get started!_`;
     telegramClient.sendMessage(startupMsg, 'Markdown', this.getMainMenuKeyboard()).catch((err) => {
@@ -262,7 +263,7 @@ export class TelegramBot {
       `🟢 *Status*: Active & Online\n` +
       `🤖 *Active AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\`\n` +
       `🧠 *LLM Model*: \`${config.AI_MODEL}\`\n` +
-      `📅 *Sync Schedule*: \`${config.CRON_SCHEDULE}\`\n` +
+      `📅 *Sync Schedule*: \`${formatCronExpression(config.CRON_SCHEDULE)}\`\n` +
       `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n` +
       `🕒 *Server Time*: \`${new Date().toLocaleString()}\``;
     await telegramClient.sendMessage(healthText, 'Markdown', this.getMainMenuKeyboard(), chatId);

@@ -191,7 +191,7 @@ export function generateHtmlReport(data: HtmlTemplateData): string {
             </li>
             <li>
               <span class="highlight-icon">💰</span>
-              <strong>Best Profit Month:</strong><br>${bestProfitMonth} (₹${Math.round(bestProfitValue).toLocaleString()})
+              <strong>Best Cash Surplus Month:</strong><br>${bestProfitMonth} (₹${Math.round(bestProfitValue).toLocaleString()})
             </li>
             <li>
               <span class="highlight-icon">🛠️</span>

@@ -14,6 +14,7 @@ import {
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   Table,
   TableHeader,
@@ -249,41 +250,173 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
 
           {/* Database Grid */}
           <div className="flex-1 overflow-auto">
-            <Table className="min-w-[700px] sm:min-w-full">
-              <TableHeader className="bg-muted/15 select-none">
-                <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
-                  {isDebitors ? (
-                    <>
-                      <TableHead className="pl-6 h-10 w-[240px]">Customer Accounts</TableHead>
-                      <TableHead className="text-right h-10">Purchase Volume</TableHead>
-                      <TableHead className="text-right h-10">Amount Settled</TableHead>
-                      <TableHead className="text-right h-10">Net Balance</TableHead>
-                      <TableHead className="text-center h-10">Total Contribution</TableHead>
-                      <TableHead className="text-center pr-6 h-10">Policy Audit</TableHead>
-                    </>
-                  ) : (
-                    <>
-                      <TableHead className="pl-6 h-10">Register Sheet</TableHead>
-                      <TableHead className="text-right h-10">Liquor Receipts</TableHead>
-                      <TableHead className="text-right h-10">Food Receipts</TableHead>
-                      <TableHead className="text-right h-10">Expenses Outflow</TableHead>
-                      <TableHead className="text-right h-10">Debits Extended</TableHead>
-                      <TableHead className="text-right h-10">Net Cash Balance</TableHead>
-                      <TableHead className="text-center h-10">Surplus Ratio</TableHead>
-                      <TableHead className="text-center pr-6 h-10">Operating Verdict</TableHead>
-                    </>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody className="text-xs">
-                {isDebitors ? (
-                  paginatedDebitors.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-20 text-muted-foreground font-medium">
-                        No matching client profiles.
-                      </TableCell>
+            {totalItems === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center select-none min-h-[300px] w-full">
+                <Search className="size-10 text-muted-foreground/45 animate-pulse shrink-0" />
+                <span className="text-sm font-bold text-foreground">
+                  {isDebitors ? "No matching client profiles" : "No matching spreadsheet monthly records"}
+                </span>
+                <span className="text-xs text-muted-foreground max-w-xs leading-normal">
+                  Try adjusting your search filters or clear the query.
+                </span>
+              </div>
+            ) : (
+              <Table className="min-w-[700px] sm:min-w-full">
+                <TableHeader className="bg-muted/15 select-none">
+                  <TooltipProvider>
+                    <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
+                      {isDebitors ? (
+                        <>
+                          <TableHead className="pl-6 h-10 w-[240px]">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Customer Accounts</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                The name of the customer carrying credit accounts.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Purchase Volume</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Total cumulative credit sales volume purchased by this customer.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Amount Settled</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Total payments made by this customer to clear their dues.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted text-destructive">Net Balance</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Net pending outstanding balance due from this customer.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-center h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Total Contribution</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                The percentage of total pending business outstanding dues contributed by this customer.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-center pr-6 h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Policy Audit</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                The verification status showing if this customer's credit balance is within safe bounds.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                        </>
+                      ) : (
+                        <>
+                          <TableHead className="pl-6 h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Register Sheet</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                The name of the monthly spreadsheet tab parsed.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Liquor Sales</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Consolidated monthly inflows generated from alcohol/liquor purchases.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Food Sales</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Consolidated monthly inflows generated from restaurant food menu sales.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted text-destructive">Operational Expenses</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Total outflows, supplier bills, and operating costs logged during this month.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted text-warning">Credit Extended</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Total volume of purchases made on credit during this month.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-right h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Net Cashflow</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Net cash balance remaining after subtracting operational expenses from total inflows.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-center h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Surplus Scale</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                The relative monthly cash surplus weight scaled against the highest benchmark month.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                          <TableHead className="text-center pr-6 h-10">
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Operating Verdict</span>
+                              } />
+                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                The validation status of this month's sheet, checking for discrepancies or anomalies.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                        </>
+                      )}
                     </TableRow>
-                  ) : (
+                  </TooltipProvider>
+                </TableHeader>
+                <TableBody className="text-xs">
+                  {isDebitors ? (
                     paginatedDebitors.map((debtor) => {
                       const contribution = summary.aggregates?.totalPendingSum ? ((debtor.pending / summary.aggregates.totalPendingSum) * 100).toFixed(1) : '0';
                       const isBreach = debtor.pending > maxOutstandingDuesLimit;
@@ -336,14 +469,6 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                         </TableRow>
                       );
                     })
-                  )
-                ) : (
-                  paginatedMonths.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-20 text-muted-foreground font-medium">
-                        No matching spreadsheet monthly records.
-                      </TableCell>
-                    </TableRow>
                   ) : (
                     paginatedMonths.map((month) => {
                       const isProfit = month.net >= 0;
@@ -384,10 +509,10 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                         </TableRow>
                       );
                     })
-                  )
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </div>
 

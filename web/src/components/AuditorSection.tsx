@@ -17,12 +17,12 @@ import {
   FileText,
   FileWarning,
   ExternalLink,
-  ChevronRight,
   RotateCcw
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 interface AuditorSectionProps {
   alerts: Alert[];
@@ -192,51 +192,74 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 select-none">
-        <Card className="shadow-xs border bg-card/45">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Audited Transactions</span>
-              <span className="text-lg font-extrabold font-mono text-foreground mt-0.5">
-                {totalTransactions.toLocaleString()}
-              </span>
-            </div>
-            <div className="size-8 rounded-lg bg-muted border flex items-center justify-center text-muted-foreground">
-              <FileText className="size-4" />
-            </div>
-          </CardContent>
-        </Card>
+      <TooltipProvider>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 select-none">
+          <Card className="shadow-xs border bg-card/45">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex flex-col gap-0.5 text-left">
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider cursor-help underline underline-offset-2 decoration-dotted">Audited Transactions</span>
+                  } />
+                  <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                    Total ledger entries parsed and verified across all historical files.
+                  </TooltipContent>
+                </Tooltip>
+                <span className="text-lg font-extrabold font-mono text-foreground mt-0.5">
+                  {totalTransactions.toLocaleString()}
+                </span>
+              </div>
+              <div className="size-8 rounded-lg bg-muted border flex items-center justify-center text-muted-foreground">
+                <FileText className="size-4" />
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-xs border bg-card/45">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Active Exceptions</span>
-              <span className="text-lg font-extrabold font-mono text-foreground mt-0.5">
-                {alerts.length.toLocaleString()}
-              </span>
-            </div>
-            <div className="size-8 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive flex items-center justify-center">
-              <AlertTriangle className="size-4" />
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="shadow-xs border bg-card/45">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex flex-col gap-0.5 text-left">
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider cursor-help underline underline-offset-2 decoration-dotted">Active Exceptions</span>
+                  } />
+                  <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                    Compliance violations, ledger imbalances, or large payment spikes currently requiring sign-off or investigation.
+                  </TooltipContent>
+                </Tooltip>
+                <span className="text-lg font-extrabold font-mono text-foreground mt-0.5">
+                  {alerts.length.toLocaleString()}
+                </span>
+              </div>
+              <div className="size-8 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive flex items-center justify-center">
+                <AlertTriangle className="size-4" />
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-xs border bg-card/45">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Audit Compliance Index</span>
-              <span className="text-lg font-extrabold font-mono mt-0.5 text-foreground">
-                {criticalCount > 0 ? `${(100 - parseFloat(exceptionRatio)).toFixed(1)}%` : '100%'}
-              </span>
-            </div>
-            <div className={`size-8 rounded-lg border flex items-center justify-center ${
-              criticalCount > 0 ? 'bg-warning/10 border-warning/20 text-warning' : 'bg-success/10 border-success/20 text-success'
-            }`}>
-              {criticalCount > 0 ? <AlertTriangle className="size-4" /> : <ShieldCheck className="size-4" />}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="shadow-xs border bg-card/45">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex flex-col gap-0.5 text-left">
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider cursor-help underline underline-offset-2 decoration-dotted">Audit Compliance Index</span>
+                  } />
+                  <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                    A percentage representing ledger health and compliance based on active critical anomalies.
+                  </TooltipContent>
+                </Tooltip>
+                <span className="text-lg font-extrabold font-mono mt-0.5 text-foreground">
+                  {criticalCount > 0 ? `${(100 - parseFloat(exceptionRatio)).toFixed(1)}%` : '100%'}
+                </span>
+              </div>
+              <div className={`size-8 rounded-lg border flex items-center justify-center ${
+                criticalCount > 0 ? 'bg-warning/10 border-warning/20 text-warning' : 'bg-success/10 border-success/20 text-success'
+              }`}>
+                {criticalCount > 0 ? <AlertTriangle className="size-4" /> : <ShieldCheck className="size-4" />}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TooltipProvider>
 
       {/* Datadog / Sentry Split-pane Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 mt-1 items-start lg:h-[calc(100dvh-13rem)]">
@@ -487,27 +510,37 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
 
 
                 {/* Recommendations */}
-                <div className="flex flex-col gap-1.5 border-t pt-4">
-                  <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider select-none">
+                <div className="flex flex-col gap-2.5 border-t pt-4 select-none">
+                  <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">
                     Rule Logic & Action Plan
                   </span>
-                  <div className="text-xs leading-relaxed font-semibold text-foreground flex flex-col gap-1">
-                    <p className="text-muted-foreground text-[0.7rem] leading-relaxed font-medium">
-                      {getSeverityMeta(activeSelectedAlert.severity).logic}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionModal(activeSelectedAlert);
-                        setPasscode('');
-                      }}
-                      className="mt-2.5 flex items-start gap-1.5 text-primary hover:text-primary/80 transition-colors text-left font-bold cursor-pointer group focus:outline-none select-none"
-                    >
-                      <ChevronRight className="size-4 shrink-0 group-hover:translate-x-0.5 transition-transform mt-0.5" />
-                      <span className="underline underline-offset-4 decoration-primary/30 group-hover:decoration-primary/80 transition-colors">
+                  <div className="text-xs leading-relaxed font-medium text-foreground flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[0.58rem] font-bold text-muted-foreground/80 uppercase tracking-wider">Rule Logic</span>
+                      <p className="text-muted-foreground text-[0.7rem] leading-relaxed font-medium">
+                        {getSeverityMeta(activeSelectedAlert.severity).logic}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[0.58rem] font-bold text-muted-foreground/80 uppercase tracking-wider">Action Plan</span>
+                      <p className="text-foreground text-[0.72rem] leading-relaxed font-semibold">
                         {getSeverityMeta(activeSelectedAlert.severity).action}
-                      </span>
-                    </button>
+                      </p>
+                    </div>
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          setActiveActionModal(activeSelectedAlert);
+                          setPasscode('');
+                        }}
+                        className="font-semibold cursor-pointer flex items-center gap-1.5 w-fit"
+                      >
+                        <ShieldCheck className="size-3.5" />
+                        Resolve with Manager Sign-off
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -96,8 +96,8 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.72 0.16 277.366);
-    --primary-foreground: oklch(0.962 0.018 272.314);
+    --primary: oklch(0.55 0.23 277.366);
+    --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.274 0.006 286.033);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -329,42 +329,60 @@
   accent-color: oklch(0.72 0.16 277.366);
 }
 
-/* Custom Destructive Close Button for Toast Alerts positioned at top-right */
-[data-sonner-toast], .cn-toast {
-  position: relative !important;
+
+/* Premium Toast Styling */
+.cn-toast {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.12), 0 4px 12px -4px rgba(0, 0, 0, 0.04) !important;
+  padding: 12px 38px 12px 16px !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
 }
 
+.dark .cn-toast {
+  background: oklch(0.18 0.01 277 / 85%) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid oklch(1 0 0 / 12%) !important;
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Custom Sleek Close Button for Toast Alerts positioned at top-right */
+/* Note: [data-sonner-toast] is already positioned by Sonner, establishing the context for absolute position */
 [data-close-button] {
   left: auto !important;
-  right: -6px !important;
-  top: -6px !important;
-  transform: none !important;
-  background: oklch(0.577 0.245 27.325) !important; /* Matches --destructive theme color */
-  color: #ffffff !important;
-  border: 1px solid oklch(0.577 0.245 27.325) !important;
-  border-radius: 9999px !important;
-  width: 18px !important;
-  height: 18px !important;
+  right: 10px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  width: 24px !important;
+  height: 24px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
   cursor: pointer !important;
   transition: all 0.15s ease-in-out !important;
-  opacity: 1 !important;
+  opacity: 0.55 !important;
+  color: var(--foreground) !important;
 }
 
 [data-close-button]:hover {
-  background: oklch(0.48 0.2 27) !important; /* Darker red on hover */
-  transform: scale(1.1) !important;
+  background: var(--muted) !important;
+  color: var(--foreground) !important;
+  opacity: 1 !important;
+  transform: translateY(-50%) scale(1.08) !important;
 }
 
 /* Ensure cross icon fits correctly and is perfectly centered */
 [data-close-button] svg {
-  width: 8px !important;
-  height: 8px !important;
-  stroke: #ffffff !important;
-  stroke-width: 3 !important;
+  width: 11px !important;
+  height: 11px !important;
+  stroke: currentColor !important;
+  stroke-width: 2.5 !important;
   display: block !important;
 }
 

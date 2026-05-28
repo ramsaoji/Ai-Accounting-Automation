@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 import {
   ArrowRight,
@@ -8,7 +9,8 @@ import {
   Calendar,
   Database,
   TrendingUp,
-  Cpu
+  Cpu,
+  AlertTriangle
 } from 'lucide-react';
 const PortalCharts = React.lazy(() => import('./PortalCharts'));
 
@@ -17,7 +19,7 @@ interface PortalSectionProps {
   debitorsData: any;
   salesAlertCount: number;
   debitorsAlertCount: number;
-  onLaunchWorkspace: (workspace: 'sales' | 'debitors') => void;
+  onLaunchWorkspace: (workspace: 'sales' | 'debitors', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
   cronSchedule: string;
   connectionMode: 'live' | 'static' | 'empty';
 }
@@ -196,20 +198,35 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
 
         {/* Console Filters */}
         <div className="flex items-center gap-1.5 self-start sm:self-auto select-none">
-          {(['all', 'flagged', 'audited'] as const).map((filter) => (
-            <button
-              type="button"
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
-                activeFilter === filter
-                  ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
-                  : 'bg-background hover:bg-muted text-muted-foreground border-border/80'
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
+          {(['all', 'flagged', 'audited'] as const).map((filter) => {
+            const tooltipContent = 
+              filter === 'all' 
+                ? 'Show all imported ledger registers.' 
+                : filter === 'flagged' 
+                  ? 'Show only ledgers containing active anomalies or warnings.' 
+                  : 'Show verified ledgers completely clear of exceptions.';
+
+            return (
+              <Tooltip key={filter}>
+                <TooltipTrigger render={
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter(filter)}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
+                      activeFilter === filter
+                        ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
+                        : 'bg-background hover:bg-muted text-muted-foreground border-border/80'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                } />
+                <TooltipContent className="block max-w-[240px] p-3 text-[0.72rem] leading-relaxed border bg-popover text-popover-foreground shadow-md rounded-lg">
+                  {tooltipContent}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
         </div>
       </div>
 
@@ -267,13 +284,27 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
                 {/* Trend line and meta description */}
                 <div className="flex items-center justify-between gap-4 py-1">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider select-none">
                       Dynamic Trend
                     </span>
-                    <span className="text-[0.68rem] text-foreground font-semibold flex items-center gap-1 mt-0.5">
-                      <TrendingUp className="size-3.5 text-success" />
-                      Audited stability log
-                    </span>
+                    {portal.alertCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLaunchWorkspace(portal.id as 'sales' | 'debitors', 'auditor');
+                        }}
+                        className="text-[0.68rem] text-destructive dark:text-red-400 font-semibold flex items-center gap-1 mt-0.5 hover:underline focus:outline-none cursor-pointer text-left"
+                      >
+                        <AlertTriangle className="size-3.5 text-destructive dark:text-red-400 shrink-0" />
+                        <span>Flagged: {portal.alertCount} {portal.alertCount === 1 ? 'anomaly' : 'anomalies'}</span>
+                      </button>
+                    ) : (
+                      <span className="text-[0.68rem] text-success font-semibold flex items-center gap-1 mt-0.5">
+                        <TrendingUp className="size-3.5 text-success" />
+                        <span>Audited stability log</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Sparkline Graph */}

@@ -671,7 +671,7 @@ Rules:
 ### 🏆 Executive Highlights & Benchmarks
 > [!NOTE]
 > * **🥇 Best Sales Month**: **${bestRevenueMonth}** (Total Revenue: **₹${Math.round(bestRevenueValue).toLocaleString()}**)
-> * **💰 Best Profit Month**: **${bestProfitMonth}** (Net Surplus: **₹${Math.round(bestProfitValue).toLocaleString()}**)
+> * **💰 Best Cash Surplus Month**: **${bestProfitMonth}** (Net Surplus: **₹${Math.round(bestProfitValue).toLocaleString()}**)
 > * **🛠️ Peak Expense Month**: **${peakExpenseMonth}** (Supplier Costs: **₹${Math.round(peakExpenseValue).toLocaleString()}**)
 > * **🍺 Restaurant Menu Ratio**: **${liquorPercentage}% Bar Counter Sales** vs. **${foodPercentage}% Food Sales**
 > * **💳 Credit Recovery Efficiency**: **${creditRecoveryRate}%** of extended customer credit successfully collected! 

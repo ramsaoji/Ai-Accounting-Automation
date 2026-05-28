@@ -21,6 +21,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { uploadSpreadsheet, verifyUploadPassword } from '../services/api';
 
 interface UploadModalProps {
@@ -204,38 +205,52 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col gap-1.5 py-4 w-full select-none text-left">
-              <label htmlFor="upload-auth-password" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                Authorization Password
-              </label>
-              <div className="relative w-full">
-                <input
-                  id="upload-auth-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAuthorize();
-                    }
-                  }}
-                  placeholder="Enter security key to unlock…"
-                  aria-label="Authorization password"
-                  className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
-                  disabled={isVerifying}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
+            <TooltipProvider>
+              <div className="flex flex-col gap-1.5 py-4 w-full select-none text-left">
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="upload-auth-password" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                    Authorization Password
+                  </label>
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <button type="button" className="text-muted-foreground hover:text-foreground cursor-help p-0.5 focus:outline-none mb-0.5">
+                        <AlertCircle className="size-3" />
+                      </button>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                      Administrative security key required to authorize database writes and protect against unverified spreadsheet uploads.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <div className="relative w-full">
+                  <input
+                    id="upload-auth-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAuthorize();
+                      }
+                    }}
+                    placeholder="Enter security key to unlock…"
+                    aria-label="Authorization password"
+                    className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
+                    disabled={isVerifying}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
+            </TooltipProvider>
 
             <DialogFooter className="sm:justify-between gap-2">
               <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} className="text-xs">
@@ -287,7 +302,21 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
                       </div>
                       <div className="flex flex-col items-center">
                         <span className="text-xs font-semibold">Select ledger sheets</span>
-                        <span className="text-[0.62rem] text-muted-foreground mt-1 mb-3">Accepts only Excel files (.xlsx)</span>
+                        <div className="flex items-center gap-1 mt-1 mb-3">
+                          <span className="text-[0.62rem] text-muted-foreground">Accepts only Excel files (.xlsx)</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger render={
+                                <button type="button" className="text-muted-foreground hover:text-foreground cursor-help focus:outline-none">
+                                  <AlertCircle className="size-3" />
+                                </button>
+                              } />
+                              <TooltipContent className="block max-w-[240px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                                Upload a Daily Sales Register spreadsheet containing monthly sales sheets (e.g. "January 2026"), or a Customer Debitors Outstanding ledger spreadsheet.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
                         <Button variant="outline" size="sm" onClick={triggerFileSelect} className="w-full sm:w-auto font-semibold cursor-pointer">
                           Browse Files
                         </Button>

@@ -94,22 +94,38 @@ export class TelegramClient {
   private formatForTelegram(text: string): string {
     let formatted = text;
 
-    // 1. Convert Markdown tables to gorgeous visual lists
+    // 1. Escape stray underscores inside words/paths to prevent parser errors
+    formatted = this.escapeStrayUnderscores(formatted);
+
+    // 2. Convert Markdown tables to gorgeous visual lists (only if not inside a code block)
     formatted = this.formatTablesToLists(formatted);
 
-    // 2. Clean GitHub alert banners and format blockquotes
+    // 3. Clean GitHub alert banners and format blockquotes
     formatted = this.formatBlockquotes(formatted);
 
-    // 3. Balance stray markdown elements to prevent parser exceptions
+    // 4. Balance stray markdown elements to prevent parser exceptions
     formatted = this.balanceMarkdownTags(formatted);
 
     return formatted;
+  }
+
+  private escapeStrayUnderscores(text: string): string {
+    // Split the text by code blocks (```...```) and code spans (`...`)
+    // to protect code segments from being escaped.
+    const parts = text.split(/(```[\s\S]*?```|`[^`]+`)/g);
+    return parts.map((part) => {
+      if (part.startsWith('`')) {
+        return part;
+      }
+      return part.replace(/([a-zA-Z0-9/])_([a-zA-Z0-9])/g, '$1\\_$2');
+    }).join('');
   }
 
   private formatTablesToLists(text: string): string {
     const lines = text.split('\n');
     const newLines: string[] = [];
     let inTable = false;
+    let inCodeBlock = false;
     let tableHeaders: string[] = [];
     let tableRows: string[][] = [];
 
@@ -137,7 +153,12 @@ export class TelegramClient {
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      
+      if (trimmed.startsWith('```')) {
+        inCodeBlock = !inCodeBlock;
+      }
+
+      if (!inCodeBlock && trimmed.startsWith('|') && trimmed.endsWith('|')) {
         inTable = true;
         const cells = trimmed
           .split('|')
@@ -183,9 +204,11 @@ export class TelegramClient {
   }
 
   private balanceMarkdownTags(text: string): string {
-    // Strip content inside backtick code spans before counting — asterisks/underscores
-    // inside code spans (e.g. `0 0 * * *`) are NOT markdown and must not affect the balance count.
-    const textWithoutCode = text.replace(/`[^`]*`/g, '``');
+    // Strip triple-backtick code blocks and single-backtick code spans before counting.
+    // Asterisks/underscores inside code snippets/tables are literal and should not be balanced.
+    const textWithoutCode = text
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`[^`]+`/g, '');
 
     const stars = (textWithoutCode.match(/\*/g) || []).length;
     const underscores = (textWithoutCode.match(/_/g) || []).length;

@@ -423,59 +423,63 @@ export function App() {
     return months.reduce((sum, m) => sum + m.expenses, 0) / months.length;
   }, [salesData]);
 
-  // Compute Alerts reactively based on active configuration
-  const activeAlerts = useMemo(() => {
+  // Compute Sales Alerts reactively
+  const salesAlerts = useMemo(() => {
     const list: Alert[] = [];
-    if (activeWorkspace === 'sales') {
-      if (!salesData) return [];
-      const baseAlerts = salesData.alerts || [];
-      list.push(...baseAlerts);
+    if (!salesData) return [];
+    const baseAlerts = salesData.alerts || [];
+    list.push(...baseAlerts);
 
-      // Add slider reactive breaches
-      const months = salesData.months || [];
-      months.forEach((m) => {
-        if (m.expenses > highExpenseLimit) {
-          list.push({
-            ruleId: 'RULE-01',
-            ruleName: 'High Expense Limit Breach',
-            severity: 'high',
-            message: `Sheet "${m.sheetName}" logged ₹${m.expenses.toLocaleString('en-IN')} in expenses, exceeding the safety ceiling of ₹${highExpenseLimit.toLocaleString('en-IN')}.`,
-          });
-        }
-        if (m.expenses > averageMonthlyExpense * suspiciousSpikeMultiplier) {
-          list.push({
-            ruleId: 'RULE-02',
-            ruleName: 'Suspicious Expense Spike',
-            severity: 'critical',
-            message: `Expenses in "${m.sheetName}" (₹${m.expenses.toLocaleString('en-IN')}) are ${(m.expenses / averageMonthlyExpense).toFixed(1)}x higher than the baseline average monthly expense of ₹${Math.round(averageMonthlyExpense).toLocaleString('en-IN')}.`,
-          });
-        }
-      });
-    } else {
-      // Debitors workspace
-      if (!debitorsData) return [];
-      const baseAlerts = debitorsData.alerts || [];
-      list.push(...baseAlerts);
-
-      const topDebitors = debitorsData.topDebitors || [];
-      topDebitors.forEach((debtor) => {
-        if (debtor.pending > maxOutstandingDuesLimit) {
-          list.push({
-            ruleId: 'RULE-03',
-            ruleName: 'Debitor Cap Exceeded',
-            severity: 'critical',
-            message: `Customer "${debtor.name}" carries ₹${debtor.pending.toLocaleString('en-IN')} in outstanding pending dues, breaching the credit cap of ₹${maxOutstandingDuesLimit.toLocaleString('en-IN')}.`,
-          });
-        }
-      });
-    }
+    const months = salesData.months || [];
+    months.forEach((m) => {
+      if (m.expenses > highExpenseLimit) {
+        list.push({
+          ruleId: 'RULE-01',
+          ruleName: 'High Expense Limit Breach',
+          severity: 'high',
+          message: `Sheet "${m.sheetName}" logged ₹${m.expenses.toLocaleString('en-IN')} in expenses, exceeding the safety ceiling of ₹${highExpenseLimit.toLocaleString('en-IN')}.`,
+        });
+      }
+      if (m.expenses > averageMonthlyExpense * suspiciousSpikeMultiplier) {
+        list.push({
+          ruleId: 'RULE-02',
+          ruleName: 'Suspicious Expense Spike',
+          severity: 'critical',
+          message: `Expenses in "${m.sheetName}" (₹${m.expenses.toLocaleString('en-IN')}) are ${(m.expenses / averageMonthlyExpense).toFixed(1)}x higher than the baseline average monthly expense of ₹${Math.round(averageMonthlyExpense).toLocaleString('en-IN')}.`,
+        });
+      }
+    });
     return list;
-  }, [activeWorkspace, salesData, debitorsData, averageMonthlyExpense]);
+  }, [salesData, averageMonthlyExpense]);
+
+  // Compute Debitors Alerts reactively
+  const debitorsAlerts = useMemo(() => {
+    const list: Alert[] = [];
+    if (!debitorsData) return [];
+    const baseAlerts = debitorsData.alerts || [];
+    list.push(...baseAlerts);
+
+    const topDebitors = debitorsData.topDebitors || [];
+    topDebitors.forEach((debtor) => {
+      if (debtor.pending > maxOutstandingDuesLimit) {
+        list.push({
+          ruleId: 'RULE-03',
+          ruleName: 'Debitor Cap Exceeded',
+          severity: 'critical',
+          message: `Customer "${debtor.name}" carries ₹${debtor.pending.toLocaleString('en-IN')} in outstanding pending dues, breaching the credit cap of ₹${maxOutstandingDuesLimit.toLocaleString('en-IN')}.`,
+        });
+      }
+    });
+    return list;
+  }, [debitorsData]);
+
+  // activeAlerts selects the alerts for the active workspace
+  const activeAlerts = activeWorkspace === 'sales' ? salesAlerts : debitorsAlerts;
 
   // Launch workspace callback from portal
-  const handleLaunchWorkspace = (workspace: 'sales' | 'debitors') => {
+  const handleLaunchWorkspace = (workspace: 'sales' | 'debitors', view: 'overview' | 'ledger' | 'auditor' | 'advisor' = 'overview') => {
     setActiveWorkspace(workspace);
-    setActiveView('overview');
+    setActiveView(view);
     toast.info(`Switched Workspace: ${workspace === 'sales' ? 'Sales Register' : 'Customer Debitors'}`);
   };
 
@@ -635,8 +639,8 @@ export function App() {
                     <PortalSection
                       salesData={salesData}
                       debitorsData={debitorsData}
-                      salesAlertCount={salesData ? salesData.alerts.length : 0}
-                      debitorsAlertCount={debitorsData ? debitorsData.alerts.length : 0}
+                      salesAlertCount={salesAlerts.length}
+                      debitorsAlertCount={debitorsAlerts.length}
                       onLaunchWorkspace={handleLaunchWorkspace}
                       cronSchedule={cronSchedule}
                       connectionMode={connectionMode}

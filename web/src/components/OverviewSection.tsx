@@ -124,141 +124,199 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 select-none">
-        {isDebitors && summary.aggregates ? (
-          <>
-            {/* Total Outstanding Dues */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Unrecovered Liability</span>
-                <TrendingDown className="text-destructive size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {formatINR(summary.aggregates.totalPendingSum)}
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Total pending customer credit.
-                </span>
-              </CardContent>
-            </Card>
-
-            {/* Recovery Success */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Clearance Index</span>
-                <Percent className="text-success size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {summary.aggregates.collectionSuccessRate}%
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Paid credit balance percentage.
-                </span>
-              </CardContent>
-            </Card>
-
-            {/* Average Outstanding */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Mean Balances</span>
-                <DollarSign className="text-primary size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {formatINR(summary.aggregates.averageOutstandingDues)}
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Average outstanding per customer.
-                </span>
-              </CardContent>
-            </Card>
-
-            {/* Active Customers */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Open Ledgers</span>
-                <Users className="text-primary size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {summary.aggregates.activeDebitorsCount}
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Outstanding credit profiles.
-                </span>
-              </CardContent>
-            </Card>
-          </>
-        ) : summary.masterTotals && summary.benchmarks ? (
-          <>
-            {/* Consolidated Cashflow */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Net Surplus</span>
-                <TrendingUp className="text-success size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {formatINR(summary.masterTotals.netCashflow)}
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Surplus cash after cost settlements.
-                </span>
-              </CardContent>
-            </Card>
-
-            {/* Bar/Menu Ratio */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Liquor vs Food Split</span>
-                <Percent className="text-amber-500 size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {summary.benchmarks.liquorPercentage}% / {summary.benchmarks.foodPercentage}%
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Liquor sales vs. food revenue margins.
-                </span>
-              </CardContent>
-            </Card>
-
-            {/* Peak Profit Month */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Peak Profit</span>
-                <BarChart3 className="text-primary size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {formatINR(summary.benchmarks.bestProfitValue)}
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Recorded peak in {summary.benchmarks.bestProfitMonth}.
-                </span>
-              </CardContent>
-            </Card>
-
-            {/* Recovery Rate */}
-            <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-              <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest">Credit Recovery</span>
-                <CalendarDays className="text-primary size-4 shrink-0" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                  {summary.benchmarks.creditRecoveryRate}%
-                </h3>
-                <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                  Recovery performance over credits extended.
-                </span>
-              </CardContent>
-            </Card>
-          </>
-        ) : null}
-      </div>
+      <TooltipProvider>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 select-none">
+          {isDebitors && summary.aggregates ? (
+            <>
+              {/* Total Outstanding Dues */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Unrecovered Liability</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      Total pending customer credit outstanding in the debitors ledger.
+                    </TooltipContent>
+                  </Tooltip>
+                  <TrendingDown className="text-destructive size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {formatINR(summary.aggregates.totalPendingSum)}
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Total pending customer credit.
+                  </span>
+                </CardContent>
+              </Card>
+  
+              {/* Recovery Success */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Clearance Index</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      Percentage of extended credit balances successfully paid back by customers.
+                    </TooltipContent>
+                  </Tooltip>
+                  <Percent className="text-success size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {summary.aggregates.collectionSuccessRate}%
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Paid credit balance percentage.
+                  </span>
+                </CardContent>
+              </Card>
+  
+              {/* Average Outstanding */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Mean Balances</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      Average outstanding pending dues per active debit customer.
+                    </TooltipContent>
+                  </Tooltip>
+                  <DollarSign className="text-primary size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {formatINR(summary.aggregates.averageOutstandingDues)}
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Average outstanding per customer.
+                  </span>
+                </CardContent>
+              </Card>
+  
+              {/* Active Customers */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Open Ledgers</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      Total number of customers carrying outstanding pending credits.
+                    </TooltipContent>
+                  </Tooltip>
+                  <Users className="text-primary size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {summary.aggregates.activeDebitorsCount}
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Outstanding credit profiles.
+                  </span>
+                </CardContent>
+              </Card>
+            </>
+          ) : summary.masterTotals && summary.benchmarks ? (
+            <>
+              {/* Consolidated Cashflow */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Net Surplus</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      Net cash balance remaining after subtracting operational expenses from total inflows.
+                    </TooltipContent>
+                  </Tooltip>
+                  <TrendingUp className="text-success size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {formatINR(summary.masterTotals.netCashflow)}
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Surplus cash after cost settlements.
+                  </span>
+                </CardContent>
+              </Card>
+  
+              {/* Bar/Menu Ratio */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Liquor vs Food Split</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      Proportional ratio of liquor sales compared to food menu sales.
+                    </TooltipContent>
+                  </Tooltip>
+                  <Percent className="text-amber-500 size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {summary.benchmarks.liquorPercentage}% / {summary.benchmarks.foodPercentage}%
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Ratio of liquor sales vs. food sales.
+                  </span>
+                </CardContent>
+              </Card>
+  
+              {/* Peak Profit Month */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Peak Cash Surplus</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      The single highest monthly cash surplus value achieved in the historical ledger.
+                    </TooltipContent>
+                  </Tooltip>
+                  <BarChart3 className="text-primary size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {formatINR(summary.benchmarks.bestProfitValue)}
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Highest monthly cash surplus in {summary.benchmarks.bestProfitMonth}.
+                  </span>
+                </CardContent>
+              </Card>
+  
+              {/* Recovery Rate */}
+              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
+                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Credit Recovery</span>
+                    } />
+                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
+                      The index measuring debt recovery success calculated over credits extended.
+                    </TooltipContent>
+                  </Tooltip>
+                  <CalendarDays className="text-primary size-4 shrink-0" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                    {summary.benchmarks.creditRecoveryRate}%
+                  </h3>
+                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
+                    Recovery performance over credits extended.
+                  </span>
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </div>
+      </TooltipProvider>
 
       {/* Tab-switched Recharts Graphic Panel */}
       <Card className="bg-card/45 shadow-xs border">
@@ -269,7 +327,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
               {isDebitors ? "Debitor Liabilities Analytics" : "Ledger Time-Series Performance"}
             </CardTitle>
             <CardDescription className="text-xs mt-0.5">
-              {isDebitors ? "Interactive analytics plotting liabilities and aging splits." : "Executive charts tracing cashflow margins and category expenditures."}
+              {isDebitors ? "Interactive analytics plotting liabilities and aging splits." : "Executive charts tracing cashflow surpluses and category expenditures."}
             </CardDescription>
           </div>
 

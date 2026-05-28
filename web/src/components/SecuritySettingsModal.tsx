@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { changeSecurityPasswords } from '../services/api';
 import { toast } from 'sonner';
 import { Key, Eye, EyeOff, Loader2, Lock, Upload } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 interface SecuritySettingsModalProps {
   isOpen: boolean;
@@ -118,22 +119,38 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="w-full flex h-10 sm:h-9 p-1 bg-muted rounded-lg">
-            <TabsTrigger
-              value="app-lock"
-              className="cursor-pointer select-none text-xs font-semibold dark:data-active:bg-background dark:data-active:border-transparent data-active:shadow-sm text-muted-foreground data-active:text-foreground transition-all duration-150"
-            >
-              <Lock className="size-3.5" />
-              App Lock Passcode
-            </TabsTrigger>
-            <TabsTrigger
-              value="upload"
-              className="cursor-pointer select-none text-xs font-semibold dark:data-active:bg-background dark:data-active:border-transparent data-active:shadow-sm text-muted-foreground data-active:text-foreground transition-all duration-150"
-            >
-              <Upload className="size-3.5" />
-              Upload Passcode
-            </TabsTrigger>
-          </TabsList>
+          <TooltipProvider>
+            <TabsList className="w-full flex h-12 sm:h-11 p-1 bg-muted rounded-xl">
+              <Tooltip>
+                <TooltipTrigger render={
+                  <TabsTrigger
+                    value="app-lock"
+                    className="cursor-pointer select-none text-xs sm:text-sm font-semibold dark:data-active:bg-background dark:data-active:border-transparent data-active:shadow-sm text-muted-foreground data-active:text-foreground transition-all duration-150 flex-1"
+                  >
+                    <Lock className="size-4" />
+                    App Lock Passcode
+                  </TabsTrigger>
+                } />
+                <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                  Modify the app-wide passcode required to unlock the main application dashboard from the lock screen.
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger render={
+                  <TabsTrigger
+                    value="upload"
+                    className="cursor-pointer select-none text-xs sm:text-sm font-semibold dark:data-active:bg-background dark:data-active:border-transparent data-active:shadow-sm text-muted-foreground data-active:text-foreground transition-all duration-150 flex-1"
+                  >
+                    <Upload className="size-4" />
+                    Upload Passcode
+                  </TabsTrigger>
+                } />
+                <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                  Modify the security passcode required to authorize daily sales or outstanding debitors spreadsheet uploads.
+                </TooltipContent>
+              </Tooltip>
+            </TabsList>
+          </TooltipProvider>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-2 mt-2">
             {/* Verify Current Password (Required for either action) */}

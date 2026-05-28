@@ -14,52 +14,60 @@ export function handleRequest(req: http.IncomingMessage, res: http.ServerRespons
     return;
   }
 
-  const parsedUrl = req.url || '';
+  const rawUrl = req.url || '';
+  // Strip query parameters
+  let parsedUrl = rawUrl.split('?')[0];
+  // Normalize trailing slash (unless the path is just "/")
+  if (parsedUrl.endsWith('/') && parsedUrl.length > 1) {
+    parsedUrl = parsedUrl.slice(0, -1);
+  }
 
-  // GET: Health / Default Landing
-  if ((parsedUrl === '/health' || parsedUrl === '/') && req.method === 'GET') {
+  const method = req.method || 'GET';
+
+  // GET/HEAD: Health / Default Landing
+  if ((parsedUrl === '/health' || parsedUrl === '/') && (method === 'GET' || method === 'HEAD')) {
     getHealth(req, res);
     return;
   }
 
   // GET: Real-time Sales Summary
-  if (parsedUrl === '/api/data/sales' && req.method === 'GET') {
+  if (parsedUrl === '/api/data/sales' && method === 'GET') {
     getSalesReport(req, res);
     return;
   }
 
   // GET: Real-time Outstanding Debitors
-  if (parsedUrl === '/api/data/debitors' && req.method === 'GET') {
+  if (parsedUrl === '/api/data/debitors' && method === 'GET') {
     getDebitorsReport(req, res);
     return;
   }
 
   // POST: Trigger Manual Accounting Ingestion Run
-  if ((parsedUrl === '/trigger-pipeline' || parsedUrl === '/api/trigger-pipeline') && req.method === 'POST') {
+  if ((parsedUrl === '/trigger-pipeline' || parsedUrl === '/api/trigger-pipeline') && method === 'POST') {
     triggerPipeline(req, res);
     return;
   }
 
   // POST: Interactive AI Advisory Chat Sessions
-  if ((parsedUrl === '/chat' || parsedUrl === '/api/chat') && req.method === 'POST') {
+  if ((parsedUrl === '/chat' || parsedUrl === '/api/chat') && method === 'POST') {
     handleAdvisorChat(req, res);
     return;
   }
 
   // POST: Upload and process Excel spreadsheets
-  if ((parsedUrl === '/upload' || parsedUrl === '/api/upload') && req.method === 'POST') {
+  if ((parsedUrl === '/upload' || parsedUrl === '/api/upload') && method === 'POST') {
     handleFileUpload(req, res);
     return;
   }
 
   // POST: Verify App Lock Screen Credentials
-  if (parsedUrl === '/api/security/verify-app' && req.method === 'POST') {
+  if (parsedUrl === '/api/security/verify-app' && method === 'POST') {
     verifyAppPassword(req, res);
     return;
   }
 
   // POST: Change App Lock or Ingestion Passwords
-  if (parsedUrl === '/api/security/change' && req.method === 'POST') {
+  if (parsedUrl === '/api/security/change' && method === 'POST') {
     changePasswords(req, res);
     return;
   }
