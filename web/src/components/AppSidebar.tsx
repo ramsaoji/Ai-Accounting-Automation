@@ -63,6 +63,10 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
+  const isDark = theme === 'system'
+    ? typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+    : theme === 'dark';
+
   const handleWorkspaceSelect = (workspace: 'sales' | 'debitors') => {
     setActiveWorkspace(workspace);
     if (activeView === 'portal') setActiveView('overview');
@@ -80,7 +84,7 @@ export function AppSidebar({
   };
 
   const handleThemeToggle = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+    setTheme(isDark ? 'light' : 'dark');
     if (isMobile) {
       setOpenMobile(false);
     }
@@ -231,10 +235,10 @@ export function AppSidebar({
             <SidebarMenuButton
               onClick={handleThemeToggle}
               className="text-xs font-semibold"
-              tooltip={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              tooltip={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
             >
-              {theme === 'dark' ? <Sun className="size-4 text-amber-400" /> : <Moon className="size-4 text-primary" />}
-              <span>{theme === 'dark' ? 'Light Theme' : 'Dark Theme'}</span>
+              {isDark ? <Sun className="size-4 text-amber-400" /> : <Moon className="size-4 text-primary" />}
+              <span>{isDark ? 'Light Theme' : 'Dark Theme'}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
 
