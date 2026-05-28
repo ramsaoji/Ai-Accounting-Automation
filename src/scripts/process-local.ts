@@ -112,7 +112,7 @@ async function runLocalTest() {
     logger.info(`Consolidating ${parseResult.sheets.length} worksheet(s) into a single master summary...`);
 
     // 6. Rules Engine: Evaluate business validation rules globally
-    const alerts = rulesEngine.evaluate(allTransactions);
+    const alerts = await rulesEngine.evaluate(allTransactions);
     logger.info(`Rules Engine complete. Generated ${alerts.length} business alerts.`);
 
     // 7. Check AI keys and run AI generation

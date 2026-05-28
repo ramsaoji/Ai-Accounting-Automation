@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Production-ready AI Accounting Automation Service",
   "main": "dist/index.js",
+  "workspaces": [
+    "web"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -14,10 +17,13 @@
     "generate-sample": "tsx src/scripts/generate-sample.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/multipart": "^10.0.0",
     "argon2": "^0.44.0",
     "axios": "^1.6.8",
     "dotenv": "^16.4.5",
     "exceljs": "^4.4.0",
+    "fastify": "^5.8.5",
     "googleapis": "^137.0.0",
     "node-cron": "^3.0.3",
     "pg": "^8.21.0",

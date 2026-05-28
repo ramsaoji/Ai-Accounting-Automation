@@ -118,19 +118,28 @@ export function parseDebitorsWorkbook(workbook: ExcelJS.Workbook, fileName: stri
 
       if (debit === 0 && credit === 0) continue;
 
-      let dateObj = new Date();
+      let dateObj: Date;
       const dateParts = dateStr.split('.');
       if (dateParts.length === 3) {
         const d = parseInt(dateParts[0], 10);
         const m = parseInt(dateParts[1], 10);
         const y = parseInt(dateParts[2], 10);
         if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
-          dateObj = new Date(y, m - 1, d);
+          const testDate = new Date(y, m - 1, d);
+          const isValidDate = testDate.getFullYear() === y && testDate.getMonth() === m - 1 && testDate.getDate() === d;
+          if (!isValidDate) {
+            throw new Error(`Invalid calendar date (rollover detected): ${dateStr}`);
+          }
+          dateObj = testDate;
+        } else {
+          throw new Error(`Invalid date values in format d.m.y: ${dateStr}`);
         }
       } else {
         const standardDate = new Date(dateStr);
         if (!isNaN(standardDate.getTime())) {
           dateObj = standardDate;
+        } else {
+          throw new Error(`Invalid or unrecognized calendar date format: ${dateStr}`);
         }
       }
 

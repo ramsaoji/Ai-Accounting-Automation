@@ -6,19 +6,22 @@ import { config } from '../config/config.js';
 const isDevelopment = config.NODE_ENV === 'development';
 const logDir = path.resolve(process.cwd(), 'data', 'output');
 
-// Ensure the output directory exists for log writing
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
+const streams: pino.StreamEntry[] = [];
+
+// Only output to local files if configured
+if (config.ENABLE_FILE_LOGGING) {
+  try {
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFilePath = path.join(logDir, 'system.log');
+    streams.push({
+      stream: fs.createWriteStream(logFilePath, { flags: 'a' }),
+    });
+  } catch (err) {
+    console.error('Failed to initialize local file logger stream:', err);
+  }
 }
-
-const logFilePath = path.join(logDir, 'system.log');
-
-const streams: pino.StreamEntry[] = [
-  {
-    // Append raw JSON logs persistently to a file on disk
-    stream: fs.createWriteStream(logFilePath, { flags: 'a' }),
-  },
-];
 
 if (isDevelopment) {
   streams.push({

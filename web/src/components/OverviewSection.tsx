@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import type { MasterSummary } from '../types';
+import type { MasterSummary, DebitorSummary } from '../types';
+import { deriveBusinessName } from '../utils/business';
 import {
   TrendingUp,
   TrendingDown,
@@ -35,19 +36,10 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
   const [activeChartTab, setActiveChartTab] = useState<'primary' | 'distribution'>('primary');
 
   const businessName = React.useMemo(() => {
-    const fn = summary.fileName;
-    const lower = fn.toLowerCase();
-    if (lower.includes('gaurav')) return 'Hotel Gaurav';
-    let name = fn.replace(/\.[^/.]+$/, "");
-    name = name.replace(/(daily\s*sales\s*register|debitors\s*list|debitors|sales|ledger|list)/gi, '').trim();
-    name = name.replace(/[_\-]+/g, ' ').trim();
-    if (name.length > 2) {
-      return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    }
-    return 'Hotel Gaurav';
+    return deriveBusinessName(summary.fileName);
   }, [summary.fileName]);
 
-  const triggerReminderCopy = (debtor: any) => {
+  const triggerReminderCopy = (debtor: DebitorSummary) => {
     const text = `Dear ${debtor.name},\n\nThis is a friendly reminder from ${businessName} accounts management. Your pending account balance of ₹${debtor.pending.toLocaleString('en-IN')} (total credit purchases: ₹${debtor.debit.toLocaleString('en-IN')}, cleared: ₹${debtor.credit.toLocaleString('en-IN')}) is currently due.\n\nPlease settle this amount at your earliest convenience via UPI, cash, or card.\n\nThank you!`;
     navigator.clipboard.writeText(text);
     toast.success(`Outreach draft for ${debtor.name} copied to clipboard!`);
@@ -69,13 +61,20 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
     return parsed.toLocaleString();
   };
 
-  // Safe mapping for debitors ageing buckets
-  const debitorsAgeingData = [
-    { range: '0-30 Days', amount: 85000, color: 'var(--primary)' },
-    { range: '31-60 Days', amount: 55000, color: 'var(--chart-3)' },
-    { range: '61-90 Days', amount: 25000, color: 'var(--chart-2)' },
-    { range: '90+ Days', amount: 10370, color: 'var(--destructive)' }
-  ];
+  const debitorsAgeingData = React.useMemo(() => {
+    const debitors = summary.topDebitors ?? [];
+    // Proxy aging by pending amount ranges (actual dates not in current JSONB schema)
+    const high = debitors.filter(d => (d.pending ?? 0) > 20000).reduce((s, d) => s + (d.pending ?? 0), 0);
+    const medium = debitors.filter(d => (d.pending ?? 0) > 10000 && (d.pending ?? 0) <= 20000).reduce((s, d) => s + (d.pending ?? 0), 0);
+    const low = debitors.filter(d => (d.pending ?? 0) > 3000 && (d.pending ?? 0) <= 10000).reduce((s, d) => s + (d.pending ?? 0), 0);
+    const minimal = debitors.filter(d => (d.pending ?? 0) <= 3000).reduce((s, d) => s + (d.pending ?? 0), 0);
+    return [
+      { range: 'High Risk (>₹20K)', amount: high, color: 'var(--destructive)' },
+      { range: 'Medium (₹10K-₹20K)', amount: medium, color: 'var(--chart-2)' },
+      { range: 'Low (₹3K-₹10K)', amount: low, color: 'var(--chart-3)' },
+      { range: 'Minimal (<₹3K)', amount: minimal, color: 'var(--primary)' },
+    ];
+  }, [summary.topDebitors]);
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">

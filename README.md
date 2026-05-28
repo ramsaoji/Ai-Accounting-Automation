@@ -15,7 +15,7 @@ The service executes an automated ETL, Auditing, and visual reporting pipeline b
            [drive.service.ts] (JWT Auth) or Local Loader
                               │
                               ▼
-           [excel.parser.ts] (25-Month Sheet Consolidation)
+           [excel.parser.ts] (Multi-Month Sheet Consolidation)
                               │
                               ▼
            [rules.engine.ts] (Modular Auditors & Flags)
@@ -41,8 +41,18 @@ The service executes an automated ETL, Auditing, and visual reporting pipeline b
 ```
 ai-accounting-automation/
 ├── src/
+│   ├── api/
+│   │   ├── controllers/
+│   │   │   ├── chat.controller.ts     # Zod validation & LLM advisor chat endpoint
+│   │   │   ├── health.controller.ts   # Healthcheck server metrics endpoint
+│   │   │   ├── report.controller.ts   # Real-time report getters and multipart uploader
+│   │   │   └── security.controller.ts # Passcode verify and change credentials endpoints
+│   │   ├── fastify.app.ts        # Fastify app builder with CORS & Multipart configuration
+│   │   └── fastify.auth.ts       # Authentication middleware hook validating JWT tokens
 │   ├── config/
 │   │   └── config.ts             # Strongly-typed config loader & Zod validator
+│   ├── db/
+│   │   └── db.client.ts          # Neon DB Pool client with table/security initialization
 │   ├── drive/
 │   │   ├── drive.client.ts       # Authorized Google Drive Client (JWT auth)
 │   │   └── drive.service.ts      # Excel spreadsheet searcher and downloader
@@ -64,7 +74,7 @@ ai-accounting-automation/
 │   │   │   └── ollama.provider.ts # Local LLM client
 │   │   ├── ai.types.ts           # Swappable AI provider contract
 │   │   ├── ai.factory.ts         # Env-driven runtime provider factory
-│   │   ├── ai.prompts.ts         # High-fidelity prompts & mathematical contexts
+│   │   ├── ai.prompts.ts         # Shared AI prompt input type definitions
 │   │   ├── report-helper.ts      # Visual charts coordinate math & HTML trend row builders
 │   │   ├── report-template.ts    # Daily Sales Register HTML console UI shell
 │   │   ├── debitors-template.ts  # Customer outstanding Udhari HTML console UI shell
@@ -85,12 +95,16 @@ ai-accounting-automation/
 │   │   └── logger.ts             # Pino logger configurations
 │   ├── scripts/
 │   │   ├── chat-ledger.ts        # Interactive ledger financial consultant CLI
+│   │   ├── check-db.ts           # Neon DB connection & query test script
 │   │   ├── check-gemini.ts       # Gemini API validation/diagnostics helper
 │   │   ├── generate-sample.ts    # Seed script generating sample test workbook
 │   │   ├── inspect-excel.ts      # Excel sheet structure inspection utility
-│   │   └── process-local.ts      # Local batch processor: runs full pipeline on data/input/ files
-│   └── index.ts                  # App entrypoint (runs scheduler + health check server)
-├── Dockerfile                    # Multi-stage, low footprint production container
+│   │   ├── process-local.ts      # Local batch processor: runs full pipeline on data/input/ files
+│   │   └── test-db-init.ts       # Database structure manual table initializer
+│   ├── utils/
+│   │   └── cron.ts               # Cron expression humanization utility
+│   └── index.ts                  # App entrypoint (initializes DB, scheduler, Telegram bot, and Fastify server)
+│── Dockerfile                    # Multi-stage, low footprint production container
 ├── .dockerignore                 # Container build context filtering rules
 ├── .env.example                  # Template listing all environmental configs
 ├── tsconfig.json                 # Type-check configurations
@@ -116,7 +130,7 @@ The output generation pipeline produces a fully responsive, highly interactive *
 * **Smooth-Scroll Lock:** Utilizes a state-locked scroll flag to prevent active menu indicators from flickering or jumping as the viewport smooth-scrolls across intermediate sections.
 
 ### 📈 Neon SVG Dual Line Chart
-* An inline vector graphic rendering cumulative business **Inflows** (Liquor sales, Food sales, and Credit Recovered) vs. **Outflows** (Operational expenses and credit extended) across the **25-month historical span**.
+* An inline vector graphic rendering cumulative business **Inflows** (Liquor sales, Food sales, and Credit Recovered) vs. **Outflows** (Operational expenses and credit extended) across the parsed historical span.
 * Interactive data nodes with hoverable checkpoints.
 
 ### 📋 Weekly Operational Action Checklist
@@ -221,7 +235,7 @@ Make sure your business spreadsheet has columns containing these words (the orde
 Name your file **`sample_ledger.xlsx`** and save it inside this folder:
 📂 **`data/input/`**
 
-*Note: The parser supports multi-page workbooks, consolidating up to 25+ sheets/months automatically.*
+*Note: The parser supports multi-page workbooks, consolidating all sheets/months automatically.*
 
 ### 2️⃣ Step 2: Set Your AI Provider in the `.env` File
 You can add **multiple API keys** in your `.env` configuration file at the same time! The application is smart and uses the **`AI_PROVIDER`** variable as the selector switch to decide which key to run:
@@ -263,7 +277,7 @@ Define the following environment variables in your `.env` configuration file:
 | **`PORT`** | No | `8080` | Bind port for cloud environment container health checks |
 | **`DATABASE_URL`** | No | - | PostgreSQL connection string (e.g. Neon DB). If omitted, the backend reads from local `data/output/` files instead |
 | **`AI_PROVIDER`** | Yes | `gemini` | Core provider: `openai`, `gemini`, `claude`, `openrouter`, `deepseek`, `ollama`, `groq` |
-| **`AI_MODEL`** | Yes | `gemini-1.5-flash` | The specific model ID to call (e.g. `gpt-4o-mini`, `claude-3-5-sonnet-20240620`, etc.) |
+| **`AI_MODEL`** | Yes | - | The specific model ID to call (e.g. `gpt-4o-mini`, `gemini-1.5-flash`, etc.). Must be defined |
 | **`GEMINI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=gemini` |
 | **`OPENAI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=openai` |
 | **`CLAUDE_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=claude` |
@@ -271,14 +285,18 @@ Define the following environment variables in your `.env` configuration file:
 | **`DEEPSEEK_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=deepseek` |
 | **`GROQ_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=groq` |
 | **`OLLAMA_BASE_URL`** | No | `http://localhost:11434` | Endpoint for local model serving |
-| **`GOOGLE_CLIENT_EMAIL`** | No* | - | Google Service Account email. If a placeholder value is detected, the system falls back to local file mode |
-| **`GOOGLE_PRIVATE_KEY`** | No* | - | Raw Private Key PEM string (supports multi-line or escaped `\n`). Required alongside `GOOGLE_CLIENT_EMAIL` for Drive mode |
-| **`GOOGLE_DRIVE_FOLDER_ID`** | No* | - | Target Google Drive Folder ID. Required for Drive mode |
-| **`TELEGRAM_BOT_TOKEN`** | No | - | Token generated by BotFather (e.g. `123456:ABC...`). One token for the whole bot — shared by all users. If omitted, Telegram delivery is skipped |
-| **`TELEGRAM_CHAT_ID`** | No | - | Comma-separated list of authorized Chat IDs (e.g. `987654321` or `987654321,112233445`). Required alongside `TELEGRAM_BOT_TOKEN` |
-| **`CRON_SCHEDULE`** | No | `0 * * * *` | Cron task schedule (defaults to hourly: `0 * * * *`) |
+| **`GOOGLE_CLIENT_EMAIL`** | No* | `accounting-worker@your-project-id.iam.gserviceaccount.com` | Google Service Account email. If left at this default or placeholder value, the drive service is bypassed and local file mode is active |
+| **`GOOGLE_PRIVATE_KEY`** | No* | `MIIEvgIBADANBgkqhkiG9w0` | Raw Private Key PEM string (escaped `\n`). If left at this default, local file mode is active |
+| **`GOOGLE_DRIVE_FOLDER_ID`** | No* | `your_google_drive_folder_id_here` | Target Google Drive Folder ID. If left at this default, local file mode is active |
+| **`TELEGRAM_BOT_TOKEN`** | No | `1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ` | Telegram Bot API Token. If left at this default or omitted, Telegram features are bypassed |
+| **`TELEGRAM_CHAT_ID`** | No | `-1001234567890` | Comma-separated list of authorized Chat IDs. If left at this default or omitted, Telegram features are bypassed |
+| **`CRON_SCHEDULE`** | No | `0 0 * * *` | Cron task schedule (defaults to daily at midnight: `0 0 * * *`) |
 | **`UPLOAD_PASSWORD`** | Yes | - | Passcode used to authorize spreadsheet ingestion uploads |
 | **`APP_PASSWORD`** | Yes | - | Passcode used to unlock the fullscreen App Lock screen |
+| **`JWT_SECRET`** | No | `development_jwt_secret_fallback_key_12345` | Signing secret key used to generate and verify JWT admin session tokens |
+| **`ENABLE_FILE_LOGGING`** | No | `false` | Enable/disable appending structured logs to `data/output/system.log` |
+| **`ALLOWED_ORIGINS`** | No | - | Comma-separated list of allowed CORS domains (e.g. `https://your-domain.vercel.app`) |
+| **`BUSINESS_NAME`** | No | `Hotel Gaurav` | Display name of the business injected into AI prompting contexts and Telegram messages |
 
 
 > *Google Drive credentials are optional — omit them (or leave placeholders) to run in **local file mode** where the service reads spreadsheets from `data/input/` instead of Drive.
@@ -396,4 +414,4 @@ The `web/` React dashboard deploys to Vercel as a static site.
 The architecture is built from the ground up to support future business scale:
 * **Multi-Format Excel Parsing**: The `excel.mapper.ts` synonymous header map can be expanded or mapped dynamically to specific database profiles if you ingest ledgers from multiple vendors.
 * **Persistent History**: While designed to be stateless, you can easily plug in an ORM (like Prisma) in `orchestrator.service.ts` to log transaction histories and alerts before generating summaries.
-* **Multiple Recipients**: Expand `TELEGRAM_CHAT_ID` to a list or comma-separated string in the config, and iterate over it in `telegram.service.ts` to dispatch summaries to multiple executive channels or accounting groups.
+* **Multi-Channel Dispatch**: Expand the notification layer beyond Telegram to support alternative channels, such as WhatsApp API alerts, SMS notifications, Slack webhooks, or automated HTML email digests.

@@ -1,52 +1,23 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-  LayoutDashboard,
-  Table,
-  ShieldAlert,
-  MessageSquare,
-  ChevronsUpDown,
-  Check,
-  BarChart3,
-  Users,
-  Sun,
-  Moon,
-  RefreshCw,
-  Grid,
   Cloud,
   Loader2,
-  Lock,
-  LogOut
+  Users,
+  RefreshCw,
+  LayoutDashboard
 } from 'lucide-react';
 import {
   SidebarProvider,
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarFooter,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
   SidebarTrigger,
-  SidebarInset,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  useSidebar
+  SidebarInset
 } from '@/components/ui/sidebar';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 
 import { useTheme } from '@/components/theme-provider';
+import { useAccountingStore } from './store/useAccountingStore';
 import { useAccountingData } from './hooks/useAccountingData';
 import { PortalSection } from './components/PortalSection';
 import { OverviewSection } from './components/OverviewSection';
@@ -58,263 +29,53 @@ import { LockScreen } from './components/LockScreen';
 import { SecuritySettingsModal } from './components/SecuritySettingsModal';
 import { Button } from '@/components/ui/button';
 import { triggerDriveSync, fetchAccountingData } from './services/api';
-import type { Alert } from './types';
-interface AppSidebarProps {
-  activeWorkspace: 'sales' | 'debitors';
-  setActiveWorkspace: (w: 'sales' | 'debitors') => void;
-  activeView: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor';
-  setActiveView: (v: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
-  businessName: string;
-  activeAlerts: any[];
-  theme: any;
-  setTheme: (t: any) => void;
-  onOpenSecuritySettings: () => void;
-  onLogout: () => void;
-}
+import { AppSidebar } from './components/AppSidebar';
+import { deriveBusinessName } from './utils/business';
 
-function AppSidebar({
-  activeWorkspace,
-  setActiveWorkspace,
-  activeView,
-  setActiveView,
-  businessName,
-  activeAlerts,
-  theme,
-  setTheme,
-  onOpenSecuritySettings,
-  onLogout
-}: AppSidebarProps) {
-  const { isMobile, setOpenMobile } = useSidebar();
-
-  const handleWorkspaceSelect = (workspace: 'sales' | 'debitors') => {
-    setActiveWorkspace(workspace);
-    if (activeView === 'portal') setActiveView('overview');
-    toast.info(`Switched to ${workspace === 'sales' ? 'Daily Sales Register' : 'Debitors Outstanding Ledger'}`);
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  };
-
-  const handleViewSelect = (view: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor') => {
-    setActiveView(view);
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  };
-
-  const handleThemeToggle = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  };
-
-  return (
-    <Sidebar collapsible="icon" className="border-r border-border/80">
-      {/* Header Workspace Switcher */}
-      <SidebarHeader className="h-16 border-b border-border/80 px-4 group-data-[collapsible=icon]:px-2 flex flex-row items-center group-data-[collapsible=icon]:justify-center">
-        <SidebarMenu className="w-full">
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="peer/menu-button group/menu-button flex w-full items-center justify-between gap-2 overflow-hidden rounded-md p-2 text-start text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:opacity-50 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-12 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-0! select-none cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                    {activeWorkspace === 'sales' ? 'SG' : 'DL'}
-                  </div>
-                  <div className="flex flex-col text-left group-data-[collapsible=icon]:hidden">
-                    <span className="text-xs font-bold leading-none">{businessName}</span>
-                    <span className="text-[0.68rem] text-muted-foreground mt-1 leading-none">
-                      {activeWorkspace === 'sales' ? 'Daily Sales Register' : 'Customer Debitors'}
-                    </span>
-                  </div>
-                </div>
-                <ChevronsUpDown className="size-4 text-muted-foreground shrink-0 group-data-[collapsible=icon]:hidden" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 mt-1">
-                <DropdownMenuLabel className="text-[0.68rem] font-bold text-muted-foreground uppercase tracking-wider">
-                  Select Ledger Register
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                
-                <DropdownMenuItem
-                  onClick={() => handleWorkspaceSelect('sales')}
-                  className="flex items-center justify-between text-xs cursor-pointer py-2"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <BarChart3 className="size-4 text-primary" />
-                    <span className="font-medium">Daily Sales Register</span>
-                  </div>
-                  {activeWorkspace === 'sales' && <Check className="size-3.5 text-primary" />}
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  onClick={() => handleWorkspaceSelect('debitors')}
-                  className="flex items-center justify-between text-xs cursor-pointer py-2"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users className="size-4 text-primary" />
-                    <span className="font-medium">Debitors Outstanding Ledger</span>
-                  </div>
-                  {activeWorkspace === 'debitors' && <Check className="size-3.5 text-primary" />}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-
-      {/* Sidebar Main Content Navigation Items */}
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="px-2 text-[0.68rem] font-bold text-muted-foreground uppercase tracking-wider select-none">
-            Console Navigation
-          </SidebarGroupLabel>
-          <SidebarGroupContent className="mt-1">
-            <SidebarMenu className="gap-1">
-              {/* All Ledgers Console Directory */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeView === 'portal'}
-                  onClick={() => handleViewSelect('portal')}
-                  className="text-xs font-semibold"
-                  tooltip="All Ledgers Portal"
-                >
-                  <Grid className="size-4" />
-                  <span>All Ledgers Directory</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Overview Nav Button */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeView === 'overview'}
-                  onClick={() => handleViewSelect('overview')}
-                  className="text-xs font-semibold"
-                  tooltip="Executive Overview"
-                >
-                  <LayoutDashboard className="size-4" />
-                  <span>Executive Overview</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Ledger Records Nav Button */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeView === 'ledger'}
-                  onClick={() => handleViewSelect('ledger')}
-                  className="text-xs font-semibold"
-                  tooltip="Ledger Directory"
-                >
-                  <Table className="size-4" />
-                  <span>Ledger Directory</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Rules & Alerts Nav Button */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeView === 'auditor'}
-                  onClick={() => handleViewSelect('auditor')}
-                  className="text-xs font-semibold"
-                  tooltip="Rules & Alerts"
-                >
-                  <ShieldAlert className="size-4 shrink-0" />
-                  <span className="group-data-[collapsible=icon]:hidden">Rules & Alerts</span>
-                  {activeAlerts.length > 0 && (
-                    <span className="ml-auto text-[0.62rem] font-bold px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 leading-none group-data-[collapsible=icon]:hidden">
-                      {activeAlerts.length}
-                    </span>
-                  )}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* AI Advisor Chat Nav Button */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeView === 'advisor'}
-                  onClick={() => handleViewSelect('advisor')}
-                  className="text-xs font-semibold"
-                  tooltip="AI Strategic Chat"
-                >
-                  <MessageSquare className="size-4" />
-                  <span>AI Strategic Chat</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-
-      {/* Sidebar Footer Console Controls */}
-      <SidebarFooter className="border-t border-border/80 p-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={handleThemeToggle}
-              className="text-xs font-semibold"
-              tooltip={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-            >
-              {theme === 'dark' ? <Sun className="size-4 text-amber-400" /> : <Moon className="size-4 text-primary" />}
-              <span>{theme === 'dark' ? 'Light Theme' : 'Dark Theme'}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={() => {
-                onOpenSecuritySettings();
-                if (isMobile) {
-                  setOpenMobile(false);
-                }
-              }}
-              className="text-xs font-semibold"
-              tooltip="Security Settings"
-            >
-              <Lock className="size-4" />
-              <span>Change Security Passcodes</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={onLogout}
-              className="text-xs font-semibold text-destructive hover:text-destructive hover:bg-destructive/5 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 cursor-pointer"
-              tooltip="Lock Application"
-            >
-              <LogOut className="size-4" />
-              <span>Lock Application</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
-    </Sidebar>
-  );
-}
 
 export function App() {
   const { theme, setTheme } = useTheme();
 
-  // Active Workspace: 'sales' | 'debitors'
-  const [activeWorkspace, setActiveWorkspace] = useState<'sales' | 'debitors'>('sales');
-  
-  // Active Navigation View: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor'
-  const [activeView, setActiveView] = useState<'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor'>('portal');
+  // Zustand Store selectors
+  const appSessionToken = useAccountingStore((state) => state.appSessionToken);
+  const activeWorkspace = useAccountingStore((state) => state.activeWorkspace);
+  const activeView = useAccountingStore((state) => state.activeView);
+  const setToken = useAccountingStore((state) => state.setToken);
+  const clearToken = useAccountingStore((state) => state.clearToken);
+  const setActiveWorkspace = useAccountingStore((state) => state.setActiveWorkspace);
+  const setActiveView = useAccountingStore((state) => state.setActiveView);
 
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
-
-  // App Session Token & Security settings dialog states
-  const [appSessionToken, setAppSessionToken] = useState(() => sessionStorage.getItem('app_session_token') || '');
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
   const handleLogout = () => {
-    sessionStorage.removeItem('app_session_token');
-    setAppSessionToken('');
+    clearToken();
     toast.info("Application locked successfully.");
   };
 
+  // Listen for global session expiry events (e.g. backend restarts or token expiration)
+  useEffect(() => {
+    const handleAuthUnauthorized = () => {
+      clearToken();
+      toast.error("Administrative session expired or invalid. Console locked.");
+    };
+    window.addEventListener('auth-unauthorized', handleAuthUnauthorized);
+    return () => {
+      window.removeEventListener('auth-unauthorized', handleAuthUnauthorized);
+    };
+  }, [clearToken]);
+
   const mainRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clean up sync polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
   // Scroll to top on activeView or activeWorkspace change
   useEffect(() => {
@@ -328,29 +89,16 @@ export function App() {
 
   // Trigger sync on mount if already authenticated
   useEffect(() => {
-    const cachedToken = sessionStorage.getItem('app_session_token');
-    if (cachedToken) {
+    if (appSessionToken) {
       fetchRealData();
     }
-  }, [fetchRealData]);
+  }, [appSessionToken, fetchRealData]);
 
   const businessName = useMemo(() => {
-    const files = [salesData?.fileName, debitorsData?.fileName].filter(Boolean) as string[];
-    for (const f of files) {
-      const lower = f.toLowerCase();
-      if (/gaurav/i.test(lower)) return 'Hotel Gaurav';
-      
-      let name = f.replace(/\.[^/.]+$/, "");
-      name = name.replace(/(daily\s*sales\s*register|debitors\s*list|debitors|sales|ledger|list)/gi, '').trim();
-      name = name.replace(/[_\-]+/g, ' ').trim();
-      if (name.length > 2) {
-        return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      }
-    }
-    return 'Hotel Gaurav'; // default fallback
-  }, [salesData, debitorsData]);
+    return deriveBusinessName(salesData?.fileName ?? debitorsData?.fileName);
+  }, [salesData?.fileName, debitorsData?.fileName]);
 
-  const handleDriveSync = async () => {
+  const handleDriveSync = useCallback(async () => {
     if (isSyncingDrive) return;
     setIsSyncingDrive(true);
     const toastId = toast.loading('Initiating Google Drive sync...');
@@ -371,7 +119,12 @@ export function App() {
 
       let attempts = 0;
       const maxAttempts = 12; // 30 seconds max
-      const interval = setInterval(async () => {
+      
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      intervalRef.current = setInterval(async () => {
         attempts++;
         try {
           const syncResult = await fetchAccountingData();
@@ -383,98 +136,54 @@ export function App() {
           const emptyGotData = !(salesData || debitorsData) && !!(syncResult.sales || syncResult.debitors);
 
           if (salesUpdated || debitorsUpdated || emptyGotData) {
-            clearInterval(interval);
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
             setIsSyncingDrive(false);
             await fetchRealData();
             toast.success('Google Drive sync completed successfully!', { id: toastId });
           } else if (attempts >= maxAttempts) {
-            clearInterval(interval);
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
             setIsSyncingDrive(false);
             await fetchRealData();
             toast.info('Sync request completed. Refreshing dashboard...', { id: toastId });
           }
-        } catch (pollErr) {
+        } catch {
           if (attempts >= maxAttempts) {
-            clearInterval(interval);
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
             setIsSyncingDrive(false);
             toast.error('Sync polling timed out. Check backend logs.', { id: toastId });
           }
         }
       }, 2500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsSyncingDrive(false);
-      toast.error(`Drive sync failed: ${err.message || err}`, { id: toastId });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      toast.error(`Drive sync failed: ${errMsg}`, { id: toastId });
     }
-  };
+  }, [isSyncingDrive, salesData, debitorsData, fetchRealData]);
 
   // Dynamic Rule Threshold Constants aligned with backend auditing policies
-  const highExpenseLimit = 50000;
-  const suspiciousSpikeMultiplier = 3.0;
   const maxOutstandingDuesLimit = 15000;
 
   // activeSummary points to the currently active dataset
   const activeSummary = activeWorkspace === 'sales' ? salesData : debitorsData;
 
-  // Baseline Monthly Expense average for anomaly calculations
-  const averageMonthlyExpense = useMemo(() => {
-    if (!salesData) return 0;
-    const months = salesData.months || [];
-    if (months.length === 0) return 0;
-    return months.reduce((sum, m) => sum + m.expenses, 0) / months.length;
-  }, [salesData]);
-
-  // Compute Sales Alerts reactively
-  const salesAlerts = useMemo(() => {
-    const list: Alert[] = [];
-    if (!salesData) return [];
-    const baseAlerts = salesData.alerts || [];
-    list.push(...baseAlerts);
-
-    const months = salesData.months || [];
-    months.forEach((m) => {
-      if (m.expenses > highExpenseLimit) {
-        list.push({
-          ruleId: 'RULE-01',
-          ruleName: 'High Expense Limit Breach',
-          severity: 'high',
-          message: `Sheet "${m.sheetName}" logged ₹${m.expenses.toLocaleString('en-IN')} in expenses, exceeding the safety ceiling of ₹${highExpenseLimit.toLocaleString('en-IN')}.`,
-        });
-      }
-      if (m.expenses > averageMonthlyExpense * suspiciousSpikeMultiplier) {
-        list.push({
-          ruleId: 'RULE-02',
-          ruleName: 'Suspicious Expense Spike',
-          severity: 'critical',
-          message: `Expenses in "${m.sheetName}" (₹${m.expenses.toLocaleString('en-IN')}) are ${(m.expenses / averageMonthlyExpense).toFixed(1)}x higher than the baseline average monthly expense of ₹${Math.round(averageMonthlyExpense).toLocaleString('en-IN')}.`,
-        });
-      }
-    });
-    return list;
-  }, [salesData, averageMonthlyExpense]);
-
-  // Compute Debitors Alerts reactively
-  const debitorsAlerts = useMemo(() => {
-    const list: Alert[] = [];
-    if (!debitorsData) return [];
-    const baseAlerts = debitorsData.alerts || [];
-    list.push(...baseAlerts);
-
-    const topDebitors = debitorsData.topDebitors || [];
-    topDebitors.forEach((debtor) => {
-      if (debtor.pending > maxOutstandingDuesLimit) {
-        list.push({
-          ruleId: 'RULE-03',
-          ruleName: 'Debitor Cap Exceeded',
-          severity: 'critical',
-          message: `Customer "${debtor.name}" carries ₹${debtor.pending.toLocaleString('en-IN')} in outstanding pending dues, breaching the credit cap of ₹${maxOutstandingDuesLimit.toLocaleString('en-IN')}.`,
-        });
-      }
-    });
-    return list;
-  }, [debitorsData]);
-
-  // activeAlerts selects the alerts for the active workspace
-  const activeAlerts = activeWorkspace === 'sales' ? salesAlerts : debitorsAlerts;
+  // activeAlerts selects the alerts for the active workspace (centralized backend source of truth)
+  const activeAlerts = useMemo(() => {
+    if (activeWorkspace === 'sales') {
+      return salesData?.alerts || [];
+    } else {
+      return debitorsData?.alerts || [];
+    }
+  }, [activeWorkspace, salesData, debitorsData]);
 
   // Launch workspace callback from portal
   const handleLaunchWorkspace = (workspace: 'sales' | 'debitors', view: 'overview' | 'ledger' | 'auditor' | 'advisor' = 'overview') => {
@@ -489,8 +198,7 @@ export function App() {
       <TooltipProvider>
         <LockScreen
           onUnlock={(token) => {
-            sessionStorage.setItem('app_session_token', token);
-            setAppSessionToken(token);
+            setToken(token);
             fetchRealData();
           }}
         />
@@ -639,8 +347,8 @@ export function App() {
                     <PortalSection
                       salesData={salesData}
                       debitorsData={debitorsData}
-                      salesAlertCount={salesAlerts.length}
-                      debitorsAlertCount={debitorsAlerts.length}
+                      salesAlertCount={salesData?.alerts?.length || 0}
+                      debitorsAlertCount={debitorsData?.alerts?.length || 0}
                       onLaunchWorkspace={handleLaunchWorkspace}
                       cronSchedule={cronSchedule}
                       connectionMode={connectionMode}

@@ -11,10 +11,15 @@ export interface DriveFileInfo {
 }
 
 export class DriveService {
-  private drive: drive_v3.Drive;
+  private driveInstance: drive_v3.Drive | null = null;
 
-  constructor() {
-    this.drive = getDriveClient();
+  constructor() {}
+
+  private getDrive(): drive_v3.Drive {
+    if (!this.driveInstance) {
+      this.driveInstance = getDriveClient();
+    }
+    return this.driveInstance;
   }
 
   /**
@@ -26,10 +31,11 @@ export class DriveService {
       const folderId = config.GOOGLE_DRIVE_FOLDER_ID;
       logger.info({ folderId }, 'Searching for all Excel files in Google Drive');
 
+      const drive = this.getDrive();
       // Query to search for files inside specific folder, matching Excel mimeType, not trashed
       const q = `'${folderId}' in parents and mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' and trashed = false`;
 
-      const response = await this.drive.files.list({
+      const response = await drive.files.list({
         q,
         spaces: 'drive',
         fields: 'files(id, name, createdTime, modifiedTime)',
@@ -64,7 +70,8 @@ export class DriveService {
     try {
       logger.info({ fileId, fileName }, 'Downloading file buffer from Google Drive');
 
-      const response = await this.drive.files.get(
+      const drive = this.getDrive();
+      const response = await drive.files.get(
         {
           fileId,
           alt: 'media',

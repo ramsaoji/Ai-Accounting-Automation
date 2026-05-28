@@ -30,7 +30,7 @@ The React application syncs data with the Node.js backend using a clean dual-sto
 - **Live Database Mode** (Active if `DATABASE_URL` is set in the backend `.env`): The frontend queries `GET /api/data/sales` and `GET /api/data/debitors` which pull directly from the Neon PostgreSQL database. If the database has no data yet, the API returns a 404 and the frontend displays the onboarding dashboard with upload controls active. **No mock fallbacks or simulated stats are shown in production when the database is empty.**
 - **Offline Local File Mode** (Active if `DATABASE_URL` is omitted in backend): The backend reads reports directly from local disk (`data/output/.../summary.json`), supporting offline-first local audits without any cloud dependency.
 
-The frontend detects which mode is active based on the API response and displays a `LIVE DB` or `Local Files` badge in the sidebar accordingly.
+When the backend API is connected and reachable, the frontend initializes in `live` mode and fetches data registers concurrently. If the backend is completely unreachable, the console enters an offline `empty` state, launching a setup onboarding overlay. Under this offline mode, the advisor chat operates via a local simulated heuristic reasoning engine for demonstration purposes, and the AI Recommendations card displays a "Simulated Demo" badge.
 
 ### 2. Google Drive Sync
 The **Sync Drive** button in the header triggers `POST /api/trigger-pipeline`, which instructs the backend to:
@@ -52,16 +52,62 @@ On mount, the dashboard runs a background fetch to determine connection status a
 
 ---
 
+## 📁 Project Directory Structure
+
+```
+web/
+├── public/                       # Static public assets
+├── src/
+│   ├── assets/                   # Local image and media assets
+│   ├── components/               # React UI & page section components
+│   │   ├── ui/                   # Primitive layout components (card, button, input)
+│   │   ├── AdvisorSection.tsx    # AI strategic advisor chat feed component
+│   │   ├── AppSidebar.tsx        # Navigation sidebar component
+│   │   ├── AuditorSection.tsx    # Anomaly list and rules editor component
+│   │   ├── LedgerSection.tsx     # Reconciled transaction records grid view
+│   │   ├── LockScreen.tsx        # Fullscreen App Lock security overlay
+│   │   ├── OverviewCharts.tsx    # Recharts line and bar graphs visualization
+│   │   ├── OverviewSection.tsx   # Dashboard main KPI metrics grid
+│   │   ├── PortalCharts.tsx      # Sparkline Recharts rendering helper
+│   │   ├── PortalSection.tsx     # Double-ledger directory entrypoints
+│   │   ├── SecuritySettingsModal.tsx # Password changing settings modal
+│   │   ├── theme-provider.tsx    # System-wide CSS dark/light theme context provider
+│   │   └── UploadModal.tsx       # Excel file upload queue component
+│   ├── hooks/                    # Custom React hooks
+│   │   ├── use-mobile.ts         # Viewport size detector hook
+│   │   └── useAccountingData.ts  # Cascading backend fetching hook
+│   ├── lib/
+│   │   └── utils.ts              # Tailwind CSS merging utility
+│   ├── services/
+│   │   └── api.ts                # Client API wrappers with auth fetch
+│   ├── store/
+│   │   └── useAccountingStore.ts # Zustand global state manager
+│   ├── utils/
+│   │   ├── business.ts           # Business name filename-to-display converter
+│   │   └── markdown.tsx          # Custom safe regex-based block tokenizer
+│   ├── types.ts                  # Shared frontend types
+│   ├── App.tsx                   # Main routing hub
+│   ├── index.css                 # Global styles and tailwind directives
+│   └── main.tsx                  # Vite React app entrypoint
+├── components.json               # Config for shadcn UI component installer
+├── eslint.config.js              # Code linting rules configuration
+├── index.html                    # Dashboard main HTML container template
+├── package.json                  # Scripts and package manifests
+├── tsconfig.json                 # Type compiler configurations
+└── vite.config.ts                # Bundling and path alias settings
+```
+
+---
+
 ## 🛠 Key Features
 
 ### 📊 Dual-Ledger Portal (Home)
 - **Overview Cards**: Two portal cards (Sales Register, Customer Debitors) with live data status, alert counts, and sparkline trend previews.
-- **Connection Indicator**: Sidebar badge shows `LIVE DB` or `Local Files` connection mode.
 - **Cron Schedule Display**: Shows the next scheduled auto-sync time from the backend cron configuration.
 
 ### 📈 Executive Overview
 - **Dynamic KPIs**: Track Net Surplus, Credit Recovery split, and Clearance Indexes derived directly from parsed Excel data.
-- **Interactive Time-Series Charts**: View cashflow timelines and vertical ageing splits using Recharts.
+- **Interactive Time-Series Charts**: View cashflow timelines and dynamic priority debt risk splits using Recharts.
 - **Outreach Copy Triggers**: Copy personalized SMS/WhatsApp payment reminder drafts directly from outstanding accounts.
 
 ### 🗃 Transaction Ledger Explorer
@@ -97,8 +143,9 @@ On mount, the dashboard runs a background fetch to determine connection status a
 | Charts | Recharts | ^3.8.1 |
 | Icons | Lucide React | ^1.16.0 |
 | Toast Notifications | Sonner | ^2.0.7 |
-| Theme | next-themes | ^0.4.6 |
-| Markdown Rendering | marked | ^18.0.4 |
+| State Management | Zustand | ^5.0.13 |
+| Theme | Custom ThemeProvider | (Internal `components/theme-provider.tsx`) |
+| Markdown Rendering | Custom SafeMarkdown | (Internal `utils/markdown.tsx`) |
 
 ---
 

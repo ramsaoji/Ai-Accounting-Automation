@@ -143,8 +143,9 @@ npm run dev
 
 You will see in the logs:
 ```
-[drive.service] Searching for the latest Excel file in Google Drive
-[drive.service] Found latest accounting Excel file: "Hotel Gaurav Daily Sales Register.xlsx"
+[drive.service] Searching for all Excel files in Google Drive
+[drive.service] Found Excel file(s) in Google Drive
+[orchestrator] Downloading target Excel sheet from Google Drive
 [drive.service] Downloading file buffer from Google Drive
 [orchestrator] Persisted ingestion report to Neon DB
 ```
@@ -186,8 +187,8 @@ The orchestrator automatically detects which mode to run based on your credentia
 
 | Condition | Mode | Source |
 | :--- | :--- | :--- |
-| `GOOGLE_CLIENT_EMAIL` contains placeholder text | **Local mode** | Reads `.xlsx` files from `data/input/` |
-| `GOOGLE_CLIENT_EMAIL` is a real service account | **Drive mode** | Downloads from Google Drive folder |
+| `GOOGLE_CLIENT_EMAIL` contains `your-project-id` or `GOOGLE_PRIVATE_KEY` contains `MIIEvgIBADANBgkqhkiG9w0` | **Local mode** | Reads `.xlsx` files from `data/input/` |
+| Neither contains placeholder text | **Drive mode** | Downloads from Google Drive folder |
 
 No code changes are needed — just update the `.env` and restart.
 
@@ -195,14 +196,14 @@ No code changes are needed — just update the `.env` and restart.
 
 ## 🗓️ Configuring the Sync Schedule
 
-Control how often Drive is polled by setting `CRON_SCHEDULE` in your `.env`:
+Control how often Drive is polled by setting `CRON_SCHEDULE` in your `.env` (defaults to daily at midnight if omitted):
 
 ```env
-# Run every hour (default)
-CRON_SCHEDULE=0 * * * *
+# Run daily at midnight (default if omitted)
+CRON_SCHEDULE=0 0 * * *
 
-# Run every day at 11 PM IST (17:30 UTC)
-CRON_SCHEDULE=30 17 * * *
+# Run every hour
+CRON_SCHEDULE=0 * * * *
 
 # Run every 6 hours
 CRON_SCHEDULE=0 */6 * * *

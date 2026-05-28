@@ -30,7 +30,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
         setHasError(true);
         toast.error("Invalid passcode. Access denied.");
       }
-    } catch (err) {
+    } catch {
       toast.error("Server authorization request failed.");
     } finally {
       setIsVerifying(false);
@@ -60,7 +60,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
         </div>
 
         {/* Password Form */}
-        <form onSubmit={handleUnlock} className="flex flex-col gap-4">
+        <form onSubmit={handleUnlock} noValidate className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5 text-left">
             <label htmlFor="terminal-passcode" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
               Terminal Passcode

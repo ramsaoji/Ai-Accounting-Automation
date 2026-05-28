@@ -3,6 +3,8 @@ import path from 'path';
 import { Transaction } from '../types/accounting.types.js';
 import { Rule, RuleAlert, AlertSeverity } from './rules.types.js';
 import { logger } from '../logger/logger.js';
+import { getReport } from '../db/db.client.js';
+import { config } from '../config/config.js';
 
 /**
  * 1. Duplicate Invoice Rule
@@ -13,7 +15,7 @@ export class DuplicateInvoiceRule implements Rule {
   name = 'Duplicate Invoice Check';
   description = 'Detects multiple transactions sharing the same invoice number';
 
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
     const invoiceGroups = new Map<string, Transaction[]>();
 
@@ -63,7 +65,7 @@ export class HighExpenseRule implements Rule {
 
   constructor(private threshold: number = 50000) {}
 
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
 
     for (const tx of transactions) {
@@ -95,7 +97,7 @@ export class SuspiciousSpikeRule implements Rule {
   name = 'Suspicious Category Spike';
   description = 'Flags transactions exceeding 3x the average amount for their category';
 
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
     const categoryValues = new Map<string, number[]>();
 
@@ -147,7 +149,7 @@ export class OffHoursTransactionRule implements Rule {
   name = 'Off-Hours Transaction';
   description = 'Flags transactions executed during weekends or late nights (11 PM - 5 AM)';
 
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
 
     for (const tx of transactions) {
@@ -209,7 +211,7 @@ export class NegativeOrZeroTransactionRule implements Rule {
   name = 'Negative or Zero Transaction Value';
   description = 'Flags transactions carrying zero or negative amounts';
 
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
 
     for (const tx of transactions) {
@@ -237,7 +239,7 @@ export class DuplicateDateRule implements Rule {
   name = 'Duplicate Daily Register Date';
   description = 'Detects duplicate transaction entries for the same date and category in daily registers';
 
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
     const seenKeys = new Map<string, Transaction>();
 
@@ -281,7 +283,7 @@ export class CrossWorkbookReconciliationRule implements Rule {
   name = 'Cross-Workbook Reconciliation';
   description = 'Reconciles Credit Extended & Recovery between Daily Sales Register and Debitors Ledger';
 
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
     const outputDir = path.resolve(process.cwd(), 'data', 'output');
 
@@ -289,11 +291,23 @@ export class CrossWorkbookReconciliationRule implements Rule {
     const isDebitorsList = transactions.some(t => t.invoiceNumber.startsWith('UD-DB') || t.invoiceNumber.startsWith('UD-CR'));
 
     if (hasSalesCategory) {
-      const debitorsSummaryPath = path.join(outputDir, 'DEBITORS LIST', 'summary.json');
-      if (fs.existsSync(debitorsSummaryPath)) {
+      let summary: any = null;
+      if (config.DATABASE_URL) {
+        summary = await getReport('debitors');
+      } else {
+        const debitorsSummaryPath = path.join(outputDir, 'DEBITORS LIST', 'summary.json');
+        if (fs.existsSync(debitorsSummaryPath)) {
+          try {
+            const raw = fs.readFileSync(debitorsSummaryPath, 'utf8');
+            summary = JSON.parse(raw);
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      if (summary) {
         try {
-          const raw = fs.readFileSync(debitorsSummaryPath, 'utf8');
-          const summary = JSON.parse(raw);
           const debTotalDebit = summary.aggregates?.totalDebitSum || 0;
           const debTotalCredit = summary.aggregates?.totalCreditSum || 0;
 
@@ -324,11 +338,23 @@ export class CrossWorkbookReconciliationRule implements Rule {
         }
       }
     } else if (isDebitorsList) {
-      const salesSummaryPath = path.join(outputDir, 'Hotel Gaurav Daily Sales Register', 'summary.json');
-      if (fs.existsSync(salesSummaryPath)) {
+      let summary: any = null;
+      if (config.DATABASE_URL) {
+        summary = await getReport('sales');
+      } else {
+        const salesSummaryPath = path.join(outputDir, 'Hotel Gaurav Daily Sales Register', 'summary.json');
+        if (fs.existsSync(salesSummaryPath)) {
+          try {
+            const raw = fs.readFileSync(salesSummaryPath, 'utf8');
+            summary = JSON.parse(raw);
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      if (summary) {
         try {
-          const raw = fs.readFileSync(salesSummaryPath, 'utf8');
-          const summary = JSON.parse(raw);
           const salesTotalDebit = summary.masterTotals?.creditExtended || 0;
           const salesTotalCredit = summary.masterTotals?.creditRecovery || 0;
 
@@ -392,14 +418,14 @@ export class RulesEngine {
   /**
    * Evaluates all registered rules against a set of transactions.
    */
-  evaluate(transactions: Transaction[]): RuleAlert[] {
+  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     logger.info({ ruleCount: this.rules.length, transactionCount: transactions.length }, 'Evaluating accounting rules');
     
     const allAlerts: RuleAlert[] = [];
 
     for (const rule of this.rules) {
       try {
-        const ruleAlerts = rule.evaluate(transactions);
+        const ruleAlerts = await rule.evaluate(transactions);
         if (ruleAlerts.length > 0) {
           logger.info({ ruleId: rule.id, alertCount: ruleAlerts.length }, 'Rule generated alerts');
           allAlerts.push(...ruleAlerts);

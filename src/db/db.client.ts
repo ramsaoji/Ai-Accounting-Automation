@@ -23,6 +23,7 @@ let isInitialized = false;
 
 /**
  * Initializes the database by creating the required reports table if it doesn't exist.
+ * Must be called once at startup — do NOT call inside per-query methods.
  */
 export async function initDb(): Promise<void> {
   if (!pool) return;
@@ -45,18 +46,22 @@ export async function initDb(): Promise<void> {
 
 /**
  * Upserts a financial report JSON payload into the database.
+ * Assumes initDb() has already been called at startup.
  */
-export async function saveReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config', data: any): Promise<void> {
+export async function saveReport(
+  reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config',
+  data: unknown
+): Promise<void> {
   if (!pool) return;
   try {
-    await initDb(); // Ensure table exists
     const query = `
       INSERT INTO financial_reports (report_type, data, updated_at)
       VALUES ($1, $2, NOW())
       ON CONFLICT (report_type)
       DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();
     `;
-    await pool.query(query, [reportType, JSON.stringify(data)]);
+    // Pass data directly — pg driver serializes objects to JSONB without double-stringify
+    await pool.query(query, [reportType, data]);
     logger.info({ reportType }, 'Saved report summary to Neon DB');
   } catch (err) {
     logger.error({ err, reportType }, 'Failed to save report to Neon DB');
@@ -65,11 +70,13 @@ export async function saveReport(reportType: 'sales' | 'debitors' | 'daily-sales
 
 /**
  * Retrieves a financial report JSON payload from the database.
+ * Assumes initDb() has already been called at startup.
  */
-export async function getReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config'): Promise<any | null> {
+export async function getReport(
+  reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config'
+): Promise<unknown> {
   if (!pool) return null;
   try {
-    await initDb(); // Ensure table exists
     const result = await pool.query('SELECT data FROM financial_reports WHERE report_type = $1', [reportType]);
     if (result.rows.length === 0) return null;
     return result.rows[0].data;
@@ -81,17 +88,17 @@ export async function getReport(reportType: 'sales' | 'debitors' | 'daily-sales'
 
 /**
  * Initializes the default security config inside Neon DB if not already existing.
+ * Must be called once at startup after initDb().
  */
 export async function initSecurityConfig(): Promise<void> {
   if (!pool) return;
   try {
-    await initDb();
     const existing = await getReport('security-config');
     if (!existing) {
       logger.info('No security config found in Neon DB. Initializing with credentials configured in .env...');
       const defaultData = {
         uploadPassword: await argon2.hash(config.UPLOAD_PASSWORD),
-        appPassword: await argon2.hash(config.APP_PASSWORD)
+        appPassword: await argon2.hash(config.APP_PASSWORD),
       };
       await saveReport('security-config', defaultData);
     } else {

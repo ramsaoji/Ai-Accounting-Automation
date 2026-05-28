@@ -48,20 +48,35 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
   const [passcode, setPasscode] = useState('');
   const [primarySigner, setPrimarySigner] = useState('Senior Bookkeeper');
   const [secondarySigner, setSecondarySigner] = useState('General Manager');
+  const [authErrors, setAuthErrors] = useState<{
+    secondarySigner?: string;
+    passcode?: string;
+  }>({});
 
   const handleAuthorizeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const newErrors: typeof authErrors = {};
+
+    if (!secondarySigner.trim()) {
+      newErrors.secondarySigner = 'Please enter the name of the Authorizing Manager.';
+    }
     if (!passcode.trim()) {
-      toast.error('Please enter a valid secondary authorization PIN.');
+      newErrors.passcode = 'Please enter a valid secondary authorization PIN.';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setAuthErrors(newErrors);
       return;
     }
-    
+
+    setAuthErrors({});
     if (activeActionModal) {
       if (!acknowledgedAlerts.includes(activeActionModal.message)) {
         setAcknowledgedAlerts(prev => [...prev, activeActionModal.message]);
       }
       toast.success(`Dual-Authorization Approved! Bill signed off by ${secondarySigner} and marked as Resolved.`);
       setActiveActionModal(null);
+      setPasscode('');
     }
   };
 
@@ -592,7 +607,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
             </div>
 
             {/* Modal Body / Form */}
-            <form onSubmit={handleAuthorizeSubmit} className="p-6 flex flex-col gap-5">
+            <form onSubmit={handleAuthorizeSubmit} noValidate className="p-6 flex flex-col gap-5">
               {/* Flagged Item Details */}
               <div className="flex flex-col gap-1.5 p-3 rounded-lg border bg-muted/30">
                 <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-widest">Flagged Ledger Exception</span>
@@ -617,33 +632,60 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                   <span className="text-[0.55rem] text-muted-foreground mt-0.5">Senior Accountant</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <label htmlFor="secondary-signer" className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Secondary Signer</label>
+                  <label htmlFor="secondary-signer" className={`text-[0.58rem] font-bold uppercase tracking-wider ${authErrors.secondarySigner ? 'text-destructive' : 'text-muted-foreground'}`}>Secondary Signer</label>
                   <input
                     id="secondary-signer"
                     type="text"
                     value={secondarySigner}
-                    onChange={(e) => setSecondarySigner(e.target.value)}
+                    onChange={(e) => {
+                      setSecondarySigner(e.target.value);
+                      if (authErrors.secondarySigner) {
+                        setAuthErrors(prev => ({ ...prev, secondarySigner: undefined }));
+                      }
+                    }}
                     aria-label="Secondary Signer (Authorizing Manager)"
-                    className="h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-background text-foreground"
-                    required
+                    className={`h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-background text-foreground transition-all focus:outline-none focus:ring-1 ${
+                      authErrors.secondarySigner
+                        ? 'border-destructive focus:ring-destructive focus:border-destructive'
+                        : 'border-border focus:ring-primary focus:border-primary'
+                    }`}
                   />
-                  <span className="text-[0.55rem] text-muted-foreground mt-0.5">Authorizing Manager</span>
+                  {authErrors.secondarySigner ? (
+                    <span className="text-[10px] text-destructive font-semibold mt-1">
+                      {authErrors.secondarySigner}
+                    </span>
+                  ) : (
+                    <span className="text-[0.55rem] text-muted-foreground mt-0.5">Authorizing Manager</span>
+                  )}
                 </div>
               </div>
 
               {/* PIN / Code Input */}
               <div className="flex flex-col gap-1">
-                <label htmlFor="manager-pin" className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider">Manager Authorization PIN</label>
+                <label htmlFor="manager-pin" className={`text-[0.58rem] font-bold uppercase tracking-wider ${authErrors.passcode ? 'text-destructive' : 'text-muted-foreground'}`}>Manager Authorization PIN</label>
                 <input
                   id="manager-pin"
                   type="password"
                   placeholder="Enter 4-digit security PIN (e.g. 1234)"
                   value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
+                  onChange={(e) => {
+                    setPasscode(e.target.value);
+                    if (authErrors.passcode) {
+                      setAuthErrors(prev => ({ ...prev, passcode: undefined }));
+                    }
+                  }}
                   aria-label="Manager Authorization PIN"
-                  className="h-9.5 border rounded-lg px-3 text-xs bg-background text-foreground"
-                  required
+                  className={`h-9.5 border rounded-lg px-3 text-xs bg-background text-foreground transition-all focus:outline-none focus:ring-1 ${
+                    authErrors.passcode
+                      ? 'border-destructive focus:ring-destructive focus:border-destructive'
+                      : 'border-border focus:ring-primary focus:border-primary'
+                  }`}
                 />
+                {authErrors.passcode && (
+                  <span className="text-[10px] text-destructive font-semibold mt-1">
+                    {authErrors.passcode}
+                  </span>
+                )}
               </div>
 
               {/* Footer Buttons */}
@@ -652,7 +694,10 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
                   type="button"
                   variant="outline"
                   size="default"
-                  onClick={() => setActiveActionModal(null)}
+                  onClick={() => {
+                    setActiveActionModal(null);
+                    setAuthErrors({});
+                  }}
                   className="text-xs cursor-pointer"
                 >
                   Cancel

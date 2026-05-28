@@ -8,11 +8,11 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(8080),
   DATABASE_URL: z.string().optional(),
-  
+
   // AI Config
   AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'ollama', 'groq']).default('gemini'),
   AI_MODEL: z.string().min(1, 'AI_MODEL is required'),
-  
+
   // API Keys (Conditional checks can be added at runtime depending on chosen provider)
   OPENAI_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
@@ -21,7 +21,7 @@ const envSchema = z.object({
   DEEPSEEK_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
-  
+
   // Google Config (optional — falls back to local file mode if absent/placeholder)
   GOOGLE_CLIENT_EMAIL: z.string().default('accounting-worker@your-project-id.iam.gserviceaccount.com'),
   GOOGLE_PRIVATE_KEY: z.string().default('MIIEvgIBADANBgkqhkiG9w0').transform((val) => {
@@ -29,17 +29,17 @@ const envSchema = z.object({
     return val.replace(/\\n/g, '\n');
   }),
   GOOGLE_DRIVE_FOLDER_ID: z.string().default('your_google_drive_folder_id_here'),
-  
+
   // Telegram Config (optional — skips bot/notifications if absent/placeholder)
   TELEGRAM_BOT_TOKEN: z.string().default('1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ'),
   // Comma-separated list of authorized chat IDs (e.g. "123456789,987654321")
   TELEGRAM_CHAT_ID: z.string().default('-1001234567890').transform((val) =>
     val.split(',').map((id) => id.trim()).filter(Boolean)
   ),
-  
+
   // Scheduler Config
   CRON_SCHEDULE: z.string().default('0 0 * * *'), // Default to every day at 00:00
-  
+
   // Authorization Config
   UPLOAD_PASSWORD: z.string({
     required_error: 'UPLOAD_PASSWORD must be configured in your .env file to authorize spreadsheet ingestion uploads.',
@@ -47,7 +47,23 @@ const envSchema = z.object({
   APP_PASSWORD: z.string({
     required_error: 'APP_PASSWORD must be configured in your .env file to secure the App Lock screen.',
   }).min(1, 'APP_PASSWORD must not be empty inside .env.'),
-});
+  JWT_SECRET: z.string().default('development_jwt_secret_fallback_key_12345'),
+  ENABLE_FILE_LOGGING: z.string().default('false').transform((val) => val === 'true'),
+
+  // CORS — comma-separated list of allowed production origins (e.g. "https://yourdomain.com")
+  ALLOWED_ORIGINS: z.string().optional().default('').transform((val) =>
+    val ? val.split(',').map((o) => o.trim()).filter(Boolean) : []
+  ),
+
+  // Business display name (used in AI prompts, Telegram messages, and reports)
+  BUSINESS_NAME: z.string().optional().default('Hotel Gaurav'),
+}).refine(
+  (data) => data.NODE_ENV !== 'production' || data.JWT_SECRET !== 'development_jwt_secret_fallback_key_12345',
+  {
+    message: 'JWT_SECRET must be explicitly defined and not fallback to default in production environment',
+    path: ['JWT_SECRET'],
+  }
+);
 
 // Parse and validate environment variables
 const parsedEnv = envSchema.safeParse(process.env);

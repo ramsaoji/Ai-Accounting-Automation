@@ -15,5 +15,5 @@ export interface Rule {
   id: string;
   name: string;
   description: string;
-  evaluate(transactions: Transaction[]): RuleAlert[];
+  evaluate(transactions: Transaction[]): Promise<RuleAlert[]>;
 }

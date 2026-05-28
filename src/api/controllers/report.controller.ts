@@ -1,48 +1,41 @@
-import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { getReport } from '../../db/db.client.js';
 import { orchestratorService } from '../../services/orchestrator.service.js';
 import { logger } from '../../logger/logger.js';
-import { corsHeaders } from '../cors.js';
 import { config } from '../../config/config.js';
-
-import { getSecurityCredentials, uploadSessions, verifyPasscode } from './security.controller.js';
+import { verifyToken } from './security.controller.js';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 
 /**
  * GET /api/data/sales
  * Serves real-time sales summary data (reconciled cashflow metrics and benchmarks).
  */
-export function getSalesReport(req: http.IncomingMessage, res: http.ServerResponse): void {
+export async function getSalesReport(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const isDbActive = !!config.DATABASE_URL;
 
   if (isDbActive) {
-    getReport('sales').then((dbData) => {
+    try {
+      const dbData = await getReport('sales');
       if (dbData) {
-        res.writeHead(200, corsHeaders);
-        res.end(JSON.stringify(dbData));
+        reply.code(200).send(dbData);
         return;
       }
-      res.writeHead(404, corsHeaders);
-      res.end(JSON.stringify({ error: 'Sales summary dataset not found in database' }));
-    }).catch((dbErr) => {
-      logger.error({ err: dbErr.message }, 'Failed to fetch sales report from database');
-      res.writeHead(404, corsHeaders);
-      res.end(JSON.stringify({ error: 'Failed to fetch sales report from database' }));
-    });
+      reply.code(404).send({ error: 'Sales summary dataset not found in database' });
+    } catch (dbErr: unknown) {
+      const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      logger.error({ err: message }, 'Failed to fetch sales report from database');
+      reply.code(503).send({ error: 'Sales report temporarily unavailable — database error' });
+    }
   } else {
-    const filePath = path.resolve(process.cwd(), 'data', 'output', 'Hotel Gaurav Daily Sales Register', 'summary.json');
-    fs.readFile(filePath, 'utf8', (err, data) => {
-      if (err) {
-        logger.error({ err, filePath }, 'Failed to read sales summary JSON file from disk');
-        res.writeHead(404, corsHeaders);
-        res.end(JSON.stringify({ error: 'Sales summary dataset not found on disk' }));
-        return;
-      }
-      res.writeHead(200, corsHeaders);
-      res.end(data);
-    });
+    const filePath = path.resolve(process.cwd(), 'data', 'output', config.BUSINESS_NAME, 'summary.json');
+    try {
+      const data = await fs.promises.readFile(filePath, 'utf8');
+      reply.code(200).send(JSON.parse(data));
+    } catch (err) {
+      logger.error({ err, filePath }, 'Failed to read sales summary JSON file from disk');
+      reply.code(404).send({ error: 'Sales summary dataset not found on disk' });
+    }
   }
 }
 
@@ -50,57 +43,59 @@ export function getSalesReport(req: http.IncomingMessage, res: http.ServerRespon
  * GET /api/data/debitors
  * Serves outstanding debtor lists, active udhari accounts, and aging statistics.
  */
-export function getDebitorsReport(req: http.IncomingMessage, res: http.ServerResponse): void {
+export async function getDebitorsReport(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const isDbActive = !!config.DATABASE_URL;
 
   if (isDbActive) {
-    getReport('debitors').then((dbData) => {
+    try {
+      const dbData = await getReport('debitors');
       if (dbData) {
-        res.writeHead(200, corsHeaders);
-        res.end(JSON.stringify(dbData));
+        reply.code(200).send(dbData);
         return;
       }
-      res.writeHead(404, corsHeaders);
-      res.end(JSON.stringify({ error: 'Debitors summary dataset not found in database' }));
-    }).catch((dbErr) => {
-      logger.error({ err: dbErr.message }, 'Failed to fetch debitors report from database');
-      res.writeHead(404, corsHeaders);
-      res.end(JSON.stringify({ error: 'Failed to fetch debitors report from database' }));
-    });
+      reply.code(404).send({ error: 'Debitors summary dataset not found in database' });
+    } catch (dbErr: unknown) {
+      const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      logger.error({ err: message }, 'Failed to fetch debitors report from database');
+      reply.code(503).send({ error: 'Debitors report temporarily unavailable — database error' });
+    }
   } else {
     const filePath = path.resolve(process.cwd(), 'data', 'output', 'DEBITORS LIST', 'summary.json');
-    fs.readFile(filePath, 'utf8', (err, data) => {
-      if (err) {
-        logger.error({ err, filePath }, 'Failed to read debitors summary JSON file from disk');
-        res.writeHead(404, corsHeaders);
-        res.end(JSON.stringify({ error: 'Debitors summary dataset not found on disk' }));
-        return;
-      }
-      res.writeHead(200, corsHeaders);
-      res.end(data);
-    });
+    try {
+      const data = await fs.promises.readFile(filePath, 'utf8');
+      reply.code(200).send(JSON.parse(data));
+    } catch (err) {
+      logger.error({ err, filePath }, 'Failed to read debitors summary JSON file from disk');
+      reply.code(404).send({ error: 'Debitors summary dataset not found on disk' });
+    }
   }
 }
 
 /**
- * POST /api/trigger-pipeline, POST /trigger-pipeline
+ * POST /api/trigger-pipeline
  * Securely triggers an immediate, asynchronous Excel sheets ingestion run.
  */
-export async function triggerPipeline(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+export async function triggerPipeline(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   logger.info('Manual pipeline execution triggered via HTTP POST request');
-  
+
+  // Concurrency guard — return early if pipeline is already running
+  if (orchestratorService.running) {
+    logger.warn('Pipeline trigger rejected: pipeline is already running.');
+    reply.code(409).send({ status: 'conflict', message: 'Pipeline is already running. Please wait for it to complete.' });
+    return;
+  }
+
   try {
     const { hasNew, newFilesCount } = await orchestratorService.checkNewFiles();
-    
+
     if (!hasNew) {
       logger.info('All spreadsheets are already up-to-date. Skipping background execution.');
-      res.writeHead(200, corsHeaders);
-      res.end(JSON.stringify({ status: 'up-to-date', message: 'All spreadsheets are already up-to-date' }));
+      reply.code(200).send({ status: 'up-to-date', message: 'All spreadsheets are already up-to-date' });
       return;
     }
 
     logger.info({ newFilesCount }, 'New files detected. Triggering background pipeline execution');
-    
+
     // Fire-and-forget in background to return early
     orchestratorService.runPipeline().then(() => {
       logger.info('Background manual pipeline execution completed successfully');
@@ -108,79 +103,78 @@ export async function triggerPipeline(req: http.IncomingMessage, res: http.Serve
       logger.error({ err }, 'Background manual HTTP pipeline run failed');
     });
 
-    res.writeHead(202, corsHeaders);
-    res.end(JSON.stringify({ status: 'processing', message: `Sync started. Ingesting ${newFilesCount} spreadsheet(s)...` }));
+    reply.code(202).send({ status: 'processing', message: `Sync started. Ingesting ${newFilesCount} spreadsheet(s)...` });
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
     logger.error({ err }, 'Failed during pre-sync check');
-    res.writeHead(500, corsHeaders);
-    res.end(JSON.stringify({ error: `Sync request failed: ${errMsg}` }));
+    reply.code(500).send({ error: 'Sync request failed due to an internal server error' });
   }
 }
 
 /**
- * POST /api/upload, POST /upload
- * Ingests an Excel file encoded as base64 in JSON body, parses and audits it dynamically.
+ * POST /api/ledger/upload
+ * Ingests an Excel file dynamically through the full pipeline.
+ * Validates file extension and session token before processing.
  */
-export function handleFileUpload(req: http.IncomingMessage, res: http.ServerResponse): void {
+export async function handleFileUpload(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   logger.info('File upload request received');
-  
-  let body = '';
-  req.on('data', chunk => {
-    body += chunk.toString();
-  });
-  req.on('end', async () => {
-    try {
-      const { fileName, fileData, password, sessionToken } = JSON.parse(body);
-      
-      const creds = await getSecurityCredentials();
-      const targetUploadPassword = creds.uploadPassword;
 
-      // 1. Authenticate Raw Password & Generate Session Token (Lockscreen Ping)
-      if (targetUploadPassword && password !== undefined) {
-        const isMatch = await verifyPasscode(targetUploadPassword, password);
-        if (isMatch) {
-          const token = crypto.randomUUID();
-          uploadSessions.add(token);
-          res.writeHead(200, corsHeaders);
-          res.end(JSON.stringify({ status: 'authorized', sessionToken: token }));
-          return;
-        } else {
-          logger.warn('Unauthorized upload attempt: invalid lockscreen password');
-          res.writeHead(401, corsHeaders);
-          res.end(JSON.stringify({ error: 'Unauthorized: Invalid upload password' }));
-          return;
-        }
-      }
+  try {
+    const creds = await (await import('./security.controller.js')).getSecurityCredentials();
+    const targetUploadPassword = creds.uploadPassword;
 
-      // 2. Validate Session Token for file uploads
-      if (targetUploadPassword) {
-        if (!sessionToken || !uploadSessions.has(sessionToken)) {
-          logger.warn({ fileName: fileName || 'unknown' }, 'Unauthorized upload attempt: invalid or expired session token');
-          res.writeHead(401, corsHeaders);
-          res.end(JSON.stringify({ error: 'Unauthorized: Invalid or expired upload session' }));
-          return;
-        }
-      }
+    let fileName: string | undefined;
+    let buffer: Buffer | undefined;
+    let sessionToken: string | undefined;
 
-      if (!fileName || !fileData) {
-        res.writeHead(400, corsHeaders);
-        res.end(JSON.stringify({ error: 'fileName and fileData (base64) are required fields' }));
+    if (request.isMultipart()) {
+      const parts = await request.file();
+      if (!parts) {
+        reply.code(400).send({ error: 'No file uploaded' });
         return;
       }
-
-      // Decode base64 to buffer
-      const buffer = Buffer.from(fileData, 'base64');
-      
-      // Process through orchestrator pipeline
-      const summary = await orchestratorService.processFileBuffer(buffer, fileName);
-
-      res.writeHead(200, corsHeaders);
-      res.end(JSON.stringify(summary));
-    } catch (err: any) {
-      logger.error({ err: err.message }, 'Error handling file upload');
-      res.writeHead(500, corsHeaders);
-      res.end(JSON.stringify({ error: 'Failed to process spreadsheet file', details: err.message }));
+      fileName = parts.filename;
+      buffer = await parts.toBuffer();
+      sessionToken = parts.fields && parts.fields.sessionToken
+        ? (parts.fields.sessionToken as { value: string }).value
+        : undefined;
+    } else {
+      const body = request.body as { fileName?: string; fileData?: string; sessionToken?: string } | undefined;
+      sessionToken = body?.sessionToken;
+      fileName = body?.fileName;
+      if (body?.fileData) {
+        buffer = Buffer.from(body.fileData, 'base64');
+      }
     }
-  });
+
+    // Validate file extension — only .xlsx files are permitted
+    if (fileName && !fileName.toLowerCase().endsWith('.xlsx')) {
+      logger.warn({ fileName }, 'Rejected upload: file is not a valid .xlsx spreadsheet');
+      reply.code(400).send({ error: 'Invalid file type: only Excel (.xlsx) spreadsheets are accepted' });
+      return;
+    }
+
+    // Validate session token for upload authorization
+    if (targetUploadPassword) {
+      const payload = sessionToken ? verifyToken(sessionToken) : null;
+      if (!payload || !payload.uploadAuthorized) {
+        logger.warn({ fileName: fileName || 'unknown' }, 'Unauthorized upload attempt: invalid or expired session token');
+        reply.code(401).send({ error: 'Unauthorized: Invalid or expired upload session' });
+        return;
+      }
+    }
+
+    if (!fileName || !buffer) {
+      reply.code(400).send({ error: 'fileName and file data are required' });
+      return;
+    }
+
+    // Process through orchestrator pipeline
+    const summary = await orchestratorService.processFileBuffer(buffer, fileName);
+
+    reply.code(200).send(summary);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err: message }, 'Error handling file upload');
+    reply.code(500).send({ error: 'Failed to process spreadsheet file' });
+  }
 }

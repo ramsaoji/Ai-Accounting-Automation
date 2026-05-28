@@ -72,7 +72,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
       } else {
         toast.error("Invalid upload password. Access denied.");
       }
-    } catch (_) {
+    } catch {
       toast.error("Security verification request failed.");
     } finally {
       setIsVerifying(false);
@@ -115,19 +115,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
     fileInputRef.current?.click();
   };
 
-  const readFileAsBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const resultString = reader.result as string;
-        const base64Data = resultString.split(',')[1];
-        resolve(base64Data);
-      };
-      reader.onerror = () => reject(new Error(`Failed to read file ${file.name}`));
-      reader.readAsDataURL(file);
-    });
-  };
-
   const handleUpload = async () => {
     if (files.length === 0) return;
 
@@ -145,19 +132,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
         const overallProgressStart = (i / files.length) * 100;
         const overallProgressWeight = 100 / files.length;
         
-        // 1. Reading file
-        setStatus('reading');
-        setProgress(Math.round(overallProgressStart + overallProgressWeight * 0.15));
-        const base64Data = await readFileAsBase64(file);
-        
-        // 2. Uploading payload
+        // 1. Uploading payload
         setStatus('uploading');
-        setProgress(Math.round(overallProgressStart + overallProgressWeight * 0.40));
+        setProgress(Math.round(overallProgressStart + overallProgressWeight * 0.35));
         
-        // 3. AI Ingestion & DB Upsert
+        // 2. AI Ingestion & DB Upsert
         setStatus('processing');
         setProgress(Math.round(overallProgressStart + overallProgressWeight * 0.75));
-        await uploadSpreadsheet(file.name, base64Data, sessionTokenRef.current);
+        await uploadSpreadsheet(file, sessionTokenRef.current);
         
         // Finished file i
         setProgress(Math.round(((i + 1) / files.length) * 100));

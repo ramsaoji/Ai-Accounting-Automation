@@ -175,7 +175,7 @@ npm run dev
 The console will output:
 ```text
 [Telegram Bot] Starting interactive bot listener loop (Long Polling)...
-[SERVER] HTTP health-check server listening for requests on port 8080
+[SERVER] Fastify HTTP server listening for requests
 ```
 
 On cloud providers like Render, the long polling loop runs continuously in the background alongside the health check endpoint — no SSL certificates or `ngrok` tunnels needed.

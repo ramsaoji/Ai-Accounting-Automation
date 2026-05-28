@@ -1,7 +1,9 @@
-import { Transaction, TransactionSchema, TransactionType, TransactionTypeSchema } from './sales.types.js';
-import { DebitorSummary } from './debitors.types.js';
+import type { Transaction, TransactionType } from './sales.types.js';
+import { TransactionSchema, TransactionTypeSchema } from './sales.types.js';
+import type { DebitorSummary } from './debitors.types.js';
 
-export { Transaction, TransactionSchema, TransactionType, TransactionTypeSchema, DebitorSummary };
+export type { Transaction, TransactionType, DebitorSummary };
+export { TransactionSchema, TransactionTypeSchema };
 
 export interface ParsingError {
   row: number;

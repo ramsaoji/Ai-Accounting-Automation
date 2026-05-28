@@ -14,7 +14,7 @@ The logging threshold is dynamically determined by the `NODE_ENV` configuration 
 * `NODE_ENV=production` or `NODE_ENV=test` (Enables `info` logging to output standard workflow status messages, parser metrics, and summary outcomes, keeping logs clean and efficient).
 
 ### Redirecting Output
-Logs are continuously piped to standard output (`stdout`) and appended inside **`data/output/system.log`**.
+Logs are continuously piped to standard output (`stdout`). Additionally, if `ENABLE_FILE_LOGGING` is set to `true` in your `.env` (default is `false`), they are also appended inside **`data/output/system.log`**.
 To isolate failures, inspect the log output:
 ```bash
 tail -n 100 data/output/system.log

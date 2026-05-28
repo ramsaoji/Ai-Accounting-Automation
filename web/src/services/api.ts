@@ -2,11 +2,40 @@ import type { MasterSummary } from '../types';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
+// Helper to inject the app-lock session token into API requests
+function getAuthHeaders(): HeadersInit {
+  const token = sessionStorage.getItem('app_session_token') || '';
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+// Wrapper for fetch requests requiring authorization. Checks for session validity and triggers lock screen if invalid.
+async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status === 401) {
+    try {
+      const clone = res.clone();
+      const isJson = clone.headers.get('content-type')?.includes('application/json');
+      const body = isJson ? await clone.json() : {};
+      if (body?.error && (
+        body.error.includes('Missing or invalid token') || 
+        body.error.includes('Invalid or expired session')
+      )) {
+        window.dispatchEvent(new Event('auth-unauthorized'));
+      }
+    } catch {
+      // Ignore JSON/network reading failures
+    }
+  }
+  return res;
+}
+
 // Normalized parsing of backend/static response alerts
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mapMasterSummary(data: any, isDebitors: boolean): MasterSummary {
   return {
     ...data,
     runTimestamp: data.runTimestamp || data.timestamp || new Date().toLocaleString(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     alerts: data.alerts ? data.alerts.map((a: any) => ({
       ruleId: a.ruleId,
       ruleName: a.ruleName,
@@ -30,8 +59,8 @@ export async function fetchAccountingData(): Promise<SyncResult> {
   // Concurrent live API fetch
   try {
     const [salesRes, debitorsRes] = await Promise.all([
-      fetch(`${apiBaseUrl}/api/data/sales`),
-      fetch(`${apiBaseUrl}/api/data/debitors`)
+      authFetch(`${apiBaseUrl}/api/data/sales`, { headers: getAuthHeaders() }),
+      authFetch(`${apiBaseUrl}/api/data/debitors`, { headers: getAuthHeaders() })
     ]);
 
     const sales = salesRes.ok ? mapMasterSummary(await salesRes.json(), false) : null;
@@ -62,10 +91,11 @@ export async function sendAdvisorChatMessage(
   history: { sender: 'user' | 'ai'; text: string }[]
 ): Promise<string> {
   try {
-    const res = await fetch(`${apiBaseUrl}/api/chat`, {
+    const res = await authFetch(`${apiBaseUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...getAuthHeaders()
       },
       body: JSON.stringify({
         message,
@@ -135,10 +165,11 @@ function generateOfflineHeuristicResponse(query: string, isDebitors: boolean, su
  */
 export async function verifyUploadPassword(password: string): Promise<string | null> {
   try {
-    const res = await fetch(`${apiBaseUrl}/api/upload`, {
+    const res = await fetch(`${apiBaseUrl}/api/security/verify-upload`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...getAuthHeaders()
       },
       body: JSON.stringify({
         password
@@ -149,25 +180,27 @@ export async function verifyUploadPassword(password: string): Promise<string | n
       return data.sessionToken || null;
     }
     return null;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
 
 /**
- * Uploads an Excel ledger spreadsheet and parses/audits it in real-time.
+ * Uploads an Excel ledger spreadsheet and parses/audits it in real-time using streaming multipart uploads.
  */
-export async function uploadSpreadsheet(fileName: string, base64Data: string, sessionToken?: string): Promise<MasterSummary> {
-  const res = await fetch(`${apiBaseUrl}/api/upload`, {
+export async function uploadSpreadsheet(file: File, sessionToken?: string): Promise<MasterSummary> {
+  const formData = new FormData();
+  if (sessionToken) {
+    formData.append('sessionToken', sessionToken);
+  }
+  formData.append('file', file, file.name);
+
+  const res = await authFetch(`${apiBaseUrl}/api/ledger/upload`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      ...getAuthHeaders()
     },
-    body: JSON.stringify({
-      fileName,
-      fileData: base64Data,
-      sessionToken
-    })
+    body: formData
   });
 
   if (!res.ok) {
@@ -176,7 +209,7 @@ export async function uploadSpreadsheet(fileName: string, base64Data: string, se
   }
 
   const summary = await res.json();
-  const isDebitors = fileName.toUpperCase().includes('DEBITORS') || summary.isDebitorsList === true;
+  const isDebitors = file.name.toUpperCase().includes('DEBITORS') || summary.isDebitorsList === true;
   return mapMasterSummary(summary, isDebitors);
 }
 
@@ -184,8 +217,9 @@ export async function uploadSpreadsheet(fileName: string, base64Data: string, se
  * Triggers the backend AI accounting pipeline to sync with Google Drive.
  */
 export async function triggerDriveSync(): Promise<{ status: 'up-to-date' | 'processing'; message: string }> {
-  const res = await fetch(`${apiBaseUrl}/api/trigger-pipeline`, {
+  const res = await authFetch(`${apiBaseUrl}/api/trigger-pipeline`, {
     method: 'POST',
+    headers: getAuthHeaders()
   });
 
   if (!res.ok) {
@@ -244,10 +278,11 @@ export async function changeSecurityPasswords(
   newAppPassword?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch(`${apiBaseUrl}/api/security/change`, {
+    const res = await authFetch(`${apiBaseUrl}/api/security/change`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...getAuthHeaders()
       },
       body: JSON.stringify({
         currentPassword,
@@ -260,9 +295,9 @@ export async function changeSecurityPasswords(
     }
     const data = await res.json().catch(() => ({}));
     return { success: false, error: data.error || 'Server rejected password update request' };
-  } catch (err: any) {
+  } catch (err) {
     console.error('Failed to update passwords:', err);
-    return { success: false, error: err.message || 'Connection failed' };
+    const errMsg = err instanceof Error ? err.message : 'Connection failed';
+    return { success: false, error: errMsg };
   }
 }
-

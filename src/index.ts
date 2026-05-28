@@ -1,10 +1,9 @@
-import http from 'http';
 import { schedulerJob } from './scheduler/scheduler.job.js';
 import { config } from './config/config.js';
 import { logger } from './logger/logger.js';
 import { telegramBot } from './telegram/telegram.bot.js';
 import { initDb, initSecurityConfig } from './db/db.client.js';
-import { handleRequest } from './api/router.js';
+import { createFastifyApp } from './api/fastify.app.js';
 
 // 0. Initialize Neon DB if configured
 initDb().then(async () => {
@@ -28,11 +27,15 @@ try {
   logger.error({ err }, 'Failed to start interactive Telegram Bot listener. Proceeding with core services.');
 }
 
-// 2. Spin up a lightweight native HTTP server delegating to the modular router
-const server = http.createServer(handleRequest);
-
+// 2. Spin up Fastify server
+const app = createFastifyApp();
 const PORT = config.PORT || 8080;
-server.listen(PORT, () => {
+
+app.listen({ port: PORT, host: '0.0.0.0' }, (err) => {
+  if (err) {
+    logger.fatal({ err }, 'Failed to start Fastify server. Exiting.');
+    process.exit(1);
+  }
   logger.info(
     { 
       port: PORT, 
@@ -40,12 +43,12 @@ server.listen(PORT, () => {
       aiProvider: config.AI_PROVIDER,
       aiModel: config.AI_MODEL 
     }, 
-    '[SERVER] HTTP server listening for requests'
+    '[SERVER] Fastify HTTP server listening for requests'
   );
 });
 
 // 3. Graceful Shutdown handlers
-const shutdown = (signal: string) => {
+const shutdown = async (signal: string) => {
   logger.info(`Received ${signal}. Starting graceful shutdown...`);
   
   // Stop scheduler
@@ -58,12 +61,16 @@ const shutdown = (signal: string) => {
     logger.error({ err }, 'Error stopping Telegram Bot during shutdown');
   }
 
-  // Close HTTP server
-  server.close(() => {
-    logger.info('HTTP healthcheck server closed.');
+  // Close Fastify server
+  try {
+    await app.close();
+    logger.info('HTTP healthcheck Fastify server closed.');
     logger.info('Service shutdown complete. Goodbye!');
     process.exit(0);
-  });
+  } catch (err) {
+    logger.error({ err }, 'Error closing Fastify server during shutdown');
+    process.exit(1);
+  }
 
   // Force exit after 10s if sockets remain open
   setTimeout(() => {
@@ -74,4 +81,4 @@ const shutdown = (signal: string) => {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
-export default server;
+export default app;

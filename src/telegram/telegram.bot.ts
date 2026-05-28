@@ -94,7 +94,10 @@ export class TelegramBot {
         if (data.ok && data.result && data.result.length > 0) {
           for (const update of data.result) {
             this.offset = update.update_id + 1;
-            await this.handleUpdate(update);
+            // Run update asynchronously without blocking the polling queue
+            this.handleUpdate(update).catch((err) => {
+              logger.error({ err, updateId: update.update_id }, 'Error handling background Telegram update');
+            });
           }
         }
       } catch (error: any) {
