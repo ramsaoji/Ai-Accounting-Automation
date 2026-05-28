@@ -59,8 +59,14 @@ export async function fetchAccountingData(): Promise<SyncResult> {
   // Concurrent live API fetch
   try {
     const [salesRes, debitorsRes] = await Promise.all([
-      authFetch(`${apiBaseUrl}/api/data/sales`, { headers: getAuthHeaders() }),
-      authFetch(`${apiBaseUrl}/api/data/debitors`, { headers: getAuthHeaders() })
+      authFetch(`${apiBaseUrl}/api/data/sales?t=${Date.now()}`, {
+        headers: getAuthHeaders(),
+        cache: 'no-store'
+      }),
+      authFetch(`${apiBaseUrl}/api/data/debitors?t=${Date.now()}`, {
+        headers: getAuthHeaders(),
+        cache: 'no-store'
+      })
     ]);
 
     const sales = salesRes.ok ? mapMasterSummary(await salesRes.json(), false) : null;
@@ -235,7 +241,9 @@ export async function triggerDriveSync(): Promise<{ status: 'up-to-date' | 'proc
  */
 export async function fetchSystemHealth(): Promise<{ cron: string; status: string } | null> {
   try {
-    const res = await fetch(`${apiBaseUrl}/health`);
+    const res = await fetch(`${apiBaseUrl}/health?t=${Date.now()}`, {
+      cache: 'no-store'
+    });
     if (res.ok) {
       return await res.json();
     }

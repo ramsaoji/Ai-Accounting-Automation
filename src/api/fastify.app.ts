@@ -22,6 +22,14 @@ export function createFastifyApp() {
     },
   });
 
+  // Global hook to disable caching on all API responses
+  app.addHook('onSend', async (request, reply, payload) => {
+    reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    reply.header('Pragma', 'no-cache');
+    reply.header('Expires', '0');
+    return payload;
+  });
+
   // Dynamic CORS registration — origins come from the Zod-validated config schema
   app.register(FastifyCors, {
     origin: (origin, cb) => {

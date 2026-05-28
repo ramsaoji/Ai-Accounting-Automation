@@ -111,6 +111,7 @@ export function App() {
       
       if (result.status === 'up-to-date') {
         setIsSyncingDrive(false);
+        await fetchRealData();
         toast.success('Google Drive is already up-to-date!', { id: toastId });
         return;
       }
@@ -118,7 +119,7 @@ export function App() {
       toast.loading('Google Drive sync requested. Ingesting worksheets...', { id: toastId });
 
       let attempts = 0;
-      const maxAttempts = 12; // 30 seconds max
+      const maxAttempts = 48; // 2 minutes max (48 * 2.5s)
       
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -159,6 +160,7 @@ export function App() {
               intervalRef.current = null;
             }
             setIsSyncingDrive(false);
+            await fetchRealData();
             toast.error('Sync polling timed out. Check backend logs.', { id: toastId });
           }
         }
