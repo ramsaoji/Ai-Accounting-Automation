@@ -40,8 +40,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/95 backdrop-blur-md select-none animate-in fade-in duration-300">
-      <div className="w-full max-w-sm px-6 py-8 border rounded-2xl bg-card/60 shadow-lg text-center flex flex-col gap-6 mx-4">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/95 backdrop-blur-md select-none animate-in fade-in duration-300 p-4">
+      <div className="w-full max-w-[calc(100%-2rem)] sm:max-w-sm px-6 py-8 border rounded-2xl bg-card/60 shadow-lg text-center flex flex-col gap-6">
         {/* Top Header Badge */}
         <div className="flex flex-col items-center gap-3">
           <div className={`size-14 rounded-full flex items-center justify-center border transition-all duration-300 ${

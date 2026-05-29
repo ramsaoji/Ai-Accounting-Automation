@@ -5,7 +5,7 @@ import { config } from '../../config/config.js';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { sendError, Errors } from '../errors.js';
+import { Errors } from '../errors.js';
 
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
 
@@ -201,11 +201,12 @@ export async function verifyAppPassword(
     if (isMatch) {
       const durationSeconds = remember ? 604800 : 86400; // 7 days or 24 hours
       const token = signToken({ appLockAuthorized: true }, durationSeconds);
+      const isProd = config.NODE_ENV === 'production';
 
       reply.setCookie('app_session_token', token, {
         httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: isProd,
+        sameSite: isProd ? 'none' : 'lax',
         path: '/',
         maxAge: remember ? 604800 : undefined,
       });
@@ -292,8 +293,11 @@ export async function logoutUser(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
+  const isProd = config.NODE_ENV === 'production';
   reply.clearCookie('app_session_token', {
     path: '/',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
   });
   reply.code(200).send({ status: 'success', message: 'Logged out successfully' });
 }
