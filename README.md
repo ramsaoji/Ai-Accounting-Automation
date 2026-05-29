@@ -45,10 +45,10 @@ ai-accounting-automation/
 │   │   ├── controllers/
 │   │   │   ├── chat.controller.ts     # Zod validation & LLM advisor chat endpoint
 │   │   │   ├── health.controller.ts   # Healthcheck server metrics endpoint
-│   │   │   ├── report.controller.ts   # Real-time report getters and multipart uploader
-│   │   │   └── security.controller.ts # Passcode verify and change credentials endpoints
-│   │   ├── fastify.app.ts        # Fastify app builder with CORS & Multipart configuration
-│   │   └── fastify.auth.ts       # Authentication middleware hook validating JWT tokens
+│   │   │   ├── report.controller.ts   # Real-time report getters and uploader
+│   │   │   └── security.controller.ts # Passcode verification (cookie sets), session status, logout, and change endpoints
+│   │   ├── fastify.app.ts        # Fastify app builder with CORS & Cookie plugin configuration
+│   │   └── fastify.auth.ts       # Authentication hook checking HttpOnly cookies first, with Bearer header fallback
 │   ├── config/
 │   │   └── config.ts             # Strongly-typed config loader & Zod validator
 │   ├── db/
@@ -86,7 +86,7 @@ ai-accounting-automation/
 │   ├── scheduler/
 │   │   └── scheduler.job.ts      # Cron job coordinator with overlapping guard
 │   ├── services/
-│   │   └── orchestrator.service.ts # Core pipeline coordinator with fail-safe alerts
+│   │   └── orchestrator.service.ts # Decoupled pipeline coordinator with parallel worker_threads spawner
 │   ├── types/
 │   │   ├── accounting.types.ts   # Core types routing hub
 │   │   ├── sales.types.ts        # Daily sales validation schemas
@@ -307,8 +307,9 @@ Define the following environment variables in your `.env` configuration file:
 
 To protect administrative functions and financial metrics, the application implements a robust, database-backed security layer:
 
-* **Fullscreen App Lock Screen**: A fullscreen glassmorphic lock screen prevents unauthorized dashboard view access. Users must type their passcode, which is validated against the database. On validation, the backend generates an ephemeral session token cached in the browser's `sessionStorage`.
-* **Upload Passcode Layer**: File uploads via the Web UI require validation of a dedicated upload passcode, blocking arbitrary ledger modifications.
+* **Fullscreen App Lock Screen**: A fullscreen glassmorphic lock screen prevents unauthorized dashboard view access. It dynamically validates session health with the backend using secure, **bank-grade HttpOnly cookies** (`app_session_token`) completely invisible to client-side scripts (immune to XSS session-theft).
+* **Double Storage Session Parity**: If the user checks **"Remember this device"** on the passcode challenge, the backend sets the HttpOnly cookie with an explicit `maxAge` of **7 days** (`604800` seconds). If unchecked, it behaves as a standard browser session-lifetime cookie (erased immediately on tab/window close).
+* **Upload Passcode Layer**: File uploads via the Web UI require validation of a dedicated upload passcode. This uses a highly secure, scoped, short-lived in-memory token within the `UploadModal` state, completely bypassing local storage and remaining immune to XSS and CSRF attack vectors.
 * **Database-Backed Credential Sync**: Security passcodes are stored securely in PostgreSQL (Neon) under the `financial_reports` table (`report_type = 'security-config'`) using high-strength **argon2 password hashing**. They initialize automatically from `.env` values on first boot and can be updated at runtime.
 * **Redesigned Tabbed Settings Modal**: A sidebar control allows administrators to change credentials dynamically. It features a tabbed interface splitting **App Lock Passcode** and **Upload Passcode** updates, including eye icon visibility toggles and strict validation matching fields before sending requests.
 

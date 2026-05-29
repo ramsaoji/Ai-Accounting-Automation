@@ -6,6 +6,7 @@ import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
 import { verifyToken } from './security.controller.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { Errors } from '../errors.js';
 
 /**
  * GET /api/data/sales
@@ -21,11 +22,11 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
         reply.code(200).send(dbData);
         return;
       }
-      reply.code(404).send({ error: 'Sales summary dataset not found in database' });
+      reply.code(404).send(Errors.notFound('Sales summary dataset'));
     } catch (dbErr: unknown) {
       const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
       logger.error({ err: message }, 'Failed to fetch sales report from database');
-      reply.code(503).send({ error: 'Sales report temporarily unavailable — database error' });
+      reply.code(503).send(Errors.databaseError('Sales report'));
     }
   } else {
     const filePath = path.resolve(process.cwd(), 'data', 'output', config.BUSINESS_NAME, 'summary.json');
@@ -34,7 +35,7 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
       reply.code(200).send(JSON.parse(data));
     } catch (err) {
       logger.error({ err, filePath }, 'Failed to read sales summary JSON file from disk');
-      reply.code(404).send({ error: 'Sales summary dataset not found on disk' });
+      reply.code(404).send(Errors.notFound('Sales summary dataset on disk'));
     }
   }
 }
@@ -53,11 +54,11 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
         reply.code(200).send(dbData);
         return;
       }
-      reply.code(404).send({ error: 'Debitors summary dataset not found in database' });
+      reply.code(404).send(Errors.notFound('Debitors summary dataset'));
     } catch (dbErr: unknown) {
       const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
       logger.error({ err: message }, 'Failed to fetch debitors report from database');
-      reply.code(503).send({ error: 'Debitors report temporarily unavailable — database error' });
+      reply.code(503).send(Errors.databaseError('Debitors report'));
     }
   } else {
     const filePath = path.resolve(process.cwd(), 'data', 'output', 'DEBITORS LIST', 'summary.json');
@@ -66,7 +67,7 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
       reply.code(200).send(JSON.parse(data));
     } catch (err) {
       logger.error({ err, filePath }, 'Failed to read debitors summary JSON file from disk');
-      reply.code(404).send({ error: 'Debitors summary dataset not found on disk' });
+      reply.code(404).send(Errors.notFound('Debitors summary dataset on disk'));
     }
   }
 }
@@ -81,7 +82,7 @@ export async function triggerPipeline(request: FastifyRequest, reply: FastifyRep
   // Concurrency guard — return early if pipeline is already running
   if (orchestratorService.running) {
     logger.warn('Pipeline trigger rejected: pipeline is already running.');
-    reply.code(409).send({ status: 'conflict', message: 'Pipeline is already running. Please wait for it to complete.' });
+    reply.code(409).send(Errors.conflict('Pipeline is already running. Please wait for it to complete.'));
     return;
   }
 
@@ -96,7 +97,6 @@ export async function triggerPipeline(request: FastifyRequest, reply: FastifyRep
 
     logger.info({ newFilesCount }, 'New files detected. Triggering background pipeline execution');
 
-    // Fire-and-forget in background to return early
     orchestratorService.runPipeline().then(() => {
       logger.info('Background manual pipeline execution completed successfully');
     }).catch((err) => {
@@ -106,7 +106,7 @@ export async function triggerPipeline(request: FastifyRequest, reply: FastifyRep
     reply.code(202).send({ status: 'processing', message: `Sync started. Ingesting ${newFilesCount} spreadsheet(s)...` });
   } catch (err) {
     logger.error({ err }, 'Failed during pre-sync check');
-    reply.code(500).send({ error: 'Sync request failed due to an internal server error' });
+    reply.code(500).send(Errors.internalError('Sync request failed due to an internal server error'));
   }
 }
 
@@ -129,7 +129,7 @@ export async function handleFileUpload(request: FastifyRequest, reply: FastifyRe
     if (request.isMultipart()) {
       const parts = await request.file();
       if (!parts) {
-        reply.code(400).send({ error: 'No file uploaded' });
+      reply.code(400).send(Errors.badRequest('No file uploaded'));
         return;
       }
       fileName = parts.filename;
@@ -146,35 +146,31 @@ export async function handleFileUpload(request: FastifyRequest, reply: FastifyRe
       }
     }
 
-    // Validate file extension — only .xlsx files are permitted
     if (fileName && !fileName.toLowerCase().endsWith('.xlsx')) {
       logger.warn({ fileName }, 'Rejected upload: file is not a valid .xlsx spreadsheet');
-      reply.code(400).send({ error: 'Invalid file type: only Excel (.xlsx) spreadsheets are accepted' });
+      reply.code(400).send(Errors.badRequest('Invalid file type: only Excel (.xlsx) spreadsheets are accepted'));
       return;
     }
 
-    // Validate session token for upload authorization
     if (targetUploadPassword) {
       const payload = sessionToken ? verifyToken(sessionToken) : null;
       if (!payload || !payload.uploadAuthorized) {
         logger.warn({ fileName: fileName || 'unknown' }, 'Unauthorized upload attempt: invalid or expired session token');
-        reply.code(401).send({ error: 'Unauthorized: Invalid or expired upload session' });
+        reply.code(401).send(Errors.unauthorized('Invalid or expired upload session'));
         return;
       }
     }
 
     if (!fileName || !buffer) {
-      reply.code(400).send({ error: 'fileName and file data are required' });
+      reply.code(400).send(Errors.badRequest('fileName and file data are required'));
       return;
     }
 
-    // Process through orchestrator pipeline
     const summary = await orchestratorService.processFileBuffer(buffer, fileName);
-
     reply.code(200).send(summary);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err: message }, 'Error handling file upload');
-    reply.code(500).send({ error: 'Failed to process spreadsheet file' });
+    reply.code(500).send(Errors.internalError('Failed to process spreadsheet file'));
   }
 }

@@ -10,7 +10,10 @@ function getAuthHeaders(): HeadersInit {
 
 // Wrapper for fetch requests requiring authorization. Checks for session validity and triggers lock screen if invalid.
 async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const res = await fetch(input, init);
+  const res = await fetch(input, {
+    ...init,
+    credentials: 'include',
+  });
   if (res.status === 401) {
     try {
       const clone = res.clone();
@@ -59,11 +62,11 @@ export async function fetchAccountingData(): Promise<SyncResult> {
   // Concurrent live API fetch
   try {
     const [salesRes, debitorsRes] = await Promise.all([
-      authFetch(`${apiBaseUrl}/api/data/sales?t=${Date.now()}`, {
+      authFetch(`${apiBaseUrl}/api/v1/data/sales?t=${Date.now()}`, {
         headers: getAuthHeaders(),
         cache: 'no-store'
       }),
-      authFetch(`${apiBaseUrl}/api/data/debitors?t=${Date.now()}`, {
+      authFetch(`${apiBaseUrl}/api/v1/data/debitors?t=${Date.now()}`, {
         headers: getAuthHeaders(),
         cache: 'no-store'
       })
@@ -97,7 +100,7 @@ export async function sendAdvisorChatMessage(
   history: { sender: 'user' | 'ai'; text: string }[]
 ): Promise<string> {
   try {
-    const res = await authFetch(`${apiBaseUrl}/api/chat`, {
+    const res = await authFetch(`${apiBaseUrl}/api/v1/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -171,7 +174,7 @@ function generateOfflineHeuristicResponse(query: string, isDebitors: boolean, su
  */
 export async function verifyUploadPassword(password: string): Promise<string | null> {
   try {
-    const res = await fetch(`${apiBaseUrl}/api/security/verify-upload`, {
+    const res = await fetch(`${apiBaseUrl}/api/v1/security/verify-upload`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -201,7 +204,7 @@ export async function uploadSpreadsheet(file: File, sessionToken?: string): Prom
   }
   formData.append('file', file, file.name);
 
-  const res = await authFetch(`${apiBaseUrl}/api/ledger/upload`, {
+  const res = await authFetch(`${apiBaseUrl}/api/v1/ledger/upload`, {
     method: 'POST',
     headers: {
       ...getAuthHeaders()
@@ -223,7 +226,7 @@ export async function uploadSpreadsheet(file: File, sessionToken?: string): Prom
  * Triggers the backend AI accounting pipeline to sync with Google Drive.
  */
 export async function triggerDriveSync(): Promise<{ status: 'up-to-date' | 'processing'; message: string }> {
-  const res = await authFetch(`${apiBaseUrl}/api/trigger-pipeline`, {
+  const res = await authFetch(`${apiBaseUrl}/api/v1/trigger-pipeline`, {
     method: 'POST',
     headers: getAuthHeaders()
   });
@@ -257,14 +260,15 @@ export async function fetchSystemHealth(): Promise<{ cron: string; status: strin
  * Verifies the app lock screen password on the backend.
  * Returns the sessionToken string on success, or null on failure.
  */
-export async function verifyAppLockPassword(password: string): Promise<string | null> {
+export async function verifyAppLockPassword(password: string, remember: boolean): Promise<string | null> {
   try {
-    const res = await fetch(`${apiBaseUrl}/api/security/verify-app`, {
+    const res = await fetch(`${apiBaseUrl}/api/v1/security/verify-app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ password })
+      body: JSON.stringify({ password, remember }),
+      credentials: 'include',
     });
     if (res.ok) {
       const data = await res.json();
@@ -286,7 +290,7 @@ export async function changeSecurityPasswords(
   newAppPassword?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await authFetch(`${apiBaseUrl}/api/security/change`, {
+    const res = await authFetch(`${apiBaseUrl}/api/v1/security/change`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -307,5 +311,35 @@ export async function changeSecurityPasswords(
     console.error('Failed to update passwords:', err);
     const errMsg = err instanceof Error ? err.message : 'Connection failed';
     return { success: false, error: errMsg };
+  }
+}
+
+/**
+ * Checks if the browser has an active valid session cookie.
+ */
+export async function checkSessionStatus(): Promise<boolean> {
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/security/status`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Failed to check session status:', err);
+    return false;
+  }
+}
+
+/**
+ * Logs out the user by clearing the HttpOnly cookie.
+ */
+export async function logoutUser(): Promise<void> {
+  try {
+    await fetch(`${apiBaseUrl}/api/security/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch (err) {
+    console.error('Failed to logout:', err);
   }
 }

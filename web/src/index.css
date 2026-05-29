@@ -161,10 +161,21 @@
 
   body {
     @apply bg-background text-foreground;
+    /* Prevents 300ms tap delay on all tappable elements globally */
+    touch-action: manipulation;
   }
+
+  /* Momentum scrolling on iOS for any overflow-y container */
+  [data-slot="main"], main, [role="main"], .overflow-y-auto, .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
+    /* Eliminate per-tap 300ms delay globally without JS */
+    touch-action: manipulation;
   }
+
   html {
     @apply font-sans;
   }
@@ -343,8 +354,7 @@
 }
 
 .dark .cn-toast {
-  background: oklch(0.18 0.01 277 / 85%) !important;
-  backdrop-filter: blur(16px) !important;
+  background: oklch(0.18 0.01 277) !important;
   border: 1px solid oklch(1 0 0 / 12%) !important;
   box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.2) !important;
 }

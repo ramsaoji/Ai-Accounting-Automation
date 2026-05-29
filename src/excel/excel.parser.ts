@@ -4,6 +4,7 @@ import { extractStringValue } from './excel.mapper.js';
 import { parseDebitorsWorkbook } from './parsers/debitors.parser.js';
 import { parseHotelGauravSheet, parseStandardSheet } from './parsers/sales.parser.js';
 import { logger } from '../logger/logger.js';
+import { config } from '../config/config.js';
 
 // =========================================================================
 // 🚀 RUNTIME MONKEY PATCH: Bypass ExcelJS "History" tab name protection bug
@@ -57,7 +58,7 @@ export class ExcelParser {
       const row3_col5 = extractStringValue(sheet.getRow(3).getCell(5).value).toLowerCase();
       const row3_col6 = extractStringValue(sheet.getRow(3).getCell(6).value).toLowerCase();
 
-      const hasHotelName = row1Val.includes('hotel gaurav');
+      const hasHotelName = row1Val.includes(config.BUSINESS_NAME.toLowerCase());
       const hasDailySalesHeaders = 
         row3_col6.includes('udhari jama') && 
         (row3_col4.includes('liquor') || row3_col4.includes('wine') || row3_col5.includes('food') || row3_col4.includes('sale'));

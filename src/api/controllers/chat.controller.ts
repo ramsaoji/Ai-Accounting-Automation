@@ -6,6 +6,7 @@ import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
 import { z } from 'zod';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { Errors } from '../errors.js';
 
 export const chatSchema = z.object({
   message: z.string().min(1, 'Message is required').max(4000, 'Message must not exceed 4000 characters'),
@@ -29,12 +30,7 @@ export async function handleAdvisorChat(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const parseResult = chatSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      reply.code(400).send({ error: 'Invalid request payload: message and workspace are required' });
-      return;
-    }
-    const { message, workspace, history } = parseResult.data;
+    const { message, workspace, history } = request.body;
 
     // Determine correct summary file based on requested workspace
     const isDebitors = workspace === 'debitors';
@@ -52,20 +48,20 @@ export async function handleAdvisorChat(
       }
 
       if (!summaryJson) {
-        reply.code(404).send({ error: 'Summary data not found in database. Please upload spreadsheets.' });
+        reply.code(404).send(Errors.notFound('Summary data in database. Please upload spreadsheets.'));
         return;
       }
     } else {
       const folderName = isDebitors ? 'DEBITORS LIST' : config.BUSINESS_NAME;
       const filePath = path.resolve(process.cwd(), 'data', 'output', folderName, 'summary.json');
 
-      if (!fs.existsSync(filePath)) {
-        reply.code(404).send({ error: 'Summary data not found on disk. Please trigger pipeline.' });
+      try {
+        const raw = await fs.promises.readFile(filePath, 'utf8');
+        summaryJson = JSON.parse(raw);
+      } catch {
+        reply.code(404).send(Errors.notFound('Summary data on disk. Please trigger pipeline.'));
         return;
       }
-
-      const rawSummaryData = fs.readFileSync(filePath, 'utf8');
-      summaryJson = JSON.parse(rawSummaryData);
     }
 
     // Cast for downstream usage — summaryJson comes from controlled DB/file output
@@ -178,6 +174,6 @@ ${conversationHistoryPrompt}
     reply.code(200).send({ text: aiResponse.trim() });
   } catch (err: unknown) {
     logger.error({ err }, 'Error in chat API handler');
-    reply.code(500).send({ error: 'AI advisor failed to generate response' });
+    reply.code(500).send(Errors.internalError('AI advisor failed to generate response'));
   }
 }

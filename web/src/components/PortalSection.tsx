@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import type { MasterSummary, MonthlySummary, DebitorSummary } from '../types';
 
 import {
   ArrowRight,
@@ -15,8 +16,8 @@ import {
 const PortalCharts = React.lazy(() => import('./PortalCharts'));
 
 interface PortalSectionProps {
-  salesData: any;
-  debitorsData: any;
+  salesData: MasterSummary | null;
+  debitorsData: MasterSummary | null;
   salesAlertCount: number;
   debitorsAlertCount: number;
   onLaunchWorkspace: (workspace: 'sales' | 'debitors', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
@@ -31,6 +32,11 @@ interface PortalStat {
   critical?: boolean;
 }
 
+interface SparklineItem {
+  net?: number;
+  pending?: number;
+}
+
 interface PortalItem {
   id: string;
   title: string;
@@ -40,7 +46,7 @@ interface PortalItem {
   stats: PortalStat[];
   alertCount: number;
   tags: string[];
-  sparkline: any[];
+  sparkline: SparklineItem[];
   dataKey: string;
   stroke: string;
 }
@@ -117,13 +123,13 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
         lastUpdated: salesData ? formatTimestamp(salesData.runTimestamp) : 'Never',
         stats: [
           { label: 'Consolidated Inflows', value: salesData ? formatINRValue(salesData.masterTotals?.totalInflows) : '—' },
-          { label: 'Net Cash Surplus', value: salesData ? formatINRValue(salesData.masterTotals?.netCashflow) : '—', positive: salesData ? (salesData.masterTotals?.netCashflow >= 0) : undefined },
+          { label: 'Net Cash Surplus', value: salesData ? formatINRValue(salesData.masterTotals?.netCashflow) : '—', positive: salesData?.masterTotals?.netCashflow !== undefined ? (salesData.masterTotals.netCashflow >= 0) : undefined },
         ],
         alertCount: salesAlertCount,
         tags: salesData 
           ? ['Sales Registry', `${salesData.totalMonths || 0} Months`, `${(salesData.totalTransactions || 0).toLocaleString()} Transactions`]
           : ['Sales Registry', 'Awaiting Ingestion'],
-        sparkline: salesData?.months?.map((m: any) => ({ net: m.net })) || [],
+        sparkline: salesData?.months?.map((m: MonthlySummary) => ({ net: m.net })) || [],
         dataKey: 'net',
         stroke: 'var(--primary)'
       },
@@ -137,10 +143,10 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
           { label: 'Outstanding Balance', value: debitorsData ? formatINRValue(debitorsData.aggregates?.totalPendingSum) : '—', critical: true },
           { 
             label: 'Recovery Success', 
-            value: debitorsData 
-              ? (String(debitorsData.aggregates?.collectionSuccessRate).endsWith('%') 
-                  ? debitorsData.aggregates?.collectionSuccessRate 
-                  : `${debitorsData.aggregates?.collectionSuccessRate}%`) 
+            value: debitorsData?.aggregates?.collectionSuccessRate !== undefined 
+              ? (String(debitorsData.aggregates.collectionSuccessRate).endsWith('%') 
+                  ? String(debitorsData.aggregates.collectionSuccessRate) 
+                  : `${debitorsData.aggregates.collectionSuccessRate}%`) 
               : '—' 
           },
         ],
@@ -148,7 +154,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
         tags: debitorsData
           ? ['Debitors Ledger', `${debitorsData.aggregates?.activeDebitorsCount || 0} Customers`, 'Udhari Register']
           : ['Debitors Ledger', 'Awaiting Ingestion'],
-        sparkline: debitorsData?.topDebitors?.map((d: any) => ({ pending: d.pending })) || [],
+        sparkline: debitorsData?.topDebitors?.map((d: DebitorSummary) => ({ pending: d.pending })) || [],
         dataKey: 'pending',
         stroke: 'var(--destructive)'
       }

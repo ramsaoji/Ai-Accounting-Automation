@@ -5,8 +5,13 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
+interface SparklineItem {
+  net?: number;
+  pending?: number;
+}
+
 interface PortalChartsProps {
-  data: any[];
+  data: SparklineItem[];
   dataKey: string;
   stroke: string;
 }

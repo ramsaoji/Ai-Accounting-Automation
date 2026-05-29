@@ -8,7 +8,7 @@ interface AccountingState {
   chatHistories: Record<string, ChatMessage[]>;
 
   // Mutators
-  setToken: (token: string) => void;
+  setToken: (token: string, remember?: boolean) => void;
   clearToken: () => void;
   setActiveWorkspace: (workspace: 'sales' | 'debitors') => void;
   setActiveView: (view: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
@@ -20,21 +20,16 @@ interface AccountingState {
 }
 
 export const useAccountingStore = create<AccountingState>((set, get) => {
-  // Initialize from sessionStorage safely on client side
-  const initialToken = typeof window !== 'undefined' ? (sessionStorage.getItem('app_session_token') || '') : '';
-
   return {
-    appSessionToken: initialToken,
+    appSessionToken: '',
     activeWorkspace: 'sales',
     activeView: 'portal',
     chatHistories: {},
 
     setToken: (token) => {
-      sessionStorage.setItem('app_session_token', token);
       set({ appSessionToken: token });
     },
     clearToken: () => {
-      sessionStorage.removeItem('app_session_token');
       set({ appSessionToken: '' });
     },
     setActiveWorkspace: (workspace) => {

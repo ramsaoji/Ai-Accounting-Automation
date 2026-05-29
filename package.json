@@ -1,6 +1,7 @@
 {
   "name": "ai-accounting-automation",
   "version": "1.0.0",
+  "type": "module",
   "description": "Production-ready AI Accounting Automation Service",
   "main": "dist/index.js",
   "workspaces": [
@@ -17,6 +18,7 @@
     "generate-sample": "tsx src/scripts/generate-sample.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^10.0.0",
     "argon2": "^0.44.0",

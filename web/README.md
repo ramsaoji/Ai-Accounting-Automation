@@ -125,8 +125,8 @@ web/
 - **Offline Heuristic Fallback**: If the backend AI is unreachable, a local data-driven heuristic engine generates meaningful answers from the already-loaded ledger summary.
 
 ### 🔐 Security & Access Control
-- **Fullscreen App Lock Screen**: Displays a security lock overlay upon mounting. Users must verify their passcode on the backend (creating a browser `sessionStorage` token) before viewing the dashboard metrics.
-- **Upload Passcode Gate**: Form submissions for ledger uploads require a correct ingestion password to prevent unauthorized spreadsheet uploads.
+- **Fullscreen App Lock Screen**: Displays a security lock overlay upon mounting. It dynamically validates session health with the backend using secure, **bank-grade HttpOnly cookies** (`app_session_token`) completely invisible to client-side scripts (immune to XSS session-theft), with optional **"Remember this device"** 7-day duration scaling.
+- **Upload Passcode Gate**: Form submissions for ledger uploads require a correct ingestion password, utilizing an in-memory scoped token inside the component to prevent persistent XSS exposure and remain immune to CSRF.
 - **Tabbed Security console**: Features a dedicated settings console to update credentials in the Neon PostgreSQL database using **argon2 password hashing** on the backend. Provides side-by-side tabs for updating the App Lock passcode or the Upload passcode independently with confirmation mismatch verification and password visibility toggles (`Eye`/`EyeOff`).
 
 ---

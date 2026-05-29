@@ -5,6 +5,7 @@ import { config } from '../../config/config.js';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { sendError, Errors } from '../errors.js';
 
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ export const verifyUploadSchema = z.object({
 
 export const verifyAppSchema = z.object({
   password: z.string().min(1, 'Password is required'),
+  remember: z.boolean().optional(),
 });
 
 export const changePasswordsSchema = z.object({
@@ -151,12 +153,7 @@ export async function verifyUploadPasscode(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const parseResult = verifyUploadSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      reply.code(400).send({ error: 'Invalid request payload: password is required' });
-      return;
-    }
-    const { password } = parseResult.data;
+    const { password } = request.body;
     const creds = await getSecurityCredentials();
     const targetUploadPassword = creds.uploadPassword;
 
@@ -173,11 +170,11 @@ export async function verifyUploadPasscode(
     }
 
     logger.warn('Failed upload passcode verification attempt.');
-    reply.code(401).send({ error: 'Unauthorized: Invalid upload password' });
+    reply.code(401).send(Errors.unauthorized('Invalid upload password'));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err: message }, 'Failed during upload password verification handler');
-    reply.code(500).send({ error: 'Server error processing request' });
+    reply.code(500).send(Errors.internalError('Server error processing request'));
   }
 }
 
@@ -190,12 +187,7 @@ export async function verifyAppPassword(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const parseResult = verifyAppSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      reply.code(400).send({ error: 'Invalid request payload: password is required' });
-      return;
-    }
-    const { password } = parseResult.data;
+    const { password, remember } = request.body;
     const creds = await getSecurityCredentials();
     const targetAppPassword = creds.appPassword;
 
@@ -207,17 +199,27 @@ export async function verifyAppPassword(
 
     const isMatch = await verifyPasscode(targetAppPassword, password);
     if (isMatch) {
-      const token = signToken({ appLockAuthorized: true }, 86400); // 24 Hours validity
-      reply.code(200).send({ status: 'authorized', sessionToken: token });
+      const durationSeconds = remember ? 604800 : 86400; // 7 days or 24 hours
+      const token = signToken({ appLockAuthorized: true }, durationSeconds);
+
+      reply.setCookie('app_session_token', token, {
+        httpOnly: true,
+        secure: config.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/',
+        maxAge: remember ? 604800 : undefined,
+      });
+
+      reply.code(200).send({ status: 'authorized', sessionToken: 'active' });
       return;
     }
 
     logger.warn('Failed app-lock login attempt.');
-    reply.code(401).send({ error: 'Unauthorized: Invalid credentials entered' });
+    reply.code(401).send(Errors.unauthorized('Invalid credentials entered'));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err: message }, 'Failed during app password verification handler');
-    reply.code(500).send({ error: 'Server error processing request' });
+    reply.code(500).send(Errors.internalError('Server error processing request'));
   }
 }
 
@@ -231,19 +233,14 @@ export async function changePasswords(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const parseResult = changePasswordsSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      reply.code(400).send({ error: 'Invalid request payload: currentPassword is required' });
-      return;
-    }
-    const { currentPassword, newUploadPassword, newAppPassword } = parseResult.data;
+    const { currentPassword, newUploadPassword, newAppPassword } = request.body;
     const creds = await getSecurityCredentials();
 
     // Ensure current password matches appPassword
     if (creds.appPassword) {
       const isMatch = await verifyPasscode(creds.appPassword, currentPassword);
       if (!isMatch) {
-        reply.code(401).send({ error: 'Unauthorized: Current password verification failed.' });
+        reply.code(401).send(Errors.unauthorized('Current password verification failed'));
         return;
       }
     }
@@ -260,6 +257,43 @@ export async function changePasswords(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err: message }, 'Failed during password change execution');
-    reply.code(500).send({ error: 'Server error processing password update' });
+    reply.code(500).send(Errors.internalError('Server error processing password update'));
   }
+}
+
+/**
+ * GET /api/security/status
+ * Verifies if the request contains a valid HttpOnly cookie session.
+ */
+export async function checkSessionStatus(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  const token = request.cookies.app_session_token;
+  if (!token) {
+    reply.code(401).send({ error: 'No active session cookie found' });
+    return;
+  }
+
+  const payload = verifyToken(token);
+  if (!payload || !payload.appLockAuthorized) {
+    reply.code(401).send({ error: 'Session cookie is invalid or expired' });
+    return;
+  }
+
+  reply.code(200).send({ status: 'authorized' });
+}
+
+/**
+ * POST /api/security/logout
+ * Clears the session cookie.
+ */
+export async function logoutUser(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  reply.clearCookie('app_session_token', {
+    path: '/',
+  });
+  reply.code(200).send({ status: 'success', message: 'Logged out successfully' });
 }

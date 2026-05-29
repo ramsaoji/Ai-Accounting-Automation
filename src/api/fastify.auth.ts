@@ -13,17 +13,26 @@ export async function checkFastifyAuth(request: FastifyRequest, reply: FastifyRe
     return;
   }
 
-  const authHeader = request.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    logger.warn(`Unauthorized API access blocked: missing token for route ${request.url}`);
+  // 1. Check HttpOnly cookie first
+  let token = request.cookies.app_session_token;
+
+  // 2. Fallback to Authorization Bearer header (for Telegram bot backward compatibility)
+  if (!token) {
+    const authHeader = request.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
+
+  if (!token) {
+    logger.warn(`Unauthorized API access blocked: missing token/cookie for route ${request.url}`);
     reply.code(401).send({ error: 'Unauthorized: Missing or invalid token' });
     return;
   }
 
-  const token = authHeader.substring(7);
   const payload = verifyToken(token);
   if (!payload || !payload.appLockAuthorized) {
-    logger.warn(`Unauthorized API access blocked: invalid token for route ${request.url}`);
+    logger.warn(`Unauthorized API access blocked: invalid token/cookie for route ${request.url}`);
     reply.code(401).send({ error: 'Unauthorized: Invalid or expired session' });
     return;
   }

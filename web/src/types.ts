@@ -1,3 +1,31 @@
+/**
+ * Frontend type definitions for the AI Accounting Automation console.
+ *
+ * Types shared with the backend are re-imported via the `@backend-types` Vite alias
+ * (resolves to src/types/ in the backend). Frontend-specific types (e.g. those using
+ * string dates vs the backend's Date objects) are defined locally.
+ *
+ * Note: The Transaction and DebitorSummary types differ between frontend and backend:
+ * - Backend Transaction.date is a Date object (Zod transform)
+ * - Frontend uses string dates from JSON serialization
+ * Alert and ParsingError are structurally identical and safely shared.
+ */
+
+export interface Alert {
+  ruleId: string;
+  ruleName: string;
+  severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+}
+
+export interface ParsingError {
+  row: number;
+  invoiceNumber?: string;
+  error: string;
+}
+
+// ─── Frontend-only types ─────────────────────────────────────────────────────
+
 export interface Transaction {
   date: string;
   invoice: string;
@@ -13,18 +41,6 @@ export interface DebitorSummary {
   debit: number;
   credit: number;
   pending: number;
-}
-
-export interface Alert {
-  ruleId: string;
-  ruleName: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  message: string;
-}
-
-export interface ParsingError {
-  row: number;
-  error: string;
 }
 
 export interface MonthlySummary {
@@ -81,6 +97,8 @@ export interface MasterSummary {
   };
   topDebitors?: DebitorSummary[];
   months?: MonthlySummary[];
+  transactions?: Transaction[];
+  // Using inline imports to reference shared backend types
   alerts: Alert[];
   errors: ParsingError[];
   intelligence: string[];

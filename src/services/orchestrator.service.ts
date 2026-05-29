@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { Worker, isMainThread, parentPort } from 'worker_threads';
 import { driveService } from '../drive/drive.service.js';
 import { excelParser } from '../excel/excel.parser.js';
 import { rulesEngine } from '../rules/rules.engine.js';
@@ -46,14 +47,12 @@ export async function getSyncMetadata(inputDir: string): Promise<SyncMetadata> {
     }
   } else {
     const metaPath = path.resolve(inputDir, '..', 'output', 'sync-metadata.json');
-    if (fs.existsSync(metaPath)) {
-      try {
-        return JSON.parse(fs.readFileSync(metaPath, 'utf8')) as SyncMetadata;
-      } catch {
-        return { files: {} };
-      }
+    try {
+      const raw = await fs.promises.readFile(metaPath, 'utf8');
+      return JSON.parse(raw) as SyncMetadata;
+    } catch {
+      return { files: {} };
     }
-    return { files: {} };
   }
 }
 
@@ -67,41 +66,43 @@ export async function saveSyncMetadata(inputDir: string, metadata: SyncMetadata)
     }
   } else {
     const outputDir = path.resolve(inputDir, '..', 'output');
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
+    await fs.promises.mkdir(outputDir, { recursive: true });
     const metaPath = path.resolve(outputDir, 'sync-metadata.json');
-    fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
+    await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2));
   }
 }
 
 // ─── Internal Utilities ──────────────────────────────────────────────────────
 
-function resolveTargetFile(inputFilePath: string, inputDir: string): string {
+async function resolveTargetFile(inputFilePath: string, inputDir: string): Promise<string> {
+  const isFile = async (p: string) => {
+    try { return (await fs.promises.stat(p)).isFile(); } catch { return false; }
+  };
+
   // 1. Try raw input path
   let target = path.resolve(process.cwd(), inputFilePath);
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+  if (await isFile(target)) return target;
 
   // 2. Try with .xlsx extension appended
   target = path.resolve(process.cwd(), inputFilePath + '.xlsx');
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+  if (await isFile(target)) return target;
 
   // 3. Try inside inputDir folder
   target = path.join(inputDir, inputFilePath);
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+  if (await isFile(target)) return target;
 
   // 4. Try inside inputDir with .xlsx extension appended
   target = path.join(inputDir, inputFilePath + '.xlsx');
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+  if (await isFile(target)) return target;
 
   // 5. Try basename check in inputDir
   const baseName = path.basename(inputFilePath);
   target = path.join(inputDir, baseName);
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+  if (await isFile(target)) return target;
 
   // 6. Try basename in inputDir with .xlsx appended
   target = path.join(inputDir, baseName + '.xlsx');
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
+  if (await isFile(target)) return target;
 
   throw new Error(`Could not resolve input file "${inputFilePath}" inside the input directory "${inputDir}". Please verify the file exists.`);
 }
@@ -211,11 +212,59 @@ export class OrchestratorService {
   /**
    * Runs the complete end-to-end accounting ingestion, audit rules, AI reporting, and Telegram notification pipeline.
    * Protected by a concurrency guard — duplicate invocations while the pipeline is running are safely ignored.
+   * Spawns a background Node.js Worker Thread to keep the main Fastify event loop responsive.
    */
   async runPipeline(options?: PipelineOptions): Promise<void> {
-    // ── Concurrency Guard ──────────────────────────────────────────────────
     if (this.isRunning) {
       logger.warn('Pipeline is already running. Ignoring duplicate execution request.');
+      return;
+    }
+    this.isRunning = true;
+
+    logger.info('Initiating background worker thread for AI Accounting Ingestion...');
+
+    return new Promise<void>((resolve, reject) => {
+      // Spawn worker thread targeting this same file (tsx in dev / js in dist in prod)
+      const worker = new Worker(new URL(import.meta.url));
+
+      worker.on('message', (msg) => {
+        if (msg.status === 'success') {
+          logger.info('Background worker completed pipeline run successfully');
+          this.isRunning = false;
+          resolve();
+        } else if (msg.status === 'error') {
+          this.isRunning = false;
+          reject(new Error(msg.error));
+        }
+      });
+
+      worker.on('error', (err) => {
+        logger.error({ err }, 'Worker thread encountered a critical error');
+        this.isRunning = false;
+        reject(err);
+      });
+
+      worker.on('exit', (code) => {
+        this.isRunning = false;
+        if (code !== 0) {
+          reject(new Error(`Worker thread stopped unexpectedly with exit code ${code}`));
+        } else {
+          resolve();
+        }
+      });
+
+      // Start the pipeline inside the worker thread
+      worker.postMessage({ type: 'start', options });
+    });
+  }
+
+  /**
+   * The actual pipeline run logic executed inside the Worker Thread isolate.
+   */
+  async runPipelineInternal(options?: PipelineOptions): Promise<void> {
+    // ── Concurrency Guard ──────────────────────────────────────────────────
+    if (this.isRunning) {
+      logger.warn('Pipeline is already running in worker thread. Ignoring duplicate execution request.');
       return;
     }
     this.isRunning = true;
@@ -238,30 +287,33 @@ export class OrchestratorService {
       const outputDir = path.resolve(process.cwd(), 'data', 'output');
 
       // Ensure local directories exist
-      if (!fs.existsSync(inputDir)) fs.mkdirSync(inputDir, { recursive: true });
-      if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+      await fs.promises.mkdir(inputDir, { recursive: true });
+      await fs.promises.mkdir(outputDir, { recursive: true });
 
       const filesToProcess: FileToProcess[] = [];
 
       if (options?.specificFile) {
-        const resolvedPath = resolveTargetFile(options.specificFile, inputDir);
+        const resolvedPath = await resolveTargetFile(options.specificFile, inputDir);
         logger.info({ resolvedPath }, 'SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
         filesToProcess.push({
           name: path.basename(resolvedPath),
           path: resolvedPath,
-          buffer: fs.readFileSync(resolvedPath),
+          buffer: await fs.promises.readFile(resolvedPath),
         });
       } else if (isMockDrive) {
         logger.info('Google Drive credentials are at mock defaults. Operating in BATCH LOCAL FILE MODE.');
 
-        let files = fs.readdirSync(inputDir)
-          .filter(f => f.endsWith('.xlsx'))
-          .map(f => {
-            const filePath = path.join(inputDir, f);
-            const stat = fs.statSync(filePath);
-            return { name: f, path: filePath, mtime: stat.mtimeMs };
-          })
-          .sort((a, b) => a.mtime - b.mtime); // Sort ascending (oldest first) so newest wins in DB upsert
+        const dirEntries = await fs.promises.readdir(inputDir);
+        const fileStats = await Promise.all(
+          dirEntries
+            .filter(f => f.endsWith('.xlsx'))
+            .map(async (f) => {
+              const filePath = path.join(inputDir, f);
+              const stat = await fs.promises.stat(filePath);
+              return { name: f, path: filePath, mtime: stat.mtimeMs };
+            })
+        );
+        const files = fileStats.sort((a, b) => a.mtime - b.mtime); // Sort ascending (oldest first)
 
         if (files.length === 0) {
           logger.warn(`No Excel spreadsheets found in '${inputDir}'. Skipping local batch execution.`);
@@ -272,7 +324,7 @@ export class OrchestratorService {
           filesToProcess.push({
             name: fileInfo.name,
             path: fileInfo.path,
-            buffer: fs.readFileSync(fileInfo.path),
+            buffer: await fs.promises.readFile(fileInfo.path),
             modifiedTime: new Date(fileInfo.mtime).toISOString(),
           });
         }
@@ -378,16 +430,18 @@ export class OrchestratorService {
           } else {
             // Local mode: write to disk
             const fileOutputDir = path.resolve(outputDir, cleanFileName);
-            if (!fs.existsSync(fileOutputDir)) fs.mkdirSync(fileOutputDir, { recursive: true });
+            await fs.promises.mkdir(fileOutputDir, { recursive: true });
 
-            fs.writeFileSync(path.resolve(fileOutputDir, 'summary.md'), reports.markdownReport);
-            fs.writeFileSync(path.resolve(fileOutputDir, 'summary.html'), reports.htmlReport);
-            fs.writeFileSync(path.resolve(fileOutputDir, 'summary.json'), reports.jsonSummary);
+            await Promise.all([
+              fs.promises.writeFile(path.resolve(fileOutputDir, 'summary.md'), reports.markdownReport),
+              fs.promises.writeFile(path.resolve(fileOutputDir, 'summary.html'), reports.htmlReport),
+              fs.promises.writeFile(path.resolve(fileOutputDir, 'summary.json'), reports.jsonSummary),
+            ]);
             logger.info({ fileOutputDir }, 'Unified reports package written to local disk.');
 
             if (dailySalesArray) {
               const dailySalesPath = path.resolve(fileOutputDir, 'daily-sales.json');
-              fs.writeFileSync(dailySalesPath, JSON.stringify(dailySalesArray, null, 2));
+              await fs.promises.writeFile(dailySalesPath, JSON.stringify(dailySalesArray, null, 2));
               logger.info({ dailySalesPath }, 'Compiled daily-sales list written locally.');
             }
           }
@@ -467,7 +521,7 @@ export class OrchestratorService {
           if (isMockTelegram) {
             const crashPath = path.resolve(outputDir, `${fileName}_crash_alert.md`);
             const crashAlert = `🚨 *FILE PROCESSING CRASH*\n\nSpreadsheet *${fileName}* failed during processing:\n\n\`\`\`\n${fileErrMessage}\n\`\`\``;
-            fs.writeFileSync(crashPath, crashAlert);
+            await fs.promises.writeFile(crashPath, crashAlert);
           } else {
             try {
               const crashAlert = `🚨 *FILE PROCESSING CRASH*\n\nSpreadsheet *${fileName}* failed during processing:\n\n\`\`\`\n${fileErrMessage}\n\`\`\``;
@@ -574,8 +628,8 @@ export class OrchestratorService {
       try {
         const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
         const outputDir = path.resolve(process.cwd(), 'data', 'output', cleanFileName);
-        if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-        fs.writeFileSync(path.resolve(outputDir, 'summary.json'), reports.jsonSummary);
+        await fs.promises.mkdir(outputDir, { recursive: true });
+        await fs.promises.writeFile(path.resolve(outputDir, 'summary.json'), reports.jsonSummary);
         logger.info({ outputDir }, 'Summary JSON written to local disk (no-DB mode).');
       } catch (err) {
         logger.warn({ err }, 'Failed to write local output during upload');
@@ -590,3 +644,18 @@ export class OrchestratorService {
 }
 
 export const orchestratorService = new OrchestratorService();
+
+// ─── Ingestion Worker Thread Listener ──────────────────────────────────────────
+if (!isMainThread) {
+  parentPort?.on('message', async (message) => {
+    if (message?.type === 'start') {
+      try {
+        await orchestratorService.runPipelineInternal(message.options);
+        parentPort?.postMessage({ status: 'success' });
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        parentPort?.postMessage({ status: 'error', error: errorMsg });
+      }
+    }
+  });
+}

@@ -2,9 +2,10 @@ import ExcelJS from 'exceljs';
 import { SheetParsingResult, ParsingError, Transaction } from '../../types/accounting.types.js';
 import { buildHeaderMap, mapRowToTransaction, extractStringValue } from '../excel.mapper.js';
 import { logger } from '../../logger/logger.js';
+import { config } from '../../config/config.js';
 
 export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: string): SheetParsingResult {
-  logger.info({ sheetName: worksheet.name, totalRows: worksheet.rowCount }, 'Specialized parsing for Hotel Gaurav Daily Sales Register');
+  logger.info({ sheetName: worksheet.name, totalRows: worksheet.rowCount }, `Specialized parsing for ${config.BUSINESS_NAME} Daily Sales Register`);
   
   const transactions: Transaction[] = [];
   const errors: ParsingError[] = [];
@@ -165,7 +166,7 @@ export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: st
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      logger.error({ row: r, error: errorMessage }, 'Hotel Gaurav daily row parsing failed');
+      logger.error({ row: r, error: errorMessage }, `${config.BUSINESS_NAME} daily row parsing failed`);
       errors.push({
         row: r,
         invoiceNumber: `ERR-ROW-${r}`,
@@ -181,7 +182,7 @@ export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: st
       successfullyParsed: transactions.length, 
       failedRows: errors.length 
     }, 
-    'Completed specialized Hotel Gaurav parsing'
+    `Completed specialized ${config.BUSINESS_NAME} parsing`
   );
 
   return {

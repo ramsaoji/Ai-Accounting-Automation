@@ -1,10 +1,11 @@
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../../config/config.js';
 
 /**
  * GET /health, GET /
  * Returns system health state, active AI provider, active model, and cron configurations.
  */
-export async function getHealth(request: any, reply: any): Promise<void> {
+export async function getHealth(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
   reply.code(200).send({
     status: 'UP',
     timestamp: new Date().toISOString(),

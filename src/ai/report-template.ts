@@ -1,3 +1,5 @@
+import { config } from '../config/config.js';
+
 export interface HtmlTemplateData {
   fileName: string;
   runTimestamp: string;
@@ -81,7 +83,7 @@ export function generateHtmlReport(data: HtmlTemplateData): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hotel Gaurav — Financial Command Center</title>
+  <title>${config.BUSINESS_NAME} — Financial Command Center</title>
   <link rel="stylesheet" href="../theme.css">
 </head>
 <body>
@@ -89,8 +91,8 @@ export function generateHtmlReport(data: HtmlTemplateData): string {
   <!-- MOBILE sticky top-bar -->
   <header class="mobile-header">
     <div class="mobile-logo-trigger" style="display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none;">
-      <div class="logo-badge" style="width:32px; height:32px; font-size:1rem;">G</div>
-      <h2 style="font-family:'Outfit', sans-serif; font-size:1.1rem; font-weight:700;">Hotel Gaurav</h2>
+      <div class="logo-badge" style="width:32px; height:32px; font-size:1rem;">${config.BUSINESS_NAME.charAt(0).toUpperCase()}</div>
+      <h2 style="font-family:'Outfit', sans-serif; font-size:1.1rem; font-weight:700;">${config.BUSINESS_NAME}</h2>
     </div>
     <button class="mobile-menu-toggle" aria-label="Toggle Menu">
       <svg style="width:28px; height:28px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path></svg>
@@ -111,9 +113,9 @@ export function generateHtmlReport(data: HtmlTemplateData): string {
 
       <div>
         <div class="logo-container">
-          <div class="logo-badge">G</div>
+          <div class="logo-badge">${config.BUSINESS_NAME.charAt(0).toUpperCase()}</div>
           <div class="logo-text">
-            <h2>Hotel Gaurav</h2>
+            <h2>${config.BUSINESS_NAME}</h2>
             <p>Finance Console</p>
           </div>
         </div>
@@ -158,7 +160,7 @@ export function generateHtmlReport(data: HtmlTemplateData): string {
       </div>
       <div class="sidebar-footer">
         <p>System Version 1.2.0</p>
-        <p style="color: var(--text-muted); margin-top: 4px;">© Hotel Gaurav Operations</p>
+        <p style="color: var(--text-muted); margin-top: 4px;">© ${config.BUSINESS_NAME} Operations</p>
       </div>
     </aside>
 

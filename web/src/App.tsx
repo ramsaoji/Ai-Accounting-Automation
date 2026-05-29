@@ -1,10 +1,9 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import {
   Cloud,
   Loader2,
   Users,
-  RefreshCw,
-  LayoutDashboard
+  RefreshCw
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -19,22 +18,30 @@ import { toast } from 'sonner';
 import { useTheme } from '@/components/theme-provider';
 import { useAccountingStore } from './store/useAccountingStore';
 import { useAccountingData } from './hooks/useAccountingData';
-import { PortalSection } from './components/PortalSection';
-import { OverviewSection } from './components/OverviewSection';
-import { LedgerSection } from './components/LedgerSection';
-import { AuditorSection } from './components/AuditorSection';
-import { AdvisorSection } from './components/AdvisorSection';
 import { UploadModal } from './components/UploadModal';
 import { LockScreen } from './components/LockScreen';
-import { SecuritySettingsModal } from './components/SecuritySettingsModal';
 import { Button } from '@/components/ui/button';
-import { triggerDriveSync, fetchAccountingData } from './services/api';
+import { triggerDriveSync, fetchAccountingData, checkSessionStatus, logoutUser } from './services/api';
 import { AppSidebar } from './components/AppSidebar';
+import { OnboardingWizard } from './components/OnboardingWizard';
 import { deriveBusinessName } from './utils/business';
+
+// Lazy load layout sections and modals for bundle optimizations
+const PortalSection = lazy(() => import('./components/PortalSection').then(m => ({ default: m.PortalSection })));
+const OverviewSection = lazy(() => import('./components/OverviewSection').then(m => ({ default: m.OverviewSection })));
+const LedgerSection = lazy(() => import('./components/LedgerSection').then(m => ({ default: m.LedgerSection })));
+const AuditorSection = lazy(() => import('./components/AuditorSection').then(m => ({ default: m.AuditorSection })));
+const AdvisorSection = lazy(() => import('./components/AdvisorSection').then(m => ({ default: m.AdvisorSection })));
+const SecuritySettingsModal = lazy(() => import('./components/SecuritySettingsModal').then(m => ({ default: m.SecuritySettingsModal })));
 
 
 export function App() {
   const { theme, setTheme } = useTheme();
+
+  // Dynamically update document title from environment variable
+  useEffect(() => {
+    document.title = `${deriveBusinessName()} | Financial Command Center`;
+  }, []);
 
   // Zustand Store selectors
   const appSessionToken = useAccountingStore((state) => state.appSessionToken);
@@ -48,7 +55,21 @@ export function App() {
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
-  const handleLogout = () => {
+  // Query status of the HttpOnly session cookie on initial app mount
+  useEffect(() => {
+    checkSessionStatus()
+      .then((isValid) => {
+        if (isValid) {
+          setToken('active');
+        } else {
+          clearToken();
+        }
+      })
+      .catch(() => clearToken());
+  }, [setToken, clearToken]);
+
+  const handleLogout = async () => {
+    await logoutUser();
     clearToken();
     toast.info("Application locked successfully.");
   };
@@ -206,8 +227,8 @@ export function App() {
     return (
       <TooltipProvider>
         <LockScreen
-          onUnlock={(token) => {
-            setToken(token);
+          onUnlock={(token, remember) => {
+            setToken(token, remember);
             fetchRealData();
           }}
         />
@@ -232,52 +253,14 @@ export function App() {
   if (!salesData && !debitorsData) {
     return (
       <TooltipProvider>
-        <div className="flex h-screen w-screen bg-background text-foreground font-sans antialiased flex-col items-center justify-center p-6 select-none animate-in fade-in duration-300">
-          <div className="max-w-md w-full flex flex-col gap-6 text-center">
-            <div className="size-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mx-auto shadow-xs">
-              <LayoutDashboard className="size-8" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <h1 className="text-xl font-bold font-heading tracking-tight text-foreground">
-                AI Accounting Automation Console
-              </h1>
-              <p className="text-xs text-muted-foreground leading-normal max-w-sm mx-auto">
-                No accounting records found in the database. Ingest daily sales registers or customer outstanding debit ledgers to initialize your compliance command center.
-              </p>
-            </div>
-            
-            <div className="border border-border/80 rounded-xl p-5 bg-muted/5 flex flex-col gap-3.5 text-left text-xs">
-              <h3 className="font-bold flex items-center gap-2">
-                🛡️ Supported Ingestion Formats
-              </h3>
-              <ul className="flex flex-col gap-2 text-muted-foreground font-medium list-disc list-inside font-sans">
-                <li><strong>Daily Sales Registers</strong> (Liquor split, cash flow, operational expenditures)</li>
-                <li><strong>Debitors Outstanding List</strong> (Udhari credit balances, aging indices, collection risks)</li>
-              </ul>
-            </div>
-            
-            <div className="flex items-center justify-center gap-3 mt-2">
-              <UploadModal disabled={connectionMode !== 'live'} onSuccess={fetchRealData} />
-              {connectionMode === 'live' && (
-                <Button
-                  onClick={handleDriveSync}
-                  disabled={isSyncingDrive || isLoading}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 cursor-pointer border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 disabled:opacity-50"
-                >
-                  {isSyncingDrive ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Cloud className="size-4" />
-                  )}
-                  <span>Sync Drive</span>
-                </Button>
-              )}
-            </div>
-          </div>
-          <Toaster position="top-right" />
-        </div>
+        <OnboardingWizard
+          connectionMode={connectionMode}
+          isSyncingDrive={isSyncingDrive}
+          isLoading={isLoading}
+          onDriveSync={handleDriveSync}
+          onSuccess={fetchRealData}
+        />
+        <Toaster position="top-right" />
       </TooltipProvider>
     );
   }
@@ -352,6 +335,12 @@ export function App() {
             {/* Main Content Area — sections with fixed-height panels manage scroll internally */}
             <main ref={mainRef} className="flex-1 overflow-y-auto bg-background">
               <div className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8 flex flex-col">
+                <Suspense fallback={
+                  <div className="flex h-[calc(100svh-4rem)] w-full flex-col items-center justify-center gap-4 select-none">
+                    <Loader2 className="size-9 text-primary animate-spin" />
+                    <p className="text-xs text-muted-foreground font-semibold tracking-wide animate-pulse">Loading dashboard section…</p>
+                  </div>
+                }>
                   {activeView === 'portal' ? (
                     <PortalSection
                       salesData={salesData}
@@ -405,6 +394,7 @@ export function App() {
                       )}
                     </>
                   )}
+                </Suspense>
                 </div>
             </main>
           </SidebarInset>

@@ -278,10 +278,25 @@ export class DuplicateDateRule implements Rule {
  * 7. Cross-Workbook Reconciliation Rule
  * Reconciles credit extended/recovered between the Daily Sales Register and the Debitors Ledger.
  */
+interface ReconciliationSummary {
+  aggregates?: {
+    totalDebitSum?: number;
+    totalCreditSum?: number;
+    totalPendingSum?: number;
+    collectionSuccessRate?: string | number;
+  };
+  masterTotals?: {
+    totalInflows?: number;
+    netCashflow?: number;
+    creditExtended?: number;
+    creditRecovery?: number;
+  };
+}
+
 export class CrossWorkbookReconciliationRule implements Rule {
   id = 'RULE_007';
-  name = 'Cross-Workbook Reconciliation';
-  description = 'Reconciles Credit Extended & Recovery between Daily Sales Register and Debitors Ledger';
+  name = 'Cross-Workbook Ledger Reconciliation Check';
+  description = 'Reconciles Credit Extended / Credit Recovery sums between Daily Sales and Debitors outstanding ledger';
 
   async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
@@ -291,15 +306,15 @@ export class CrossWorkbookReconciliationRule implements Rule {
     const isDebitorsList = transactions.some(t => t.invoiceNumber.startsWith('UD-DB') || t.invoiceNumber.startsWith('UD-CR'));
 
     if (hasSalesCategory) {
-      let summary: any = null;
+      let summary: ReconciliationSummary | null = null;
       if (config.DATABASE_URL) {
-        summary = await getReport('debitors');
+        summary = await getReport('debitors') as ReconciliationSummary | null;
       } else {
         const debitorsSummaryPath = path.join(outputDir, 'DEBITORS LIST', 'summary.json');
         if (fs.existsSync(debitorsSummaryPath)) {
           try {
             const raw = fs.readFileSync(debitorsSummaryPath, 'utf8');
-            summary = JSON.parse(raw);
+            summary = JSON.parse(raw) as ReconciliationSummary;
           } catch (e) {
             // ignore
           }
@@ -338,15 +353,15 @@ export class CrossWorkbookReconciliationRule implements Rule {
         }
       }
     } else if (isDebitorsList) {
-      let summary: any = null;
+      let summary: ReconciliationSummary | null = null;
       if (config.DATABASE_URL) {
-        summary = await getReport('sales');
+        summary = await getReport('sales') as ReconciliationSummary | null;
       } else {
-        const salesSummaryPath = path.join(outputDir, 'Hotel Gaurav Daily Sales Register', 'summary.json');
+        const salesSummaryPath = path.join(outputDir, `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
         if (fs.existsSync(salesSummaryPath)) {
           try {
             const raw = fs.readFileSync(salesSummaryPath, 'utf8');
-            summary = JSON.parse(raw);
+            summary = JSON.parse(raw) as ReconciliationSummary;
           } catch (e) {
             // ignore
           }

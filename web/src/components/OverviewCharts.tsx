@@ -14,12 +14,18 @@ import {
 } from 'recharts';
 import type { MasterSummary } from '../types';
 
+interface DebitorsAgeingItem {
+  range: string;
+  amount: number;
+  color: string;
+}
+
 interface OverviewChartsProps {
   isDebitors: boolean;
   summary: MasterSummary;
   isMobile: boolean;
   activeChartTab: 'primary' | 'distribution';
-  debitorsAgeingData: any[];
+  debitorsAgeingData: DebitorsAgeingItem[];
 }
 
 export const OverviewCharts: React.FC<OverviewChartsProps> = ({

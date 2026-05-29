@@ -90,18 +90,23 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 
 ### 8. Fastify HTTP Router and Controllers (`src/api/`)
 * **Role:** Expose JSON query endpoints and spreadsheet uploader channels.
-* **Technique:** Fastify server configuration with schema validation hooks.
+* **Technique:** Fastify server configuration with schema validation hooks and cookie support plugin.
 * **Routing Strategy:** 
-  * Public routes verify overall system health (`/health`) and check unlock credentials (`/api/security/verify-app`).
-  * Authorized workspace routes are nested within Fastify pre-handler plugin validations (`fastify.auth.ts`) which intercept and verify bearer JWT session tokens.
-  * Specialized controllers (`chat.controller.ts`, `report.controller.ts`, `security.controller.ts`) handle processing requests, parsing multipart upload payloads, and fetching/saving database state.
+  * Public routes verify overall system health (`/health`), check unlock credentials (`/api/security/verify-app`), check session cookie status (`/api/security/status`), and clear active cookies (`/api/security/logout`).
+  * Authorized workspace routes are nested within Fastify pre-handler plugin validations (`fastify.auth.ts`) which intercept and verify secure **HttpOnly cookies** (`app_session_token`), falling back to Bearer tokens in headers for Telegram Bot compatibility.
+  * Specialized controllers (`chat.controller.ts`, `report.controller.ts`, `security.controller.ts`) handle processing requests, parsing uploader payloads, and fetching/saving database state.
 
-### 9. Background Cron Job Scheduler (`src/scheduler/`)
+### 9. Decoupled Worker Thread Ingestion Engine (`src/services/` & `worker_threads`)
+* **Role:** Unblock the HTTP event loop during heavy parsing and audits.
+* **Technique:** Spawns a dedicated, parallel Node.js `Worker` thread targeting `orchestrator.service.ts` to process ingestion, rules checks, and AI forecasts in an isolated V8 thread.
+* **Rationale:** Keeps the Fastify API server 100% responsive during multi-month Excel parses or long-lived AI network queries.
+
+### 10. Background Cron Job Scheduler (`src/scheduler/`)
 * **Role:** Auto-sync coordinator.
 * **Technique:** `node-cron` daemon wrapper (`scheduler.job.ts`).
-* **Rationale:** Initiates the sync pipeline automatically on a scheduled interval defined by `CRON_SCHEDULE` (default: daily at midnight).
+* **Rationale:** Initiates the background worker thread pipeline automatically on a scheduled interval defined by `CRON_SCHEDULE` (default: daily at midnight).
 
-### 10. General System Utilities (`src/utils/`)
+### 11. General System Utilities (`src/utils/`)
 * **Role:** Shareable formatting and parse helpers.
 * **Technique:** `cron.ts` conversion methods.
 * **Rationale:** Converts standard 5-field cron configurations to human-friendly strings for dashboard UI display and startup diagnostics reports.

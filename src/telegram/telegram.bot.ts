@@ -9,6 +9,43 @@ import { AiProviderFactory } from '../ai/ai.factory.js';
 import { getReport } from '../db/db.client.js';
 import { formatCronExpression } from '../utils/cron.js';
 
+interface InlineKeyboardButton {
+  text: string;
+  callback_data: string;
+}
+
+interface TelegramUpdate {
+  update_id: number;
+  message?: {
+    message_id: number;
+    chat: {
+      id: number;
+      type: string;
+      title?: string;
+    };
+    from?: {
+      id: number;
+      first_name?: string;
+      username?: string;
+    };
+    text?: string;
+    date: number;
+  };
+  callback_query?: {
+    id: string;
+    from: {
+      id: number;
+    };
+    message: {
+      message_id: number;
+      chat: {
+        id: number;
+      };
+    };
+    data: string;
+  };
+}
+
 export class TelegramBot {
   private baseUrl: string;
   private offset: number = 0;
@@ -51,7 +88,7 @@ export class TelegramBot {
 
     // Send startup online notification to all authorized users
     const startupMsg =
-      `🟢 *Hotel Gaurav AI — Accounting Service Online*\n\n` +
+      `🟢 *${config.BUSINESS_NAME} AI — Accounting Service Online*\n\n` +
       `🤖 *AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\` (${config.AI_MODEL})\n` +
       `📅 *Auto-Sync Schedule*: \`${formatCronExpression(config.CRON_SCHEDULE)}\`\n` +
       `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n\n` +
@@ -120,7 +157,7 @@ export class TelegramBot {
     }
   }
 
-  private async handleUpdate(update: any): Promise<void> {
+  private async handleUpdate(update: TelegramUpdate): Promise<void> {
     // 1. Handle Callback Query (Inline Keyboard Buttons)
     if (update.callback_query) {
       const callbackQuery = update.callback_query;
@@ -134,14 +171,16 @@ export class TelegramBot {
         await axios.post(answerUrl, {
           callback_query_id: queryId
         });
-      } catch (err: any) {
-        logger.error({ err: err.message }, 'Failed to answer callback query');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error({ err: message }, 'Failed to answer callback query');
       }
 
       try {
         await this.handleCallbackData(data, chatId);
-      } catch (error: any) {
-        logger.error({ error: error.message, data }, 'Error processing Telegram callback action');
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error({ error: message, data }, 'Error processing Telegram callback action');
         try {
           await telegramClient.sendMessage(
             this.formatBotError(error),
@@ -161,7 +200,7 @@ export class TelegramBot {
 
     const message = update.message;
     const chatId = String(message.chat.id);
-    const text = message.text.trim();
+    const text = message.text!.trim();
     const username = message.from?.username || message.from?.first_name || 'Owner';
 
     logger.info({ chatId, text, username }, '[Telegram Bot] Received message');
@@ -173,7 +212,7 @@ export class TelegramBot {
         const warningUrl = `${this.baseUrl}/sendMessage`;
         await axios.post(warningUrl, {
           chat_id: chatId,
-          text: `🔒 *Access Restricted*\n\nYour Chat ID (\`${chatId}\`) is not authorized to access Hotel Gaurav's financial ledger summaries.\n\nIf you are the owner, please add this Chat ID to \`TELEGRAM_CHAT_ID\` in your server's \`.env\` configuration.`,
+          text: `🔒 *Access Restricted*\n\nYour Chat ID (\`${chatId}\`) is not authorized to access ${config.BUSINESS_NAME}'s financial ledger summaries.\n\nIf you are the owner, please add this Chat ID to \`TELEGRAM_CHAT_ID\` in your server's \`.env\` configuration.`,
           parse_mode: 'Markdown'
         });
       } catch (err: any) {
@@ -250,7 +289,7 @@ export class TelegramBot {
   }
 
   private async sendHelp(chatId: string): Promise<void> {
-    const welcomeText = `🌟 *Hotel Gaurav - AI Financial Command Center* 🌟\n\n` +
+    const welcomeText = `🌟 *${config.BUSINESS_NAME} - AI Financial Command Center* 🌟\n\n` +
       `Welcome, Owner! I am your real-time interactive AI Financial Advisor. I monitor your daily sales registers, debt ledgers, and cashflows.\n\n` +
       `*Available Command Panel:*\n` +
       `📊 *Sales Summary* - View interactive timeframe summaries for Daily Sales.\n` +
@@ -310,7 +349,7 @@ export class TelegramBot {
     };
 
     await telegramClient.sendMessage(
-      `📊 *Hotel Gaurav - Sales Performance Portal*\n\nPlease select the timeframe you wish to view below:`,
+      `📊 *${config.BUSINESS_NAME} - Sales Performance Portal*\n\nPlease select the timeframe you wish to view below:`,
       'Markdown',
       inlineKeyboard,
       chatId
@@ -339,7 +378,7 @@ export class TelegramBot {
   }
 
   private async sendTodaySales(chatId: string): Promise<void> {
-    const dailyData = await this.loadReport('daily-sales', 'Hotel Gaurav Daily Sales Register', 'daily-sales.json');
+    const dailyData = await this.loadReport('daily-sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'daily-sales.json');
     if (!dailyData || !Array.isArray(dailyData) || dailyData.length === 0) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*\n\nPlease trigger a sync first using /sync to ingest spreadsheets.`,
@@ -366,7 +405,7 @@ export class TelegramBot {
       const net = inflow - outflow;
       const statusLabel = net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
-      const summaryText = `📅 *Hotel Gaurav - Daily Sales Summary*\n` +
+      const summaryText = `📅 *${config.BUSINESS_NAME} - Daily Sales Summary*\n` +
          `📆 *Date*: *${formattedDate}*\n\n` +
          `• 🍷 *Liquor Counter*: ₹${Math.round(latestDay.liquor || 0).toLocaleString()}\n` +
          `• 🍲 *Food Counter*: ₹${Math.round(latestDay.food || 0).toLocaleString()}\n` +
@@ -392,7 +431,7 @@ export class TelegramBot {
   }
 
   private async sendMonthSelectionMenu(chatId: string): Promise<void> {
-    const data = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    const data = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*\n\nPlease trigger a sync first using /sync to ingest spreadsheets.`,
@@ -418,10 +457,10 @@ export class TelegramBot {
 
       // Present the months in reverse chronological order (newest first)
       const sortedMonths = [...months].reverse();
-      const buttons: any[][] = [];
+      const buttons: InlineKeyboardButton[][] = [];
 
       for (let i = 0; i < sortedMonths.length; i += 3) {
-        const row: any[] = [];
+        const row: InlineKeyboardButton[] = [];
         const m1 = sortedMonths[i];
         row.push({ text: m1.sheetName, callback_data: `month_${m1.sheetName.replace(/\s/g, '_')}` });
         
@@ -440,7 +479,7 @@ export class TelegramBot {
       buttons.push([{ text: '◀️ Back to Options', callback_data: 'sales_back' }]);
 
       await telegramClient.sendMessage(
-        `📅 *Hotel Gaurav - Select Month*\n\nPlease tap a month below to view its performance summary:`,
+        `📅 *${config.BUSINESS_NAME} - Select Month*\n\nPlease tap a month below to view its performance summary:`,
         'Markdown',
         { inline_keyboard: buttons },
         chatId
@@ -457,7 +496,7 @@ export class TelegramBot {
   }
 
   private async sendSpecificMonthSales(chatId: string, targetMonth: string): Promise<void> {
-    const data = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    const data = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*`,
@@ -471,8 +510,8 @@ export class TelegramBot {
     try {
       const months = data.months || [];
 
-      const cleanTarget = targetMonth.replace(/_/g, ' ').toLowerCase().trim();
-      const mData = months.find((m: any) => m.sheetName.toLowerCase().replace(/\s/g, '') === cleanTarget.replace(/\s/g, ''));
+      const cleanTarget = targetMonth.toLowerCase().replace(/_/g, '').trim();
+      const mData = months.find((m: { sheetName: string }) => m.sheetName.toLowerCase().replace(/\s/g, '') === cleanTarget.replace(/\s/g, ''));
 
       if (!mData) {
         await telegramClient.sendMessage(
@@ -489,7 +528,7 @@ export class TelegramBot {
       const net = inflows - outflows;
       const statusLabel = net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
-      const summaryText = `📅 *Hotel Gaurav - ${mData.sheetName} Sales Summary*\n\n` +
+      const summaryText = `📅 *${config.BUSINESS_NAME} - ${mData.sheetName} Sales Summary*\n\n` +
         `• 🍷 *Liquor Sales*: ₹${Math.round(mData.liquor || 0).toLocaleString()}\n` +
         `• 🍲 *Food Sales*: ₹${Math.round(mData.food || 0).toLocaleString()}\n` +
         `• 📥 *Credit Recovery (Udhari Jama)*: ₹${Math.round(mData.creditRecovery || 0).toLocaleString()}\n` +
@@ -523,7 +562,7 @@ export class TelegramBot {
   }
 
   private async sendSalesSummary(chatId: string): Promise<void> {
-    const data = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    const data = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
@@ -534,7 +573,7 @@ export class TelegramBot {
     }
 
     try {
-      const summaryText = `📊 *Hotel Gaurav - Daily Sales Summary*\n` +
+      const summaryText = `📊 *${config.BUSINESS_NAME} - Daily Sales Summary*\n` +
         `📅 *Audited Months*: ${data.totalMonths} months (${data.totalTransactions} transactions)\n` +
         `🕒 *Last Ingested*: ${data.runTimestamp || data.timestamp || 'N/A'}\n\n` +
         `*Key Financial Metrics:*\n` +
@@ -572,7 +611,7 @@ export class TelegramBot {
       const agg = data.aggregates || {};
       const top = data.topDebitors || [];
 
-      let debitorsText = `👥 *Hotel Gaurav - Debitors & Credit Summary*\n` +
+      let debitorsText = `👥 *${config.BUSINESS_NAME} - Debitors & Credit Summary*\n` +
         `🕒 *Last Ingested*: ${data.timestamp || data.runTimestamp || 'N/A'}\n\n` +
         `*Credit Book Aggregates:*\n` +
         `• 📖 *Active Credit Accounts*: ${agg.activeDebitorsCount || 0} customers\n` +
@@ -583,7 +622,7 @@ export class TelegramBot {
         `🔥 *Top Outstanding Debits:*\n`;
 
       if (top.length > 0) {
-         top.slice(0, 5).forEach((d: any, i: number) => {
+         top.slice(0, 5).forEach((d: { name: string; pending?: number; pendingBalance?: number }, i: number) => {
            const pendingVal = d.pending ?? d.pendingBalance ?? 0;
            const riskLevel = pendingVal > 20000 ? 'High Risk 🚨' : pendingVal > 5000 ? 'Medium Alert ⚠️' : 'Healthy ✅';
            debitorsText += `${i + 1}. *${d.name}*: ₹${Math.round(pendingVal).toLocaleString()} (Risk: _${riskLevel}_)\n`;
@@ -616,7 +655,7 @@ export class TelegramBot {
 
     let combinedContext = '';
 
-    const salesData = await this.loadReport('sales', 'Hotel Gaurav Daily Sales Register', 'summary.json');
+    const salesData = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
     if (salesData) {
       // Prune list items to avoid token overflow while preserving master numbers
       const prunedSales = {
@@ -626,7 +665,13 @@ export class TelegramBot {
         totalTransactions: salesData.totalTransactions,
         masterTotals: salesData.masterTotals,
         benchmarks: salesData.benchmarks,
-        months: salesData.months?.map((m: any) => ({
+        months: salesData.months?.map((m: {
+          month: string;
+          totalSales: number;
+          netCashflow: number;
+          liquorPercentage: number;
+          foodPercentage: number;
+        }) => ({
           month: m.month,
           totalSales: m.totalSales,
           netCashflow: m.netCashflow,
@@ -635,7 +680,7 @@ export class TelegramBot {
         })) || []
       };
 
-      combinedContext += `\n=== HOTEL GAURAV DAILY SALES SUMMARY ===\n` +
+      combinedContext += `\n=== ${config.BUSINESS_NAME.toUpperCase()} DAILY SALES SUMMARY ===\n` +
         JSON.stringify(prunedSales, null, 2) + '\n';
     }
 
@@ -645,14 +690,24 @@ export class TelegramBot {
         fileName: debitorsData.fileName,
         timestamp: debitorsData.timestamp || debitorsData.runTimestamp || 'N/A',
         aggregates: debitorsData.aggregates,
-        topDebitors: debitorsData.topDebitors?.map((d: any) => ({
+        topDebitors: debitorsData.topDebitors?.map((d: {
+          name: string;
+          pending?: number;
+          pendingBalance?: number;
+          debit?: number;
+          credit?: number;
+        }) => ({
           name: d.name,
           pending: d.pending ?? d.pendingBalance ?? 0,
           debit: d.debit,
           credit: d.credit,
           riskLevel: (d.pending ?? d.pendingBalance ?? 0) > 20000 ? 'High Risk' : (d.pending ?? d.pendingBalance ?? 0) > 5000 ? 'Medium Alert' : 'Healthy'
         })) || [],
-        allDebitors: debitorsData.allDebitors?.slice(0, 30).map((d: any) => ({
+        allDebitors: debitorsData.allDebitors?.slice(0, 30).map((d: {
+          name: string;
+          pending?: number;
+          pendingBalance?: number;
+        }) => ({
           name: d.name,
           pending: d.pending ?? d.pendingBalance ?? 0,
           riskLevel: (d.pending ?? d.pendingBalance ?? 0) > 20000 ? 'High Risk' : (d.pending ?? d.pendingBalance ?? 0) > 5000 ? 'Medium Alert' : 'Healthy'
@@ -676,7 +731,7 @@ export class TelegramBot {
     const provider = AiProviderFactory.createProvider();
     const prompt = `
 You are a friendly, encouraging, and experienced local bar-and-restaurant financial consultant.
-You are helping the owner of "Hotel Gaurav" understand their accounting ledger spreadsheet data.
+You are helping the owner of "${config.BUSINESS_NAME}" understand their accounting ledger spreadsheet data.
 Use ONLY the following pre-calculated Master Ledger Summary data to answer their question:
 
 === HIGH-LEVEL FINANCIAL CONTEXT ===
@@ -686,7 +741,7 @@ ${combinedContext}
 "${query}"
 
 === INSTRUCTIONS FOR 100% AUDIT ACCURACY ===
-1. Persona & Tone: Adopt the persona of an extremely warm, encouraging, local bar-and-restaurant financial expert who is a numbers genius. Address them directly as "Hotel Gaurav" or "your restaurant". Use a friendly tone with supportive, expert guidance.
+1. Persona & Tone: Adopt the persona of an extremely warm, encouraging, local bar-and-restaurant financial expert who is a numbers genius. Address them directly as "${config.BUSINESS_NAME}" or "your restaurant". Use a friendly tone with supportive, expert guidance.
 2. Simple Language: Do NOT use dry corporate jargon (no: CFO, leverage, compliance, governance, board, executive, ingestion, pipeline). Use clear local business terms.
 3. Strict Mathematical Double-Check:
    - If the owner asks for a numeric filter, range (e.g. "between 5k and 10k"), mathematical aggregate (e.g. "total sum", "average"), or list count, you MUST physically review every single item in the data arrays.
@@ -721,8 +776,8 @@ ${combinedContext}
     await telegramClient.sendMessage(cleanResponse, 'Markdown', this.getMainMenuKeyboard(), chatId);
   }
 
-  private formatBotError(err: any): string {
-    const msg = err?.message || String(err);
+  private formatBotError(err: Error | unknown): string {
+    const msg = err instanceof Error ? err.message : String(err);
     const msgLower = msg.toLowerCase();
 
     if (msgLower.includes('rate limit') || msgLower.includes('rate_limit') || msgLower.includes('429')) {

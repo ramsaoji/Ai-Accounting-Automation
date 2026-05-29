@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import type { MasterSummary, DebitorSummary } from '../types';
+import type { MasterSummary, DebitorSummary, Transaction } from '../types';
 import { deriveBusinessName } from '../utils/business';
+import { DatePickerWithRange } from './ui/DatePickerWithRange';
+import { KpiCard } from './overview/KpiCard';
+import { RecoveryBoard } from './overview/RecoveryBoard';
 import {
   TrendingUp,
   TrendingDown,
@@ -10,18 +13,16 @@ import {
   DollarSign,
   Sparkles,
   ShieldCheck,
-  Zap,
   BarChart3,
   CalendarDays,
   LineChart as LineIcon,
-  MessageSquare,
   WifiOff,
   Activity,
   Info
 } from 'lucide-react';
+
 const OverviewCharts = React.lazy(() => import('./OverviewCharts'));
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useIsMobile } from '../hooks/use-mobile';
 
@@ -34,8 +35,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
   const isMobile = useIsMobile();
   const isDebitors = summary.isDebitorsList === true;
   const [activeChartTab, setActiveChartTab] = useState<'primary' | 'distribution'>('primary');
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
 
-  const businessName = React.useMemo(() => {
+  const availableMonths = useMemo(() => {
+    if (!summary.months) return [];
+    return summary.months.map(m => m.sheetName);
+  }, [summary.months]);
+
+  const businessName = useMemo(() => {
     return deriveBusinessName(summary.fileName);
   }, [summary.fileName]);
 
@@ -61,20 +68,186 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
     return parsed.toLocaleString();
   };
 
-  const debitorsAgeingData = React.useMemo(() => {
-    const debitors = summary.topDebitors ?? [];
-    // Proxy aging by pending amount ranges (actual dates not in current JSONB schema)
-    const high = debitors.filter(d => (d.pending ?? 0) > 20000).reduce((s, d) => s + (d.pending ?? 0), 0);
-    const medium = debitors.filter(d => (d.pending ?? 0) > 10000 && (d.pending ?? 0) <= 20000).reduce((s, d) => s + (d.pending ?? 0), 0);
-    const low = debitors.filter(d => (d.pending ?? 0) > 3000 && (d.pending ?? 0) <= 10000).reduce((s, d) => s + (d.pending ?? 0), 0);
-    const minimal = debitors.filter(d => (d.pending ?? 0) <= 3000).reduce((s, d) => s + (d.pending ?? 0), 0);
+  // Helper to parse sheet month name like "Jan 2026"
+  const getSheetDate = (sheetName: string): Date | null => {
+    const clean = sheetName.trim().toLowerCase();
+    const yearMatch = clean.match(/\b(20\d{2})\b/);
+    if (yearMatch) {
+      const year = parseInt(yearMatch[1], 10);
+      const monthsMap: Record<string, number> = {
+        january: 0, jan: 0,
+        february: 1, feb: 1,
+        march: 2, mar: 2,
+        april: 3, apr: 3,
+        may: 4,
+        june: 5, jun: 5,
+        july: 6, jul: 6,
+        august: 7, aug: 7,
+        september: 8, sept: 8, sep: 8,
+        october: 9, oct: 9,
+        november: 10, nov: 10,
+        december: 11, dec: 11
+      };
+      const monthMatch = clean.match(/(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)/);
+      const monthIdx = monthMatch ? monthsMap[monthMatch[0]] : 0;
+      return new Date(year, monthIdx, 1);
+    }
+    return null;
+  };
+
+  // Filter months by selected months
+  const filteredMonths = useMemo(() => {
+    if (!summary.months) return [];
+    if (selectedMonths.length === 0) return summary.months;
+
+    return summary.months.filter(m => selectedMonths.includes(m.sheetName));
+  }, [summary.months, selectedMonths]);
+
+  // Dynamic calculations for Sales aggregates
+  const dynamicSalesTotals = useMemo(() => {
+    if (isDebitors || filteredMonths.length === 0) return null;
+
+    const masterLiquor = filteredMonths.reduce((sum, m) => sum + (m.liquor || 0), 0);
+    const masterFood = filteredMonths.reduce((sum, m) => sum + (m.food || 0), 0);
+    const masterRecovery = filteredMonths.reduce((sum, m) => sum + (m.creditRecovery || 0), 0);
+    const masterExpenses = filteredMonths.reduce((sum, m) => sum + (m.expenses || 0), 0);
+    const masterCreditExtended = filteredMonths.reduce((sum, m) => sum + (m.creditExtended || 0), 0);
+
+    const masterIncome = masterLiquor + masterFood + masterRecovery;
+    const masterOutflow = masterExpenses + masterCreditExtended;
+    const masterNet = masterIncome - masterOutflow;
+
+    const liquorPercentage = masterLiquor + masterFood > 0
+      ? ((masterLiquor / (masterLiquor + masterFood)) * 100).toFixed(1)
+      : '0.0';
+    const foodPercentage = masterLiquor + masterFood > 0
+      ? ((masterFood / (masterLiquor + masterFood)) * 100).toFixed(1)
+      : '0.0';
+
+    const creditOutstandingGap = masterCreditExtended - masterRecovery;
+    const creditRecoveryRate = masterCreditExtended > 0
+      ? ((masterRecovery / masterCreditExtended) * 100).toFixed(1)
+      : '100.0';
+
+    // Best revenue calculation in date range
+    let bestProfitMonth = 'N/A';
+    let bestProfitValue = 0;
+    filteredMonths.forEach(m => {
+      if (m.net > bestProfitValue) {
+        bestProfitValue = m.net;
+        bestProfitMonth = m.sheetName;
+      }
+    });
+
+    return {
+      masterLiquor,
+      masterFood,
+      masterIncome,
+      masterOutflow,
+      masterNet,
+      liquorPercentage,
+      foodPercentage,
+      creditOutstandingGap,
+      creditRecoveryRate,
+      bestProfitMonth,
+      bestProfitValue
+    };
+  }, [filteredMonths, isDebitors]);
+
+  // Dynamic calculations for Debitors aggregates from transaction log
+  const dynamicDebitorTotals = useMemo(() => {
+    if (!isDebitors || !summary.topDebitors) return null;
+    
+    // If no filter selected, use backend pre-calculated metrics
+    if (selectedMonths.length === 0 || !summary.transactions) {
+      return {
+        totalPendingSum: summary.aggregates?.totalPendingSum ?? 0,
+        collectionSuccessRate: summary.aggregates?.collectionSuccessRate ?? '0.0',
+        averageOutstandingDues: summary.aggregates?.averageOutstandingDues ?? 0,
+        activeDebitorsCount: summary.aggregates?.activeDebitorsCount ?? 0,
+        topDebitorsList: summary.topDebitors ?? [],
+      };
+    }
+
+    // Filter transactions by checking if their month/year matches any of the selected months
+    const filteredTx = summary.transactions.filter((t: Transaction) => {
+      const txDate = new Date(t.date);
+      return selectedMonths.some(monthStr => {
+        const parsed = getSheetDate(monthStr);
+        return parsed && 
+               txDate.getFullYear() === parsed.getFullYear() && 
+               txDate.getMonth() === parsed.getMonth();
+      });
+    });
+
+    // Group by customer
+    const debtorMap = new Map<string, { debit: number; credit: number; pending: number }>();
+    filteredTx.forEach((t: Transaction) => {
+      const name = t.vendor || 'Unknown';
+      if (!debtorMap.has(name)) {
+        debtorMap.set(name, { debit: 0, credit: 0, pending: 0 });
+      }
+      const val = debtorMap.get(name)!;
+      if (t.type === 'debit') {
+        val.debit += t.amount;
+      } else if (t.type === 'credit') {
+        val.credit += t.amount;
+      }
+      val.pending = val.debit - val.credit;
+    });
+
+    const list = Array.from(debtorMap.entries())
+      .map(([name, val]) => ({
+        name,
+        debit: val.debit,
+        credit: val.credit,
+        pending: val.pending
+      }))
+      .filter(d => d.pending > 0 || d.debit > 0)
+      .sort((a, b) => b.pending - a.pending);
+
+    const totalDebitSum = list.reduce((sum, d) => sum + d.debit, 0);
+    const totalCreditSum = list.reduce((sum, d) => sum + d.credit, 0);
+    const totalPendingSum = list.reduce((sum, d) => sum + d.pending, 0);
+
+    const collectionSuccessRate = totalDebitSum > 0 
+      ? ((totalCreditSum / totalDebitSum) * 100).toFixed(1)
+      : '100.0';
+
+    const activeDebitorsCount = list.length;
+    const averageOutstandingDues = activeDebitorsCount > 0 ? (totalPendingSum / activeDebitorsCount) : 0;
+
+    return {
+      totalPendingSum,
+      collectionSuccessRate,
+      averageOutstandingDues,
+      activeDebitorsCount,
+      topDebitorsList: list,
+    };
+  }, [summary.topDebitors, summary.transactions, summary.aggregates, isDebitors, selectedMonths]);
+
+  const debitorsAgeingData = useMemo(() => {
+    const list = dynamicDebitorTotals?.topDebitorsList ?? [];
+    const high = list.filter(d => (d.pending ?? 0) > 20000).reduce((s, d) => s + (d.pending ?? 0), 0);
+    const medium = list.filter(d => (d.pending ?? 0) > 10000 && (d.pending ?? 0) <= 20000).reduce((s, d) => s + (d.pending ?? 0), 0);
+    const low = list.filter(d => (d.pending ?? 0) > 3000 && (d.pending ?? 0) <= 10000).reduce((s, d) => s + (d.pending ?? 0), 0);
+    const minimal = list.filter(d => (d.pending ?? 0) <= 3000).reduce((s, d) => s + (d.pending ?? 0), 0);
     return [
       { range: 'High Risk (>₹20K)', amount: high, color: 'var(--destructive)' },
       { range: 'Medium (₹10K-₹20K)', amount: medium, color: 'var(--chart-2)' },
       { range: 'Low (₹3K-₹10K)', amount: low, color: 'var(--chart-3)' },
       { range: 'Minimal (<₹3K)', amount: minimal, color: 'var(--primary)' },
     ];
-  }, [summary.topDebitors]);
+  }, [dynamicDebitorTotals?.topDebitorsList]);
+
+  // Structured summary mock payload to feed to OverviewCharts
+  const chartSummaryMock = useMemo(() => {
+    return {
+      ...summary,
+      months: filteredMonths,
+      topDebitors: dynamicDebitorTotals?.topDebitorsList ?? []
+    };
+  }, [summary, filteredMonths, dynamicDebitorTotals]);
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
@@ -122,196 +295,94 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
         </div>
       </div>
 
+      {/* Date Filter & Control Widget Card — only for sales (has month sheets) */}
+      {!isDebitors && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-xl bg-card/40 select-none shadow-xs">
+          <div className="w-full sm:w-auto">
+            <DatePickerWithRange 
+              selectedMonths={selectedMonths} 
+              setSelectedMonths={setSelectedMonths} 
+              availableMonths={availableMonths}
+            />
+          </div>
+          <div className="text-[0.7rem] font-medium text-muted-foreground">
+            {selectedMonths.length > 0 ? (
+              <span>Filtering metrics for: <strong className="text-foreground">{selectedMonths.join(", ")}</strong>.</span>
+            ) : (
+              <span>Showing all-time aggregate financial metrics from the spreadsheet.</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* KPI Cards Grid */}
       <TooltipProvider>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 select-none">
-          {isDebitors && summary.aggregates ? (
+          {isDebitors && dynamicDebitorTotals ? (
             <>
-              {/* Total Outstanding Dues */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Unrecovered Liability</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      Total pending customer credit outstanding in the debitors ledger.
-                    </TooltipContent>
-                  </Tooltip>
-                  <TrendingDown className="text-destructive size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {formatINR(summary.aggregates.totalPendingSum)}
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Total pending customer credit.
-                  </span>
-                </CardContent>
-              </Card>
-  
-              {/* Recovery Success */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Clearance Index</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      Percentage of extended credit balances successfully paid back by customers.
-                    </TooltipContent>
-                  </Tooltip>
-                  <Percent className="text-success size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {summary.aggregates.collectionSuccessRate}%
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Paid credit balance percentage.
-                  </span>
-                </CardContent>
-              </Card>
-  
-              {/* Average Outstanding */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Mean Balances</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      Average outstanding pending dues per active debit customer.
-                    </TooltipContent>
-                  </Tooltip>
-                  <DollarSign className="text-primary size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {formatINR(summary.aggregates.averageOutstandingDues)}
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Average outstanding per customer.
-                  </span>
-                </CardContent>
-              </Card>
-  
-              {/* Active Customers */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Open Ledgers</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      Total number of customers carrying outstanding pending credits.
-                    </TooltipContent>
-                  </Tooltip>
-                  <Users className="text-primary size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {summary.aggregates.activeDebitorsCount}
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Outstanding credit profiles.
-                  </span>
-                </CardContent>
-              </Card>
+              <KpiCard
+                title="Unrecovered Liability"
+                tooltipText="Total pending customer credit outstanding in the debitors ledger."
+                value={formatINR(dynamicDebitorTotals.totalPendingSum)}
+                description="Total pending customer credit."
+                icon={<TrendingDown className="text-destructive size-4 shrink-0" />}
+                variant="red"
+              />
+              <KpiCard
+                title="Clearance Index"
+                tooltipText="Percentage of extended credit balances successfully paid back by customers."
+                value={`${dynamicDebitorTotals.collectionSuccessRate}%`}
+                description="Paid credit balance percentage."
+                icon={<Percent className="text-success size-4 shrink-0" />}
+                variant="green"
+              />
+              <KpiCard
+                title="Mean Balances"
+                tooltipText="Average outstanding pending dues per active debit customer."
+                value={formatINR(dynamicDebitorTotals.averageOutstandingDues)}
+                description="Average outstanding per customer."
+                icon={<DollarSign className="text-primary size-4 shrink-0" />}
+              />
+              <KpiCard
+                title="Open Ledgers"
+                tooltipText="Total number of customers carrying outstanding pending credits."
+                value={dynamicDebitorTotals.activeDebitorsCount}
+                description="Outstanding credit profiles."
+                icon={<Users className="text-primary size-4 shrink-0" />}
+              />
             </>
-          ) : summary.masterTotals && summary.benchmarks ? (
+          ) : dynamicSalesTotals ? (
             <>
-              {/* Consolidated Cashflow */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Net Surplus</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      Net cash balance remaining after subtracting operational expenses from total inflows.
-                    </TooltipContent>
-                  </Tooltip>
-                  <TrendingUp className="text-success size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {formatINR(summary.masterTotals.netCashflow)}
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Surplus cash after cost settlements.
-                  </span>
-                </CardContent>
-              </Card>
-  
-              {/* Bar/Menu Ratio */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Liquor vs Food Split</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      Proportional ratio of liquor sales compared to food menu sales.
-                    </TooltipContent>
-                  </Tooltip>
-                  <Percent className="text-amber-500 size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {summary.benchmarks.liquorPercentage}% / {summary.benchmarks.foodPercentage}%
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Ratio of liquor sales vs. food sales.
-                  </span>
-                </CardContent>
-              </Card>
-  
-              {/* Peak Profit Month */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Peak Cash Surplus</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      The single highest monthly cash surplus value achieved in the historical ledger.
-                    </TooltipContent>
-                  </Tooltip>
-                  <BarChart3 className="text-primary size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {formatINR(summary.benchmarks.bestProfitValue)}
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Highest monthly cash surplus in {summary.benchmarks.bestProfitMonth}.
-                  </span>
-                </CardContent>
-              </Card>
-  
-              {/* Recovery Rate */}
-              <Card className="border shadow-xs bg-card/45 relative overflow-hidden group">
-                <CardHeader className="p-4 pb-1 md:p-5 md:pb-1 flex flex-row items-center justify-between">
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <span className="text-[0.58rem] md:text-[0.62rem] font-bold text-muted-foreground uppercase tracking-widest cursor-help underline underline-offset-2 decoration-dotted">Credit Recovery</span>
-                    } />
-                    <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg">
-                      The index measuring debt recovery success calculated over credits extended.
-                    </TooltipContent>
-                  </Tooltip>
-                  <CalendarDays className="text-primary size-4 shrink-0" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 md:p-5 md:pt-0 mt-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
-                    {summary.benchmarks.creditRecoveryRate}%
-                  </h3>
-                  <span className="text-[0.6rem] md:text-[0.65rem] text-muted-foreground mt-1 md:mt-1.5 block leading-normal">
-                    Recovery performance over credits extended.
-                  </span>
-                </CardContent>
-              </Card>
+              <KpiCard
+                title="Net Surplus"
+                tooltipText="Net cash balance remaining after subtracting operational expenses from total inflows."
+                value={formatINR(dynamicSalesTotals.masterNet)}
+                description="Surplus cash after cost settlements."
+                icon={<TrendingUp className="text-success size-4 shrink-0" />}
+                variant="green"
+              />
+              <KpiCard
+                title="Liquor vs Food Split"
+                tooltipText="Proportional ratio of liquor sales compared to food menu sales."
+                value={`${dynamicSalesTotals.liquorPercentage}% / ${dynamicSalesTotals.foodPercentage}%`}
+                description="Ratio of liquor sales vs. food sales."
+                icon={<Percent className="text-amber-500 size-4 shrink-0" />}
+                variant="gold"
+              />
+              <KpiCard
+                title="Peak Cash Surplus"
+                tooltipText="The single highest monthly cash surplus value achieved in the historical ledger."
+                value={formatINR(dynamicSalesTotals.bestProfitValue)}
+                description={`Highest monthly cash surplus in ${dynamicSalesTotals.bestProfitMonth}.`}
+                icon={<BarChart3 className="text-primary size-4 shrink-0" />}
+              />
+              <KpiCard
+                title="Credit Recovery"
+                tooltipText="The index measuring debt recovery success calculated over credits extended."
+                value={`${dynamicSalesTotals.creditRecoveryRate}%`}
+                description="Recovery performance over credits extended."
+                icon={<CalendarDays className="text-primary size-4 shrink-0" />}
+              />
             </>
           ) : null}
         </div>
@@ -330,7 +401,6 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
             </CardDescription>
           </div>
 
-          {/* Chart Tabs */}
           <div className="flex items-center gap-1.5 self-start sm:self-auto select-none">
             <button
               type="button"
@@ -358,10 +428,18 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
           <div className="w-full h-80 select-none">
-            <React.Suspense fallback={<div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground animate-pulse">        Loading charts…</div>}>
+            <React.Suspense fallback={
+              <div className="h-full w-full flex flex-col items-center justify-center gap-3 select-none">
+                <svg className="size-6 text-primary animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                <span className="text-[0.68rem] font-semibold text-muted-foreground tracking-wide animate-pulse">Loading charts…</span>
+              </div>}
+            >
               <OverviewCharts
                 isDebitors={isDebitors}
-                summary={summary}
+                summary={chartSummaryMock}
                 isMobile={isMobile}
                 activeChartTab={activeChartTab}
                 debitorsAgeingData={debitorsAgeingData}
@@ -371,109 +449,13 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
         </CardContent>
       </Card>
 
-      {isDebitors && summary.topDebitors && (
-        <div className="grid grid-cols-1 gap-6 mt-1 items-start animate-in fade-in duration-300">
-          {/* Recovery Strategy Board */}
-          <Card className="border bg-card/45 shadow-xs overflow-hidden flex flex-col justify-between">
-            <div>
-              <CardHeader className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-border/80 flex flex-row items-center gap-3 select-none">
-                <div className="size-10 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive border border-destructive/20 shrink-0">
-                  <Zap className="size-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-sm font-semibold">Receivable Recovery & Planning</CardTitle>
-                  <CardDescription className="text-xs">Top priority accounts and automated outreach copy drafts.</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6 flex flex-col gap-4">
-                <span className="text-[0.62rem] font-bold text-muted-foreground uppercase tracking-wider select-none">
-                  Top Priority Accounts
-                </span>
-                <div className="flex flex-col gap-3">
-                  {summary.topDebitors.slice(0, 5).map((debtor) => {
-                    const riskLevel = debtor.pending > 15000 ? 'High Risk' : debtor.pending > 5000 ? 'Medium Risk' : 'Low Risk';
-                    const statusColorMap = debtor.pending > 15000 
-                      ? 'bg-destructive' 
-                      : debtor.pending > 5000 
-                        ? 'bg-warning' 
-                        : 'bg-success';
-                    const riskColor = debtor.pending > 15000 
-                      ? 'bg-destructive/10 text-destructive border-destructive/25' 
-                      : debtor.pending > 5000 
-                        ? 'bg-warning/10 text-warning border-warning/25' 
-                        : 'bg-success/10 text-success border-success/25';
-
-                    return (
-                      <div
-                        key={debtor.name}
-                        className="relative overflow-hidden p-4 pl-5 border border-border/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 bg-card/25 hover:bg-card/50 hover:border-primary/25 group select-none shadow-xs"
-                      >
-                        {/* Subtle left status indicator bar */}
-                        <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-md transition-all duration-300 ${statusColorMap} opacity-60 group-hover:opacity-100`} />
-
-                        {/* Profile initials, Name, and Risk Level */}
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className={`size-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 font-mono transition-all duration-300 select-none shadow-sm ${
-                            debtor.pending > 15000
-                              ? 'bg-destructive/10 text-destructive border border-destructive/20 group-hover:bg-destructive/15'
-                              : debtor.pending > 5000
-                                ? 'bg-warning/10 text-warning border border-warning/20 group-hover:bg-warning/15'
-                                : 'bg-success/10 text-success border border-success/20 group-hover:bg-success/15'
-                          }`}>
-                            {(() => {
-                              const p = debtor.name.trim().split(/\s+/);
-                              return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : debtor.name.slice(0, 2).toUpperCase();
-                            })()}
-                          </div>
-                          <div className="flex flex-col gap-1 min-w-0">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                              <span className="text-sm font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors truncate">{debtor.name}</span>
-                              <span className={`text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border shrink-0 font-sans leading-none ${riskColor}`}>
-                                {riskLevel}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground flex-wrap">
-                              <span className="flex items-center gap-1.5">
-                                <span className="opacity-75">Purchases:</span>
-                                <span className="font-mono font-bold text-foreground/90">{formatINR(debtor.debit || 0)}</span>
-                              </span>
-                              <span className="size-1 rounded-full bg-border shrink-0" />
-                              <span className="flex items-center gap-1.5">
-                                <span className="opacity-75">Cleared:</span>
-                                <span className="font-mono font-bold text-success/90">{formatINR(debtor.credit || 0)}</span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Balance and Outreach Actions */}
-                        <div className="flex items-center justify-between sm:justify-end gap-6 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-border/40 w-full sm:w-auto">
-                          <div className="flex flex-col items-start sm:items-end">
-                            <span className="text-sm sm:text-base font-extrabold text-destructive font-mono tracking-tight">{formatINR(debtor.pending)}</span>
-                            <span className="text-[10px] text-muted-foreground font-bold mt-1 leading-none uppercase tracking-wider">Outstanding Dues</span>
-                          </div>
-                          
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              triggerReminderCopy(debtor);
-                            }}
-                            className="gap-1.5 h-9 sm:h-8 px-3 rounded-lg text-xs font-semibold bg-primary/5 text-primary border border-primary/10 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-xs cursor-pointer transition-all duration-200 shrink-0"
-                          >
-                            <MessageSquare className="size-3.5 shrink-0" />
-                            <span>Remind</span>
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </div>
-          </Card>
-        </div>
+      {isDebitors && dynamicDebitorTotals && (
+        <RecoveryBoard
+          topDebitors={dynamicDebitorTotals.topDebitorsList}
+          businessName={businessName}
+          triggerReminderCopy={triggerReminderCopy}
+          formatINR={formatINR}
+        />
       )}
 
       {/* AI Recommendations Queue Section */}

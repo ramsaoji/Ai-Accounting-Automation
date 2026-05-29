@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { verifyAppLockPassword } from '../services/api';
 import { toast } from 'sonner';
 import { ShieldCheck, Eye, EyeOff, Loader2, ShieldAlert } from 'lucide-react';
 
 interface LockScreenProps {
-  onUnlock: (token: string) => void;
+  onUnlock: (token: string, remember: boolean) => void;
 }
 
 export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
@@ -13,6 +14,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleUnlock = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -22,10 +24,10 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
     setHasError(false);
 
     try {
-      const token = await verifyAppLockPassword(password);
+      const token = await verifyAppLockPassword(password, rememberMe);
       if (token) {
         toast.success("Welcome back! Terminal unlocked.");
-        onUnlock(token);
+        onUnlock(token, rememberMe);
       } else {
         setHasError(true);
         toast.error("Invalid passcode. Access denied.");
@@ -89,6 +91,20 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
+          </div>
+
+          {/* Remember device checkbox option */}
+          <div className="flex items-center justify-between select-none py-1">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <Checkbox
+                id="remember-me"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(!!checked)}
+              />
+              <span className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Remember this device
+              </span>
+            </label>
           </div>
 
           <Button

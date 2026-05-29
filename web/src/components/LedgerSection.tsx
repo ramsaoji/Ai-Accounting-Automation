@@ -1,28 +1,16 @@
 import React, { useState, useMemo } from 'react';
-// import { toast } from 'sonner';
-import type { MasterSummary } from '../types';
+import type { MasterSummary, Transaction } from '../types';
+import { DatePickerWithRange } from './ui/DatePickerWithRange';
+import { LedgerTable } from './ledger/LedgerTable';
 import {
   Search,
-  // Download,
   Filter,
   ChevronLeft,
-  ChevronRight,
-  CheckCircle,
-  AlertTriangle,
-  FolderOpen
+  ChevronRight
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell
-} from '@/components/ui/table';
 
 interface LedgerSectionProps {
   summary: MasterSummary;
@@ -38,45 +26,42 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'breached' | 'watch' | 'clear'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const itemsPerPage = 10;
-
-  const formatINR = (val: number) => {
-    return '₹' + Math.round(val).toLocaleString('en-IN');
-  };
 
   const isDebitors = activeTab === 'debitors';
 
-  // Helper to generate initials avatar
-  const getAvatarInitials = (name: string) => {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
+  const availableMonths = useMemo(() => {
+    if (!summary.months) return [];
+    return summary.months.map(m => m.sheetName);
+  }, [summary.months]);
+
+  // Helper to parse sheet month name like "Jan 2026"
+  const getSheetDate = (sheetName: string): Date | null => {
+    const clean = sheetName.trim().toLowerCase();
+    const yearMatch = clean.match(/\b(20\d{2})\b/);
+    if (yearMatch) {
+      const year = parseInt(yearMatch[1], 10);
+      const monthsMap: Record<string, number> = {
+        january: 0, jan: 0,
+        february: 1, feb: 1,
+        march: 2, mar: 2,
+        april: 3, apr: 3,
+        may: 4,
+        june: 5, jun: 5,
+        july: 6, jul: 6,
+        august: 7, aug: 7,
+        september: 8, sept: 8, sep: 8,
+        october: 9, oct: 9,
+        november: 10, nov: 10,
+        december: 11, dec: 11
+      };
+      const monthMatch = clean.match(/(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)/);
+      const monthIdx = monthMatch ? monthsMap[monthMatch[0]] : 0;
+      return new Date(year, monthIdx, 1);
     }
-    return name.slice(0, 2).toUpperCase();
+    return null;
   };
-
-  // Filter & Search Logic
-  const processedDebitors = useMemo(() => {
-    if (!summary.topDebitors) return [];
-    
-    // Apply search
-    let list = summary.topDebitors.filter((debtor) =>
-      debtor.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      list = list.filter((debtor) => {
-        const isBreach = debtor.pending > maxOutstandingDuesLimit;
-        if (statusFilter === 'breached') return isBreach;
-        if (statusFilter === 'watch') return !isBreach && debtor.pending > 5000;
-        if (statusFilter === 'clear') return debtor.pending <= 5000;
-        return true;
-      });
-    }
-
-    return list;
-  }, [summary.topDebitors, searchTerm, statusFilter, maxOutstandingDuesLimit]);
 
   const parseSheetNameToValue = (sheetName: string) => {
     const clean = sheetName.trim().toLowerCase();
@@ -104,17 +89,122 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     return 0;
   };
 
+  // Dynamic Debitors List based on date range
+  const dynamicDebitorsList = useMemo(() => {
+    if (!isDebitors || !summary.topDebitors) return [];
+    
+    // If no selected months filter, use summary.topDebitors
+    if (selectedMonths.length === 0 || !summary.transactions) {
+      return summary.topDebitors;
+    }
+
+    // Filter transactions by checking if their month/year matches any of the selected months
+    const filteredTx = summary.transactions.filter((t: Transaction) => {
+      const txDate = new Date(t.date);
+      return selectedMonths.some(monthStr => {
+        const parsed = getSheetDate(monthStr);
+        return parsed && 
+               txDate.getFullYear() === parsed.getFullYear() && 
+               txDate.getMonth() === parsed.getMonth();
+      });
+    });
+
+    // Group by customer
+    const debtorMap = new Map<string, { debit: number; credit: number; pending: number }>();
+    filteredTx.forEach((t: Transaction) => {
+      const name = t.vendor || 'Unknown';
+      if (!debtorMap.has(name)) {
+        debtorMap.set(name, { debit: 0, credit: 0, pending: 0 });
+      }
+      const val = debtorMap.get(name)!;
+      if (t.type === 'debit') {
+        val.debit += t.amount;
+      } else if (t.type === 'credit') {
+        val.credit += t.amount;
+      }
+      val.pending = val.debit - val.credit;
+    });
+
+    return Array.from(debtorMap.entries())
+      .map(([name, val]) => ({
+        name,
+        debit: val.debit,
+        credit: val.credit,
+        pending: val.pending
+      }))
+      .filter(d => d.pending > 0 || d.debit > 0)
+      .sort((a, b) => b.pending - a.pending);
+  }, [summary.topDebitors, summary.transactions, isDebitors, selectedMonths]);
+
+  // Filter & Search Logic for Debitors
+  const processedDebitors = useMemo(() => {
+    // Apply search
+    let list = dynamicDebitorsList.filter((debtor) =>
+      debtor.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      list = list.filter((debtor) => {
+        const isBreach = debtor.pending > maxOutstandingDuesLimit;
+        if (statusFilter === 'breached') return isBreach;
+        if (statusFilter === 'watch') return !isBreach && debtor.pending > 5000;
+        if (statusFilter === 'clear') return debtor.pending <= 5000;
+        return true;
+      });
+    }
+
+    return list;
+  }, [dynamicDebitorsList, searchTerm, statusFilter, maxOutstandingDuesLimit]);
+
+  // Filter & Search Logic for Months
   const processedMonths = useMemo(() => {
     if (!summary.months) return [];
-    const list = summary.months.filter((m) =>
+    
+    let list = summary.months;
+    
+    // Apply selected months filter
+    if (selectedMonths.length > 0) {
+      list = list.filter(m => selectedMonths.includes(m.sheetName));
+    }
+
+    // Apply search
+    list = list.filter((m) =>
       m.sheetName.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
     return list.toSorted((a, b) => {
       const valA = parseSheetNameToValue(a.sheetName);
       const valB = parseSheetNameToValue(b.sheetName);
       return valB - valA;
     });
-  }, [summary.months, searchTerm]);
+  }, [summary.months, searchTerm, selectedMonths]);
+
+  // Dynamic values for rendering progress/bars
+  const totalPendingSum = useMemo(() => {
+    if (selectedMonths.length > 0 && summary.transactions) {
+      return dynamicDebitorsList.reduce((sum, d) => sum + d.pending, 0);
+    }
+    return summary.aggregates?.totalPendingSum ?? 0;
+  }, [selectedMonths, summary.transactions, dynamicDebitorsList, summary.aggregates]);
+
+  const topDebtorValue = useMemo(() => {
+    if (selectedMonths.length > 0 && summary.transactions) {
+      return dynamicDebitorsList[0]?.pending ?? 1;
+    }
+    return summary.aggregates?.topDebtorValue ?? 1;
+  }, [selectedMonths, summary.transactions, dynamicDebitorsList, summary.aggregates]);
+
+  const bestProfitValue = useMemo(() => {
+    if (selectedMonths.length > 0) {
+      let maxVal = 0;
+      processedMonths.forEach(m => {
+        if (m.net > maxVal) maxVal = m.net;
+      });
+      return maxVal || 1;
+    }
+    return summary.benchmarks?.bestProfitValue ?? 1;
+  }, [selectedMonths, processedMonths, summary.benchmarks]);
 
   // Pagination Logic
   const totalItems = isDebitors ? processedDebitors.length : processedMonths.length;
@@ -129,53 +219,6 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     const start = (currentPage - 1) * itemsPerPage;
     return processedMonths.slice(start, start + itemsPerPage);
   }, [processedMonths, currentPage]);
-
-  // CurrentPage is reset inside handlers to avoid chained updates
-
-  // const handleExportCSV = () => {
-  //   try {
-  //     let csvContent = "\uFEFF"; // Unicode BOM for Excel compatibility
-      
-  //     if (isDebitors) {
-  //       // Header
-  //       csvContent += "Customer Name,Total Credit purchases,Cleared Amount,Outstanding Balance,Risk Category\n";
-  //       // Rows
-  //       processedDebitors.forEach((debtor) => {
-  //         const isBreach = debtor.pending > maxOutstandingDuesLimit;
-  //         const risk = isBreach ? "Breached Credit Limit" : debtor.pending > 5000 ? "Watchlist" : "Good Standing";
-  //         const row = `"${debtor.name.replace(/"/g, '""')}",${debtor.debit},${debtor.credit},${debtor.pending},"${risk}"`;
-  //         csvContent += row + "\n";
-  //       });
-  //     } else {
-  //       // Header
-  //       csvContent += "Sheet Month,Consolidated Inflows,Operational Outflows,Net Surplus,Liquor Split,Food Split,Other Expenses\n";
-  //       // Rows
-  //       processedMonths.forEach((m) => {
-  //         const row = `"${m.sheetName.replace(/"/g, '""')}",${m.inflows},${m.outflows},${m.net},${m.liquor},${m.food},${m.expenses}`;
-  //         csvContent += row + "\n";
-  //       });
-  //     }
-      
-  //     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  //     const url = URL.createObjectURL(blob);
-  //     const link = document.createElement("a");
-  //     const filename = isDebitors 
-  //       ? `Debitors_Outstanding_Ledger_Report_${new Date().toISOString().slice(0,10)}.csv`
-  //       : `Daily_Sales_Consolidated_Report_${new Date().toISOString().slice(0,10)}.csv`;
-        
-  //     link.setAttribute("href", url);
-  //     link.setAttribute("download", filename);
-  //     document.body.appendChild(link);
-  //     link.click();
-  //     document.body.removeChild(link);
-  //     URL.revokeObjectURL(url);
-      
-  //     toast.success("CSV file downloaded successfully.");
-  //   } catch (err) {
-  //     toast.error("Failed to generate CSV export.");
-  //     console.error(err);
-  //   }
-  // };
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">
@@ -197,19 +240,30 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
           {/* Custom Database Toolbar */}
           <div className="p-4 border-b border-border/80 bg-muted/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shrink-0 select-none">
             <div className="w-full flex flex-wrap items-center justify-between gap-3">
-              {/* Search Field */}
-              <div className="relative w-full sm:w-60">
-                <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="text"
-                  placeholder="Filter records..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="pl-9 h-9 text-xs"
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Search Field */}
+                <div className="relative w-full sm:w-60">
+                  <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Filter records..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="pl-9 h-9 text-xs"
+                  />
+                </div>
+
+                {/* Date Filter Widget — only for sales (has month sheets) */}
+                {!isDebitors && (
+                  <DatePickerWithRange 
+                    selectedMonths={selectedMonths} 
+                    setSelectedMonths={(m) => { setSelectedMonths(m); setCurrentPage(1); }} 
+                    availableMonths={availableMonths}
+                  />
+                )}
               </div>
 
               {/* Status filter dropdown for Debitors */}
@@ -225,10 +279,10 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                           setStatusFilter(filter);
                           setCurrentPage(1);
                         }}
-                        className={`text-xs px-3 py-1.5 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
+                        className={`text-xs px-3 h-9 sm:h-9 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
                           statusFilter === filter
                             ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
-                            : 'bg-background hover:bg-muted text-muted-foreground border-border/80'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-input dark:bg-input/30'
                         }`}
                       >
                         {filter}
@@ -238,288 +292,27 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Export Actions */}
-            {/* <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExportCSV} className="text-xs h-9">
-                <Download className="size-3.5 mr-1.5" />
-                Export CSV
-              </Button>
-            </div> */}
           </div>
 
           {/* Database Grid */}
           <div className="flex-1 overflow-auto">
-            {totalItems === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center select-none min-h-[300px] w-full">
-                <Search className="size-10 text-muted-foreground/45 animate-pulse shrink-0" />
-                <span className="text-sm font-bold text-foreground">
-                  {isDebitors ? "No matching client profiles" : "No matching spreadsheet monthly records"}
-                </span>
-                <span className="text-xs text-muted-foreground max-w-xs leading-normal">
-                  Try adjusting your search filters or clear the query.
-                </span>
-              </div>
-            ) : (
-              <Table className="min-w-[700px] sm:min-w-full">
-                <TableHeader className="bg-muted/15 select-none">
-                  <TooltipProvider>
-                    <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
-                      {isDebitors ? (
-                        <>
-                          <TableHead className="pl-6 h-10 w-[240px]">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Customer Accounts</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                The name of the customer carrying credit accounts.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Purchase Volume</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Total cumulative credit sales volume purchased by this customer.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Amount Settled</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Total payments made by this customer to clear their dues.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted text-destructive">Net Balance</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Net pending outstanding balance due from this customer.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-center h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Total Contribution</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                The percentage of total pending business outstanding dues contributed by this customer.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-center pr-6 h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Policy Audit</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                The verification status showing if this customer's credit balance is within safe bounds.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                        </>
-                      ) : (
-                        <>
-                          <TableHead className="pl-6 h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Register Sheet</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                The name of the monthly spreadsheet tab parsed.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Liquor Sales</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Consolidated monthly inflows generated from alcohol/liquor purchases.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Food Sales</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Consolidated monthly inflows generated from restaurant food menu sales.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted text-destructive">Operational Expenses</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Total outflows, supplier bills, and operating costs logged during this month.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted text-warning">Credit Extended</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Total volume of purchases made on credit during this month.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-right h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted">Net Cashflow</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                Net cash balance remaining after subtracting operational expenses from total inflows.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-center h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Surplus Scale</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                The relative monthly cash surplus weight scaled against the highest benchmark month.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="text-center pr-6 h-10">
-                            <Tooltip>
-                              <TooltipTrigger render={
-                                <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Operating Verdict</span>
-                              } />
-                              <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                                The validation status of this month's sheet, checking for discrepancies or anomalies.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                        </>
-                      )}
-                    </TableRow>
-                  </TooltipProvider>
-                </TableHeader>
-                <TableBody className="text-xs">
-                  {isDebitors ? (
-                    paginatedDebitors.map((debtor) => {
-                      const contribution = summary.aggregates?.totalPendingSum ? ((debtor.pending / summary.aggregates.totalPendingSum) * 100).toFixed(1) : '0';
-                      const isBreach = debtor.pending > maxOutstandingDuesLimit;
-                      
-                      const badgeStyles = isBreach 
-                        ? 'bg-destructive/10 text-destructive border-destructive/20' 
-                        : debtor.pending > 5000 
-                          ? 'bg-warning/10 text-warning border-warning/20' 
-                          : 'bg-success/10 text-success border-success/20';
-                      
-                      const badgeLabel = isBreach ? 'Limit Breach' : debtor.pending > 5000 ? 'Audit Watch' : 'Clear Ledger';
-                      const statusIcon = isBreach ? <AlertTriangle className="size-3 text-destructive" /> : debtor.pending > 5000 ? <AlertTriangle className="size-3 text-warning" /> : <CheckCircle className="size-3 text-success" />;
-
-                      return (
-                        <TableRow key={debtor.name} className="hover:bg-muted/30 transition-colors h-11 border-b">
-                          {/* Name + Initials Avatar */}
-                          <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-3">
-                            <div className="size-7 rounded-full bg-primary/10 text-primary border flex items-center justify-center font-bold text-[0.68rem] font-mono select-none">
-                              {getAvatarInitials(debtor.name)}
-                            </div>
-                            <span className="truncate max-w-[150px]">{debtor.name}</span>
-                          </TableCell>
-                          
-                          <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(debtor.debit)}</TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(debtor.credit)}</TableCell>
-                          
-                          <TableCell className={`text-right font-mono font-bold ${debtor.pending > 0 ? 'text-destructive' : 'text-success'}`}>
-                            {formatINR(debtor.pending)}
-                          </TableCell>
-                          
-                          {/* Contribution Progress bar */}
-                          <TableCell className="text-center">
-                            <div className="flex items-center justify-center gap-2 select-none">
-                              <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden border">
-                                <div
-                                  className={`h-full rounded-full ${isBreach ? 'bg-destructive' : 'bg-primary'}`}
-                                  style={{ width: `${Math.min(100, Math.max(8, Math.round(debtor.pending / (summary.aggregates?.topDebtorValue || 1) * 100)))}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-[0.65rem] font-bold text-muted-foreground font-mono w-8 text-left">{contribution}%</span>
-                            </div>
-                          </TableCell>
-
-                          <TableCell className="text-center pr-6 select-none">
-                            <span className={`text-[0.62rem] font-bold border rounded-full px-2.5 py-0.8 uppercase tracking-wider inline-flex items-center gap-1.5 ${badgeStyles}`}>
-                              {statusIcon}
-                              {badgeLabel}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  ) : (
-                    paginatedMonths.map((month) => {
-                      const isProfit = month.net >= 0;
-                      const netColor = isProfit ? 'text-success' : 'text-destructive';
-                      const badgeStyles = isProfit 
-                        ? 'bg-success/10 text-success border-success/20' 
-                        : 'bg-destructive/10 text-destructive border-destructive/20';
-
-                      return (
-                        <TableRow key={month.sheetName} className="hover:bg-muted/30 transition-colors h-11 border-b">
-                          <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-2">
-                            <FolderOpen className="size-4 text-muted-foreground shrink-0" />
-                            {month.sheetName}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(month.liquor)}</TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(month.food)}</TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-destructive">{formatINR(month.expenses)}</TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-warning">{formatINR(month.creditExtended)}</TableCell>
-                          <TableCell className={`text-right font-mono font-bold ${netColor}`}>{formatINR(month.net)}</TableCell>
-                          
-                          {/* Weighting bar */}
-                          <TableCell className="text-center">
-                            <div className="flex items-center justify-center select-none">
-                              <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden border">
-                                <div
-                                  className={isProfit ? "bg-success h-full rounded-full" : "bg-destructive h-full rounded-full"}
-                                  style={{ width: `${Math.min(100, Math.max(8, Math.round(Math.abs(month.net) / (summary.benchmarks?.bestProfitValue || 1) * 100)))}%` }}
-                                ></div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          
-                          <TableCell className="text-center pr-6 select-none">
-                            <span className={`text-[0.62rem] font-bold border rounded-full px-2.5 py-0.8 uppercase tracking-wider ${badgeStyles}`}>
-                              {month.status}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            )}
+            <LedgerTable
+              isDebitors={isDebitors}
+              paginatedDebitors={paginatedDebitors}
+              paginatedMonths={paginatedMonths}
+              maxOutstandingDuesLimit={maxOutstandingDuesLimit}
+              totalPendingSum={totalPendingSum}
+              topDebtorValue={topDebtorValue}
+              bestProfitValue={bestProfitValue}
+              totalItems={totalItems}
+            />
           </div>
         </div>
 
         {/* Database Pagination Console */}
         <div className="border-t p-4 bg-muted/15 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 select-none shrink-0 text-xs font-semibold text-muted-foreground">
           <span>
-            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(totalItems, currentPage * itemsPerPage)} of {totalItems.toLocaleString()} items
+            Showing {totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(totalItems, currentPage * itemsPerPage)} of {totalItems.toLocaleString()} items
           </span>
           
           <div className="flex items-center gap-1.5">
