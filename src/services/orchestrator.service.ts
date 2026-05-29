@@ -320,7 +320,7 @@ export class OrchestratorService {
           const debitorsLimit = options?.debitorsLimit ?? 10;
 
           // 3. AI Service: Request swappable LLM provider to compile reports
-          const timestamp = new Date().toLocaleString();
+          const timestamp = new Date().toISOString();
           const reports = await aiService.generateFinancialSummary({
             fileName,
             runTimestamp: timestamp,
@@ -520,7 +520,7 @@ export class OrchestratorService {
     const alerts = await rulesEngine.evaluate(allTransactions);
 
     // 3. AI Service
-    const timestamp = new Date().toLocaleString();
+    const timestamp = new Date().toISOString();
     const reports = await aiService.generateFinancialSummary({
       fileName,
       runTimestamp: timestamp,

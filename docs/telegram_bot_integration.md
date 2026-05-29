@@ -59,6 +59,9 @@ TELEGRAM_CHAT_ID="987654321"
 
 # Multiple users (owner + accountant, for example):
 # TELEGRAM_CHAT_ID="987654321,112233445"
+
+# Comma-separated list of standard IANA timezones to format dates in Telegram messages
+TELEGRAM_TIMEZONES="Asia/Kolkata,Asia/Hong_Kong,Europe/London"
 ```
 
 > [!IMPORTANT]

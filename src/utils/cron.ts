@@ -1,5 +1,8 @@
+import { config } from '../config/config.js';
+
 /**
- * Converts a standard 5-field cron expression into a user-friendly human-readable string.
+ * Converts a standard 5-field cron expression (assumed to be in UTC)
+ * into a user-friendly human-readable string in the configured Telegram timezones.
  */
 export function formatCronExpression(cron: string): string {
   if (!cron) return 'Not Scheduled';
@@ -11,13 +14,7 @@ export function formatCronExpression(cron: string): string {
   
   const [minute, hour, dom, month, dow] = parts;
   
-  // 1. Common exact intervals
-  if (minute === '0' && hour === '0' && dom === '*' && month === '*' && dow === '*') {
-    return 'Daily at midnight';
-  }
-  if (minute === '0' && hour === '*' && dom === '*' && month === '*' && dow === '*') {
-    return 'Every hour';
-  }
+  // Timezone-independent intervals (every X minutes/hours)
   if (minute === '*/5' && hour === '*' && dom === '*' && month === '*' && dow === '*') {
     return 'Every 5 minutes';
   }
@@ -30,39 +27,117 @@ export function formatCronExpression(cron: string): string {
   if (minute === '*/30' && hour === '*' && dom === '*' && month === '*' && dow === '*') {
     return 'Every 30 minutes';
   }
-  
-  // 2. Daily at specific hour/minute: e.g. "0 9 * * *"
+  if (minute === '0' && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    return 'Every hour';
+  }
+
+  const timezones = config.TELEGRAM_TIMEZONES && config.TELEGRAM_TIMEZONES.length > 0
+    ? config.TELEGRAM_TIMEZONES
+    : ['Asia/Kolkata'];
+
+  // Helper to extract timezone abbreviation (e.g. Asia/Kolkata -> IST)
+  function getTzAbbrev(tz: string, date: Date): string {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        timeZoneName: 'short'
+      }).formatToParts(date);
+      const tzPart = parts.find(p => p.type === 'timeZoneName');
+      return tzPart ? tzPart.value : tz;
+    } catch {
+      return tz;
+    }
+  }
+
+  // 1. Daily at specific hour/minute: e.g. "30 3 * * *"
   if (minute !== '*' && hour !== '*' && dom === '*' && month === '*' && dow === '*') {
     const minNum = parseInt(minute, 10);
     const hrNum = parseInt(hour, 10);
     if (!isNaN(minNum) && !isNaN(hrNum)) {
-      const ampm = hrNum >= 12 ? 'PM' : 'AM';
-      const displayHr = hrNum % 12 === 0 ? 12 : hrNum % 12;
-      const displayMin = minNum.toString().padStart(2, '0');
-      return `Daily at ${displayHr}:${displayMin} ${ampm}`;
+      const now = new Date();
+      // Construct UTC date for today at hrNum:minNum UTC
+      const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hrNum, minNum));
+      
+      const formattedTimes = timezones.map(tz => {
+        const timeStr = utcDate.toLocaleTimeString('en-US', {
+          timeZone: tz,
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        const abbrev = getTzAbbrev(tz, utcDate);
+        return `${timeStr} (${abbrev})`;
+      });
+
+      return `Daily at ${formattedTimes.join(' / ')}`;
     }
   }
 
-  // 3. Weekly on specific day: e.g. "0 0 * * 0"
-  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  if (minute === '0' && hour === '0' && dom === '*' && month === '*' && dow !== '*') {
+  // 2. Weekly on specific day: e.g. "0 0 * * 0"
+  if (minute !== '*' && hour !== '*' && dom === '*' && month === '*' && dow !== '*') {
+    const minNum = parseInt(minute, 10);
+    const hrNum = parseInt(hour, 10);
     const dowNum = parseInt(dow, 10);
-    if (!isNaN(dowNum) && dowNum >= 0 && dowNum <= 6) {
-      return `Weekly on ${daysOfWeek[dowNum]} at midnight`;
+    if (!isNaN(minNum) && !isNaN(hrNum) && !isNaN(dowNum) && dowNum >= 0 && dowNum <= 6) {
+      // Find a baseline Sunday in UTC: e.g., May 31, 2026 is Sunday
+      const baselineSunday = new Date(Date.UTC(2026, 4, 31, hrNum, minNum));
+      // Adjust to target day of week
+      baselineSunday.setUTCDate(baselineSunday.getUTCDate() + dowNum);
+
+      const formattedWeeks = timezones.map(tz => {
+        const dayName = new Intl.DateTimeFormat('en-US', {
+          timeZone: tz,
+          weekday: 'long'
+        }).format(baselineSunday);
+
+        const timeStr = baselineSunday.toLocaleTimeString('en-US', {
+          timeZone: tz,
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        const abbrev = getTzAbbrev(tz, baselineSunday);
+        return `Weekly on ${dayName} at ${timeStr} (${abbrev})`;
+      });
+
+      return formattedWeeks.join(' / ');
     }
   }
 
-  // 4. Monthly on specific day: e.g. "0 0 1 * *"
-  if (minute === '0' && hour === '0' && dom !== '*' && month === '*' && dow === '*') {
+  // 3. Monthly on specific day: e.g. "0 0 1 * *"
+  if (minute !== '*' && hour !== '*' && dom !== '*' && month === '*' && dow === '*') {
+    const minNum = parseInt(minute, 10);
+    const hrNum = parseInt(hour, 10);
     const domNum = parseInt(dom, 10);
-    if (!isNaN(domNum)) {
-      const suffix = (domNum === 1 || domNum === 21 || domNum === 31) ? 'st' :
-                     (domNum === 2 || domNum === 22) ? 'nd' :
-                     (domNum === 3 || domNum === 23) ? 'rd' : 'th';
-      return `Monthly on the ${domNum}${suffix} at midnight`;
+    if (!isNaN(minNum) && !isNaN(hrNum) && !isNaN(domNum)) {
+      // Baseline day of month in UTC
+      const baseline = new Date(Date.UTC(2026, 4, domNum, hrNum, minNum));
+
+      const formattedMonths = timezones.map(tz => {
+        const localDom = parseInt(new Intl.DateTimeFormat('en-US', {
+          timeZone: tz,
+          day: 'numeric'
+        }).format(baseline), 10);
+        
+        const timeStr = baseline.toLocaleTimeString('en-US', {
+          timeZone: tz,
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+
+        const suffix = (localDom === 1 || localDom === 21 || localDom === 31) ? 'st' :
+                       (localDom === 2 || localDom === 22) ? 'nd' :
+                       (localDom === 3 || localDom === 23) ? 'rd' : 'th';
+        
+        const abbrev = getTzAbbrev(tz, baseline);
+        return `Monthly on the ${localDom}${suffix} at ${timeStr} (${abbrev})`;
+      });
+
+      return formattedMonths.join(' / ');
     }
   }
   
   // Fallback: return raw schedule label
-  return `Schedule: ${cron}`;
+  return `Schedule: ${cron} (UTC)`;
 }

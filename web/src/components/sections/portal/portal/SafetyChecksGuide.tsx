@@ -17,13 +17,13 @@ export const SafetyChecksGuide: React.FC<SafetyChecksGuideProps> = ({ scanSchedu
             <h4 className="font-bold text-foreground text-sm">Automated Bookkeeping Safety Checks</h4>
             <p className="text-[0.75rem] text-muted-foreground mt-1 leading-normal max-w-2xl">
               Every spreadsheet ingestion automatically passes through our <strong>Smart Integrity Engine</strong>. 
-              We scan every transaction to safeguard your finances from manual typing errors, double billing, or cost spikes, sending instant alerts to your AI Strategic Advisor.
+              We scan all sales registers and debtor ledgers to safeguard Hotel Gaurav's finances from supplier double-billing, pricing spikes, or manual bookkeeping typos, sending instant alerts to your AI Strategic Advisor.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-[0.68rem] text-muted-foreground font-mono bg-background border px-3 py-1.5 rounded-lg shrink-0 self-start sm:self-auto select-none">
           <Calendar className="size-3.5" />
-          <span>Scan Schedule: {scanScheduleLabel}</span>
+          <span>Sync Schedule: {scanScheduleLabel}</span>
         </div>
       </div>
 
@@ -33,35 +33,35 @@ export const SafetyChecksGuide: React.FC<SafetyChecksGuideProps> = ({ scanSchedu
           <span className="text-base select-none">🚫</span>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Duplicate Bills</span>
-            <span className="text-[0.58rem] text-muted-foreground">Catches double entries</span>
+            <span className="text-[0.58rem] text-muted-foreground">Catches double-entered invoice numbers</span>
           </div>
         </div>
         <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
           <span className="text-base select-none">💸</span>
           <div className="flex flex-col">
-            <span className="font-bold text-[0.68rem] text-foreground">Large Payments</span>
-            <span className="text-[0.58rem] text-muted-foreground">Flags bills &gt; ₹50,000</span>
+            <span className="font-bold text-[0.68rem] text-foreground">Large Expenses</span>
+            <span className="text-[0.58rem] text-muted-foreground">Flags bills &amp; payments &ge; ₹50,000</span>
           </div>
         </div>
         <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
           <span className="text-base select-none">📈</span>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Cost Spikes</span>
-            <span className="text-[0.58rem] text-muted-foreground">Alerts 3x average jumps</span>
+            <span className="text-[0.58rem] text-muted-foreground">Alerts on 3x category average jumps</span>
           </div>
         </div>
         <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
           <span className="text-base select-none">🕒</span>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Late Logging</span>
-            <span className="text-[0.58rem] text-muted-foreground">Checks off-hours posts</span>
+            <span className="text-[0.58rem] text-muted-foreground">Flags weekend or off-hours posting</span>
           </div>
         </div>
         <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
           <span className="text-base select-none">⚠️</span>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Value Check</span>
-            <span className="text-[0.58rem] text-muted-foreground">Flags zero/negative slips</span>
+            <span className="text-[0.58rem] text-muted-foreground">Flags zero/negative amounts</span>
           </div>
         </div>
       </div>

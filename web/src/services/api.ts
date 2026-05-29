@@ -198,7 +198,7 @@ export async function triggerDriveSync(): Promise<{ status: 'up-to-date' | 'proc
  */
 export async function fetchSystemHealth(): Promise<{ cron: string; status: string } | null> {
   try {
-    const res = await fetch(`${apiBaseUrl}/health?t=${Date.now()}`, {
+    const res = await fetch(`${apiBaseUrl}/api/v1/health?t=${Date.now()}`, {
       cache: 'no-store'
     });
     if (res.ok) {

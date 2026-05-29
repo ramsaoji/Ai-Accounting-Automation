@@ -36,6 +36,10 @@ const envSchema = z.object({
   TELEGRAM_CHAT_ID: z.string().default('-1001234567890').transform((val) =>
     val.split(',').map((id) => id.trim()).filter(Boolean)
   ),
+  // Timezones to format dates in Telegram messages (e.g. "Asia/Kolkata,Asia/Hong_Kong")
+  TELEGRAM_TIMEZONES: z.string().default('Asia/Kolkata,Asia/Hong_Kong').transform((val) =>
+    val.split(',').map((tz) => tz.trim()).filter(Boolean)
+  ),
 
   // Scheduler Config
   CRON_SCHEDULE: z.string().default('0 0 * * *'), // Default to every day at 00:00

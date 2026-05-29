@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { MasterSummary, MonthlySummary, DebitorSummary } from '@/types';
 import { Search } from 'lucide-react';
-import { formatINRValue, formatTimestamp } from '@/utils/format';
+import { formatINRValue, formatTimestamp, formatCronExpression } from '@/utils/format';
 import { PortalCard } from './portal/PortalCard';
 import { SafetyChecksGuide } from './portal/SafetyChecksGuide';
 
@@ -63,18 +63,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
       return 'Static Offline Sync';
     }
     
-    // Parse common patterns
-    const clean = cronSchedule.trim().replace(/\s+/g, ' ');
-    if (clean === '0 0 * * *') {
-      return 'Daily at 12:00 AM (Midnight)';
-    }
-    if (clean === '*/30 * * * *') {
-      return 'Every 30 Minutes';
-    }
-    if (clean === '0 * * * *') {
-      return 'Every Hour';
-    }
-    return `Scheduled: ${cronSchedule}`;
+    return formatCronExpression(cronSchedule);
   }, [cronSchedule, connectionMode]);
 
   // Filter & Portals logic combined

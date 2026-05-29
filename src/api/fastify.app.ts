@@ -70,6 +70,8 @@ export function createFastifyApp() {
   // Public health-check routes
   app.get('/health', getHealth);
   app.get('/', getHealth);
+  app.get('/api/health', getHealth);
+  app.get('/api/v1/health', getHealth);
   app.post('/api/security/verify-app', { preHandler: validateBody(verifyAppSchema) }, verifyAppPassword);
   app.post('/api/v1/security/verify-app', { preHandler: validateBody(verifyAppSchema) }, verifyAppPassword); // v1 alias
 

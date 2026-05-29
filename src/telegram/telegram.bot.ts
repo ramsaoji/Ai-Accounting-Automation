@@ -9,6 +9,44 @@ import { AiProviderFactory } from '../ai/ai.factory.js';
 import { getReport } from '../db/db.client.js';
 import { formatCronExpression } from '../utils/cron.js';
 
+/**
+ * Formats an ISO timestamp or date string to show all configured user timezones.
+ */
+function formatTimestampToDual(ts?: string): string {
+  if (!ts) return 'Never';
+  const parsed = new Date(ts);
+  if (isNaN(parsed.getTime())) {
+    return ts; // Fallback to raw string
+  }
+  const timezones = config.TELEGRAM_TIMEZONES && config.TELEGRAM_TIMEZONES.length > 0
+    ? config.TELEGRAM_TIMEZONES
+    : ['Asia/Kolkata'];
+
+  function getTzAbbrev(tz: string, date: Date): string {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        timeZoneName: 'short'
+      }).formatToParts(date);
+      const tzPart = parts.find(p => p.type === 'timeZoneName');
+      return tzPart ? tzPart.value : tz;
+    } catch {
+      return tz;
+    }
+  }
+
+  const formatted = timezones.map(tz => {
+    const timeStr = parsed.toLocaleString('en-US', {
+      timeZone: tz,
+      hour12: true
+    });
+    const abbrev = getTzAbbrev(tz, parsed);
+    return `${timeStr} ${abbrev}`;
+  });
+
+  return formatted.join(' / ');
+}
+
 interface InlineKeyboardButton {
   text: string;
   callback_data: string;
@@ -307,7 +345,7 @@ export class TelegramBot {
       `🧠 *LLM Model*: \`${config.AI_MODEL}\`\n` +
       `📅 *Sync Schedule*: \`${formatCronExpression(config.CRON_SCHEDULE)}\`\n` +
       `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n` +
-      `🕒 *Server Time*: \`${new Date().toLocaleString()}\``;
+      `🕒 *Server Time*: \`${formatTimestampToDual(new Date().toISOString())}\``;
     await telegramClient.sendMessage(healthText, 'Markdown', this.getMainMenuKeyboard(), chatId);
   }
 
@@ -575,7 +613,7 @@ export class TelegramBot {
     try {
       const summaryText = `📊 *${config.BUSINESS_NAME} - Daily Sales Summary*\n` +
         `📅 *Audited Months*: ${data.totalMonths} months (${data.totalTransactions} transactions)\n` +
-        `🕒 *Last Ingested*: ${data.runTimestamp || data.timestamp || 'N/A'}\n\n` +
+        `🕒 *Last Ingested*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
         `*Key Financial Metrics:*\n` +
         `• 🍷 *Liquor Sales*: ₹${Math.round(data.masterTotals?.liquorSales || 0).toLocaleString()} (${data.benchmarks?.liquorPercentage || 0}% of sales)\n` +
         `• 🍲 *Food Sales*: ₹${Math.round(data.masterTotals?.foodSales || 0).toLocaleString()} (${data.benchmarks?.foodPercentage || 0}% of sales)\n` +
@@ -612,7 +650,7 @@ export class TelegramBot {
       const top = data.topDebitors || [];
 
       let debitorsText = `👥 *${config.BUSINESS_NAME} - Debitors & Credit Summary*\n` +
-        `🕒 *Last Ingested*: ${data.timestamp || data.runTimestamp || 'N/A'}\n\n` +
+        `🕒 *Last Ingested*: \`${formatTimestampToDual(data.timestamp || data.runTimestamp)}\`\n\n` +
         `*Credit Book Aggregates:*\n` +
         `• 📖 *Active Credit Accounts*: ${agg.activeDebitorsCount || 0} customers\n` +
         `• 📉 *Total Credit Extended*: ₹${Math.round(agg.totalDebitSum || 0).toLocaleString()}\n` +

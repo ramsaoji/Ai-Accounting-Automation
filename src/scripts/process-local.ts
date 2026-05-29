@@ -111,7 +111,7 @@ async function runLocalTest() {
       try {
         reports = await aiService.generateFinancialSummary({
           fileName,
-          runTimestamp: new Date().toLocaleString(),
+          runTimestamp: new Date().toISOString(),
           transactions: allTransactions,
           alerts,
           parsingErrors: allErrors,

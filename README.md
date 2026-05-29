@@ -290,6 +290,7 @@ Define the following environment variables in your `.env` configuration file:
 | **`GOOGLE_DRIVE_FOLDER_ID`** | No* | `your_google_drive_folder_id_here` | Target Google Drive Folder ID. If left at this default, local file mode is active |
 | **`TELEGRAM_BOT_TOKEN`** | No | `1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ` | Telegram Bot API Token. If left at this default or omitted, Telegram features are bypassed |
 | **`TELEGRAM_CHAT_ID`** | No | `-1001234567890` | Comma-separated list of authorized Chat IDs. If left at this default or omitted, Telegram features are bypassed |
+| **`TELEGRAM_TIMEZONES`** | No | `Asia/Kolkata,Asia/Hong_Kong` | Comma-separated list of IANA timezones to format times in Telegram messages |
 | **`CRON_SCHEDULE`** | No | `0 0 * * *` | Cron task schedule (defaults to daily at midnight: `0 0 * * *`) |
 | **`UPLOAD_PASSWORD`** | Yes | - | Passcode used to authorize spreadsheet ingestion uploads |
 | **`APP_PASSWORD`** | Yes | - | Passcode used to unlock the fullscreen App Lock screen |
