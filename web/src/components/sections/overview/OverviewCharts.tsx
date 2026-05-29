@@ -12,7 +12,7 @@ import {
   Bar,
   Cell
 } from 'recharts';
-import type { MasterSummary } from '../types';
+import type { MasterSummary, DebitorSummary } from '@/types';
 
 interface DebitorsAgeingItem {
   range: string;
@@ -63,7 +63,7 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
               formatter={(value) => [`₹${Number(value).toLocaleString()}`, 'Outstanding Liability']}
             />
             <Bar dataKey="pending" radius={[0, 4, 4, 0]} barSize={16}>
-              {summary.topDebitors.slice(0, 8).map((entry) => (
+              {summary.topDebitors.slice(0, 8).map((entry: DebitorSummary) => (
                 <Cell key={`cell-${entry.name}`} fill={entry.pending > 15000 ? 'var(--destructive)' : entry.pending > 5000 ? 'var(--warning)' : 'var(--primary)'} />
               ))}
             </Bar>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import type { Alert } from '../types';
+import type { Alert } from '@/types';
 import {
   Flame,
   AlertCircle,
@@ -191,7 +191,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
           filteredAlerts={filteredAlerts}
           displayAlerts={displayAlerts}
           selectedAlert={activeSelectedAlert}
-          setSelectedAlertIndex={(idx) => setSelectedAlertIndex(idx)}
+          setSelectedAlertIndex={(idx: number | null) => setSelectedAlertIndex(idx)}
           acknowledgedAlerts={acknowledgedAlerts}
           severityCounts={severityCounts}
           getSeverityMeta={getSeverityMeta}
@@ -202,7 +202,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
           activeSelectedAlert={activeSelectedAlert}
           getSeverityMeta={getSeverityMeta}
           acknowledgedAlerts={acknowledgedAlerts}
-          onResolve={(alert) => setActiveActionModal(alert)}
+          onResolve={(alert: Alert) => setActiveActionModal(alert)}
           onToggleAcknowledge={toggleAcknowledge}
         />
       </div>

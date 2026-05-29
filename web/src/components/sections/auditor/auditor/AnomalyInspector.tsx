@@ -2,7 +2,7 @@ import React from 'react';
 import { FileWarning, ExternalLink, ShieldCheck, RotateCcw, CheckSquare } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { Alert } from '../../types';
+import type { Alert } from '@/types';
 
 interface AnomalyInspectorProps {
   activeSelectedAlert: Alert | null;

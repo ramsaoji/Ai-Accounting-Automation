@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { verifyAppLockPassword } from '../services/api';
+import { verifyAppLockPassword } from '@/services/api';
 import { toast } from 'sonner';
 import { ShieldCheck, Eye, EyeOff, Loader2, ShieldAlert } from 'lucide-react';
 

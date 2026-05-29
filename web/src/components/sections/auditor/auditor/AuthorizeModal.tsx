@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { Alert } from '../../types';
+import type { Alert } from '@/types';
 
 interface AuthorizeModalProps {
   activeActionModal: Alert;

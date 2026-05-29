@@ -1,23 +1,22 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { deriveBusinessName } from '../utils/business';
-import type { MasterSummary, ChatMessage } from '../types';
-import { sendAdvisorChatMessage } from '../services/api';
-import { useAccountingStore } from '../store/useAccountingStore';
-import { MessageText } from '../utils/markdown';
+import { deriveBusinessName } from '@/utils/business';
+import type { MasterSummary, ChatMessage } from '@/types';
+import { sendAdvisorChatMessage } from '@/services/advisorService';
+import { useAccountingStore } from '@/store/useAccountingStore';
 import {
-  Send,
   Bot,
-  ArrowUpRight,
   RefreshCw,
   TrendingUp,
   ShieldCheck,
-  Activity,
-  Compass,
   Zap
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { PlaybookSidebar } from './advisor/PlaybookSidebar';
+import type { Playbook } from './advisor/PlaybookSidebar';
+import { ChatFeed } from './advisor/ChatFeed';
+import { ChatInputForm } from './advisor/ChatInputForm';
 
 interface AdvisorSectionProps {
   summary: MasterSummary;
@@ -92,21 +91,21 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
   }, [messages, isTyping]);
 
   // Advisor playbooks definition
-  const playbooks = [
+  const playbooks: Playbook[] = [
     {
-      id: 'revenue' as const,
+      id: 'revenue',
       name: 'Revenue Optimization',
       desc: 'Evaluate category sales performance and splits.',
       icon: <TrendingUp className="size-4 text-success shrink-0" />
     },
     {
-      id: 'recovery' as const,
+      id: 'recovery',
       name: 'Dues Recovery Strategy',
       desc: 'Formulate credit limits and collection objectives.',
       icon: <Zap className="size-4 text-warning shrink-0" />
     },
     {
-      id: 'auditing' as const,
+      id: 'auditing',
       name: 'Auditing Integrity',
       desc: 'Analyze outlier postings and expense leaks.',
       icon: <ShieldCheck className="size-4 text-info shrink-0" />
@@ -220,41 +219,11 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
       <div className="flex flex-col lg:grid lg:grid-cols-4 gap-3 md:gap-4">
         
         {/* Playbooks Sidebar */}
-        <div className="lg:col-span-1 flex flex-col border rounded-xl bg-card/50 overflow-hidden shrink-0 select-none min-w-0">
-          <div className="hidden lg:flex p-4 border-b bg-muted/20 items-center gap-2">
-            <Compass className="size-4 text-primary" />
-            <span className="text-xs font-bold text-foreground">Advisory Playbooks</span>
-          </div>
-          <div className="p-2 lg:p-3 flex-1 grid grid-cols-3 lg:flex lg:flex-col gap-1.5 lg:gap-1 overflow-auto">
-            {playbooks.map((p) => {
-              const isActive = activePlaybook === p.id;
-              return (
-                <button
-                  type="button"
-                  key={p.id}
-                  onClick={() => setActivePlaybook(p.id)}
-                  className={`p-2 lg:p-3 rounded-lg border cursor-pointer transition-all duration-200 flex flex-row lg:flex-col gap-1.5 md:gap-1 items-center lg:items-start justify-center lg:justify-start text-center lg:text-left shrink-0 ${
-                    isActive
-                      ? 'bg-muted border-foreground/20'
-                      : 'bg-background hover:bg-muted/40'
-                  }`}
-                >
-                  <div className="flex flex-row lg:flex-row items-center gap-1.5 lg:gap-2">
-                    {p.icon}
-                    <span className="text-[10px] sm:text-xs font-bold text-foreground leading-none">{p.name.split(' ')[0]}</span>
-                  </div>
-                  <span className="text-[0.65rem] text-muted-foreground leading-normal mt-0.5 hidden lg:block">
-                    {p.desc}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="hidden lg:flex p-3 border-t bg-muted/15 items-center gap-2 text-[0.62rem] font-bold text-muted-foreground font-mono">
-            <Activity className="size-3 text-success animate-pulse" />
-            LLM Layer: Local Ingestion
-          </div>
-        </div>
+        <PlaybookSidebar
+          playbooks={playbooks}
+          activePlaybook={activePlaybook}
+          setActivePlaybook={setActivePlaybook}
+        />
 
         {/* Chat Feed Pane (3/4 size) */}
         <Card className="lg:col-span-3 border bg-card/45 h-[650px] sm:h-[720px] flex flex-col overflow-hidden min-w-0">
@@ -284,88 +253,22 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
           </CardHeader>
 
           {/* Message Thread (Scrollable Viewport) */}
-          <CardContent ref={scrollContainerRef} className="flex-1 min-h-0 px-4 py-3 sm:px-6 sm:py-4 overflow-y-auto flex flex-col scroll-smooth pr-3">
-            <div className="flex flex-col gap-4">
-              {messages.map((msg) => (
-                <div
-                  key={`${msg.sender}-${msg.timestamp}`}
-                  className={`flex max-w-[85%] flex-col gap-1.5 ${
-                    msg.sender === 'user' ? 'self-end items-end' : 'self-start items-start'
-                  }`}
-                >
-                  <div
-                    className={`rounded-lg px-4 py-2.5 text-xs leading-relaxed ${
-                      msg.sender === 'user'
-                        ? 'bg-indigo-600 dark:bg-indigo-500 text-white rounded-tr-none font-medium shadow-sm'
-                        : 'bg-muted border text-foreground rounded-tl-none font-medium'
-                    }`}
-                  >
-                    <MessageText text={msg.text} isUser={msg.sender === 'user'} />
-                  </div>
-                  <span className="text-[0.65rem] font-medium text-muted-foreground/60 px-1 select-none">{msg.timestamp}</span>
-                </div>
-              ))}
-
-              {isTyping && (
-                <div className="self-start flex flex-col gap-1.5 items-start select-none">
-                  <div className="bg-muted border rounded-lg rounded-tl-none px-4 py-3 flex gap-1 items-center">
-                    <span className="size-1.5 bg-muted-foreground/60 rounded-full" style={{ animation: 'typing-dot 0.9s cubic-bezier(0.16,1,0.3,1) infinite', animationDelay: '0ms' }}></span>
-                    <span className="size-1.5 bg-muted-foreground/60 rounded-full" style={{ animation: 'typing-dot 0.9s cubic-bezier(0.16,1,0.3,1) infinite', animationDelay: '180ms' }}></span>
-                    <span className="size-1.5 bg-muted-foreground/60 rounded-full" style={{ animation: 'typing-dot 0.9s cubic-bezier(0.16,1,0.3,1) infinite', animationDelay: '360ms' }}></span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          </CardContent>
+          <ChatFeed
+            messages={messages}
+            isTyping={isTyping}
+            scrollContainerRef={scrollContainerRef}
+            messagesEndRef={messagesEndRef}
+          />
 
           {/* Form / Actions */}
-          <CardFooter className="px-3 py-2.5 sm:px-6 sm:py-4 border-t bg-muted/10 flex flex-col gap-2 sm:gap-3 flex-shrink-0">
-            {/* Quick Suggestion Chips */}
-            <div className="flex gap-1.5 overflow-x-auto max-w-full no-scrollbar select-none flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
-              {suggestions.map((sug) => (
-                <Button
-                  key={sug}
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleSend(sug)}
-                  className="text-[0.65rem] text-muted-foreground hover:text-foreground rounded-full flex-shrink-0 flex items-center gap-1 h-8 sm:h-7 px-2.5 sm:px-3 border-border/80 hover:bg-muted whitespace-nowrap"
-                >
-                  {sug}
-                  <ArrowUpRight className="size-2.5 sm:size-3 text-muted-foreground/80 shrink-0" />
-                </Button>
-              ))}
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend(input);
-              }}
-              noValidate
-              className="flex items-end gap-2 w-full shrink-0 animate-in fade-in duration-200"
-            >
-              <textarea
-                ref={textareaRef}
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask a financial question..."
-                aria-label="Ask a financial question..."
-                className="flex-1 bg-background dark:bg-muted/40 border border-border rounded-md px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 resize-none min-h-[36px] scroll-smooth"
-                style={{ height: '36px', overflowY: 'hidden' }}
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!input.trim()}
-                className="h-10 sm:h-9 px-3.5 cursor-pointer shrink-0"
-              >
-                <Send className="size-4" />
-              </Button>
-            </form>
-          </CardFooter>
+          <ChatInputForm
+            input={input}
+            setInput={setInput}
+            handleSend={handleSend}
+            suggestions={suggestions}
+            textareaRef={textareaRef}
+            handleKeyDown={handleKeyDown}
+          />
         </Card>
 
       </div>

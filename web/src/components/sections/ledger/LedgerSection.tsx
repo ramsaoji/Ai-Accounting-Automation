@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import type { MasterSummary, Transaction } from '../types';
-import { DatePickerWithRange } from './ui/DatePickerWithRange';
+import type { MasterSummary, Transaction, MonthlySummary, DebitorSummary } from '@/types';
+import { DatePickerWithRange } from '@/components/ui/DatePickerWithRange';
 import { LedgerTable } from './ledger/LedgerTable';
+import { getSheetDate, parseSheetNameToValue } from '@/utils/format';
 import {
   Search,
   Filter,
@@ -33,61 +34,10 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
 
   const availableMonths = useMemo(() => {
     if (!summary.months) return [];
-    return summary.months.map(m => m.sheetName);
+    return summary.months.map((m: MonthlySummary) => m.sheetName);
   }, [summary.months]);
 
-  // Helper to parse sheet month name like "Jan 2026"
-  const getSheetDate = (sheetName: string): Date | null => {
-    const clean = sheetName.trim().toLowerCase();
-    const yearMatch = clean.match(/\b(20\d{2})\b/);
-    if (yearMatch) {
-      const year = parseInt(yearMatch[1], 10);
-      const monthsMap: Record<string, number> = {
-        january: 0, jan: 0,
-        february: 1, feb: 1,
-        march: 2, mar: 2,
-        april: 3, apr: 3,
-        may: 4,
-        june: 5, jun: 5,
-        july: 6, jul: 6,
-        august: 7, aug: 7,
-        september: 8, sept: 8, sep: 8,
-        october: 9, oct: 9,
-        november: 10, nov: 10,
-        december: 11, dec: 11
-      };
-      const monthMatch = clean.match(/(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)/);
-      const monthIdx = monthMatch ? monthsMap[monthMatch[0]] : 0;
-      return new Date(year, monthIdx, 1);
-    }
-    return null;
-  };
 
-  const parseSheetNameToValue = (sheetName: string) => {
-    const clean = sheetName.trim().toLowerCase();
-    const yearMatch = clean.match(/\b(20\d{2})\b/);
-    if (yearMatch) {
-      const year = parseInt(yearMatch[1], 10);
-      const monthsMap: Record<string, number> = {
-        january: 0, jan: 0,
-        february: 1, feb: 1,
-        march: 2, mar: 2,
-        april: 3, apr: 3,
-        may: 4,
-        june: 5, jun: 5,
-        july: 6, jul: 6,
-        august: 7, aug: 7,
-        september: 8, sept: 8, sep: 8,
-        october: 9, oct: 9,
-        november: 10, nov: 10,
-        december: 11, dec: 11
-      };
-      const monthMatch = clean.match(/(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)/);
-      const monthIdx = monthMatch ? monthsMap[monthMatch[0]] : 0;
-      return year * 12 + monthIdx;
-    }
-    return 0;
-  };
 
   // Dynamic Debitors List based on date range
   const dynamicDebitorsList = useMemo(() => {
@@ -139,13 +89,13 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   // Filter & Search Logic for Debitors
   const processedDebitors = useMemo(() => {
     // Apply search
-    let list = dynamicDebitorsList.filter((debtor) =>
+    let list = dynamicDebitorsList.filter((debtor: DebitorSummary) =>
       debtor.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // Apply status filter
     if (statusFilter !== 'all') {
-      list = list.filter((debtor) => {
+      list = list.filter((debtor: DebitorSummary) => {
         const isBreach = debtor.pending > maxOutstandingDuesLimit;
         if (statusFilter === 'breached') return isBreach;
         if (statusFilter === 'watch') return !isBreach && debtor.pending > 5000;
@@ -165,15 +115,15 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     
     // Apply selected months filter
     if (selectedMonths.length > 0) {
-      list = list.filter(m => selectedMonths.includes(m.sheetName));
+      list = list.filter((m: MonthlySummary) => selectedMonths.includes(m.sheetName));
     }
 
     // Apply search
-    list = list.filter((m) =>
+    list = list.filter((m: MonthlySummary) =>
       m.sheetName.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    return list.toSorted((a, b) => {
+    return list.toSorted((a: MonthlySummary, b: MonthlySummary) => {
       const valA = parseSheetNameToValue(a.sheetName);
       const valB = parseSheetNameToValue(b.sheetName);
       return valB - valA;
@@ -183,7 +133,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   // Dynamic values for rendering progress/bars
   const totalPendingSum = useMemo(() => {
     if (selectedMonths.length > 0 && summary.transactions) {
-      return dynamicDebitorsList.reduce((sum, d) => sum + d.pending, 0);
+      return dynamicDebitorsList.reduce((sum: number, d: DebitorSummary) => sum + d.pending, 0);
     }
     return summary.aggregates?.totalPendingSum ?? 0;
   }, [selectedMonths, summary.transactions, dynamicDebitorsList, summary.aggregates]);
@@ -198,7 +148,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const bestProfitValue = useMemo(() => {
     if (selectedMonths.length > 0) {
       let maxVal = 0;
-      processedMonths.forEach(m => {
+      processedMonths.forEach((m: MonthlySummary) => {
         if (m.net > maxVal) maxVal = m.net;
       });
       return maxVal || 1;
@@ -260,7 +210,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                 {!isDebitors && (
                   <DatePickerWithRange 
                     selectedMonths={selectedMonths} 
-                    setSelectedMonths={(m) => { setSelectedMonths(m); setCurrentPage(1); }} 
+                    setSelectedMonths={(m: string[]) => { setSelectedMonths(m); setCurrentPage(1); }} 
                     availableMonths={availableMonths}
                   />
                 )}

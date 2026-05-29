@@ -60,8 +60,9 @@ export async function saveReport(
       ON CONFLICT (report_type)
       DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();
     `;
-    // Pass data directly — pg driver serializes objects to JSONB without double-stringify
-    await pool.query(query, [reportType, data]);
+    // Explicitly stringify payload to guarantee correct JSONB serialization (prevents pg driver from parsing JS arrays as postgres native arrays)
+    const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+    await pool.query(query, [reportType, jsonStr]);
     logger.info({ reportType }, 'Saved report summary to Neon DB');
   } catch (err) {
     logger.error({ err, reportType }, 'Failed to save report to Neon DB');

@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
-import type { MasterSummary } from '../types';
-import { fetchAccountingData, fetchSystemHealth } from '../services/api';
+import type { MasterSummary } from '@/types';
+import { fetchAccountingData, fetchSystemHealth } from '@/services/api';
 import { toast } from 'sonner';
-import { BUSINESS_NAME } from '../utils/business';
+import { BUSINESS_NAME } from '@/utils/business';
 
 export function useAccountingData() {
   const [salesData, setSalesData] = useState<MasterSummary | null>(null);

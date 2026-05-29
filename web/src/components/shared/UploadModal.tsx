@@ -22,7 +22,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
-import { uploadSpreadsheet, verifyUploadPassword } from '../services/api';
+import { uploadSpreadsheet, verifyUploadPassword } from '@/services/api';
 
 interface UploadModalProps {
   onSuccess: () => void;

@@ -10,6 +10,8 @@ import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 import { saveReport, getReport } from '../db/db.client.js';
 import type { Transaction } from '../types/accounting.types.js';
+import { resolveTargetFile } from '../utils/file.js';
+import { buildDailySalesArray } from '../utils/accounting.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -70,80 +72,6 @@ export async function saveSyncMetadata(inputDir: string, metadata: SyncMetadata)
     const metaPath = path.resolve(outputDir, 'sync-metadata.json');
     await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2));
   }
-}
-
-// ─── Internal Utilities ──────────────────────────────────────────────────────
-
-async function resolveTargetFile(inputFilePath: string, inputDir: string): Promise<string> {
-  const isFile = async (p: string) => {
-    try { return (await fs.promises.stat(p)).isFile(); } catch { return false; }
-  };
-
-  // 1. Try raw input path
-  let target = path.resolve(process.cwd(), inputFilePath);
-  if (await isFile(target)) return target;
-
-  // 2. Try with .xlsx extension appended
-  target = path.resolve(process.cwd(), inputFilePath + '.xlsx');
-  if (await isFile(target)) return target;
-
-  // 3. Try inside inputDir folder
-  target = path.join(inputDir, inputFilePath);
-  if (await isFile(target)) return target;
-
-  // 4. Try inside inputDir with .xlsx extension appended
-  target = path.join(inputDir, inputFilePath + '.xlsx');
-  if (await isFile(target)) return target;
-
-  // 5. Try basename check in inputDir
-  const baseName = path.basename(inputFilePath);
-  target = path.join(inputDir, baseName);
-  if (await isFile(target)) return target;
-
-  // 6. Try basename in inputDir with .xlsx appended
-  target = path.join(inputDir, baseName + '.xlsx');
-  if (await isFile(target)) return target;
-
-  throw new Error(`Could not resolve input file "${inputFilePath}" inside the input directory "${inputDir}". Please verify the file exists.`);
-}
-
-/**
- * Compiles a per-day aggregated sales array from a flat transaction list.
- * Shared between runPipeline() and processFileBuffer() to eliminate duplication.
- */
-function buildDailySalesArray(transactions: Transaction[]): Array<{
-  date: string;
-  liquor: number;
-  food: number;
-  creditRecovery: number;
-  expenses: number;
-  creditExtended: number;
-}> {
-  const dailyMap = new Map<string, {
-    date: string;
-    liquor: number;
-    food: number;
-    creditRecovery: number;
-    expenses: number;
-    creditExtended: number;
-  }>();
-
-  for (const t of transactions) {
-    if (!t.date || isNaN(t.date.getTime())) continue;
-    const dateStr = t.date.toISOString().split('T')[0];
-    if (!dailyMap.has(dateStr)) {
-      dailyMap.set(dateStr, { date: dateStr, liquor: 0, food: 0, creditRecovery: 0, expenses: 0, creditExtended: 0 });
-    }
-    const dayData = dailyMap.get(dateStr)!;
-    const amt = t.amount || 0;
-    if (t.category === 'Liquor Revenue') dayData.liquor += amt;
-    else if (t.category === 'Food Revenue') dayData.food += amt;
-    else if (t.category === 'Credit Recovery') dayData.creditRecovery += amt;
-    else if (t.category === 'Operational Expense') dayData.expenses += amt;
-    else if (t.category === 'Credit Extended') dayData.creditExtended += amt;
-  }
-
-  return Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // ─── Orchestrator Service ────────────────────────────────────────────────────

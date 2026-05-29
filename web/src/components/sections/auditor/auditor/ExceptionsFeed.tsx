@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, Sliders, Sparkles, Ban, Info, CheckCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import type { Alert } from '../../types';
+import type { Alert } from '@/types';
 
 interface ExceptionsFeedProps {
   activeLeftTab: 'feed' | 'policies';

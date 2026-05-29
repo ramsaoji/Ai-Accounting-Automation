@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { changeSecurityPasswords } from '../services/api';
+import { changeSecurityPasswords } from '@/services/api';
 import { toast } from 'sonner';
 import { Key, Eye, EyeOff, Loader2, Lock, Upload } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';

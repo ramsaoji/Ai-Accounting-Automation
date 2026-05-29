@@ -7,35 +7,8 @@ import { telegramService } from '../telegram/telegram.service.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 import { saveReport } from '../db/db.client.js';
-
-function resolveTargetFile(inputFilePath: string, inputDir: string): string {
-  // 1. Try raw input path
-  let target = path.resolve(process.cwd(), inputFilePath);
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
-
-  // 2. Try with .xlsx extension appended
-  target = path.resolve(process.cwd(), inputFilePath + '.xlsx');
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
-
-  // 3. Try inside inputDir folder
-  target = path.join(inputDir, inputFilePath);
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
-
-  // 4. Try inside inputDir with .xlsx extension appended
-  target = path.join(inputDir, inputFilePath + '.xlsx');
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
-
-  // 5. Try basename check in inputDir
-  const baseName = path.basename(inputFilePath);
-  target = path.join(inputDir, baseName);
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
-
-  // 6. Try basename in inputDir with .xlsx appended
-  target = path.join(inputDir, baseName + '.xlsx');
-  if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
-
-  throw new Error(`Could not resolve input file "${inputFilePath}" inside the input directory "${inputDir}". Please verify the file exists.`);
-}
+import { resolveTargetFile } from '../utils/file.js';
+import { buildDailySalesArray } from '../utils/accounting.js';
 
 async function runLocalTest() {
   logger.info('--- STARTING LOCAL PIPELINE INTEGRATION TEST (BATCH MODE) ---');
@@ -59,7 +32,7 @@ async function runLocalTest() {
   let files: { name: string; path: string; mtime: number }[] = [];
 
   if (specificFilePath) {
-    const resolvedPath = resolveTargetFile(specificFilePath, inputDir);
+    const resolvedPath = await resolveTargetFile(specificFilePath, inputDir);
     logger.info({ resolvedPath }, 'SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
     files = [{
       name: path.basename(resolvedPath),
@@ -159,26 +132,10 @@ async function runLocalTest() {
 
     const cleanFileName = fileName.replace(/\.[^/.]+$/, ''); // Strip extension
 
-    // Compile daily-sales array (needed for both DB and disk paths)
-    let dailySalesArray: any[] | undefined = undefined;
-    if (!parseResult.isDebitorsList) {
-      const dailyMap = new Map<string, { date: string; liquor: number; food: number; creditRecovery: number; expenses: number; creditExtended: number }>();
-      for (const t of allTransactions) {
-        if (!t.date || isNaN(t.date.getTime())) continue;
-        const dateStr = t.date.toISOString().split('T')[0];
-        if (!dailyMap.has(dateStr)) {
-          dailyMap.set(dateStr, { date: dateStr, liquor: 0, food: 0, creditRecovery: 0, expenses: 0, creditExtended: 0 });
-        }
-        const dayData = dailyMap.get(dateStr)!;
-        const amt = t.amount || 0;
-        if (t.category === 'Liquor Revenue') dayData.liquor += amt;
-        else if (t.category === 'Food Revenue') dayData.food += amt;
-        else if (t.category === 'Credit Recovery') dayData.creditRecovery += amt;
-        else if (t.category === 'Operational Expense') dayData.expenses += amt;
-        else if (t.category === 'Credit Extended') dayData.creditExtended += amt;
-      }
-      dailySalesArray = Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-    }
+    // Compile daily-sales array using centralized utility helper
+    const dailySalesArray = !parseResult.isDebitorsList
+      ? buildDailySalesArray(allTransactions)
+      : undefined;
 
     if (config.DATABASE_URL) {
       // DB mode: persist to Neon DB only — no local disk writes
