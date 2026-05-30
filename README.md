@@ -276,8 +276,8 @@ Define the following environment variables in your `.env` configuration file:
 | **`NODE_ENV`** | No | `development` | Runtime mode (`development` enables verbose debug logs, `production` enables clean info logs) |
 | **`PORT`** | No | `8080` | Bind port for cloud environment container health checks |
 | **`DATABASE_URL`** | No | - | PostgreSQL connection string (e.g. Neon DB). If omitted, the backend reads from local `data/output/` files instead |
-| **`AI_PROVIDER`** | Yes | `gemini` | Core provider: `openai`, `gemini`, `claude`, `openrouter`, `deepseek`, `ollama`, `groq` |
-| **`AI_MODEL`** | Yes | - | The specific model ID to call (e.g. `gpt-4o-mini`, `gemini-1.5-flash`, etc.). Must be defined |
+| **`AI_PROVIDER`** | No | `none` | Core provider: `openai`, `gemini`, `claude`, `openrouter`, `deepseek`, `ollama`, `groq`, `none`. If omitted or set to `none`, AI summaries are bypassed |
+| **`AI_MODEL`** | No | - | The specific model ID to call (e.g. `gpt-4o-mini`, `gemini-1.5-flash`, etc.). If omitted, falls back to a default model matching your provider |
 | **`GEMINI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=gemini` |
 | **`OPENAI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=openai` |
 | **`CLAUDE_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=claude` |

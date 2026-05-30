@@ -60,22 +60,15 @@ web/
 ├── src/
 │   ├── assets/                   # Local image and media assets
 │   ├── components/               # React UI & page section components
-│   │   ├── ui/                   # Primitive layout components (card, button, input)
-│   │   ├── AdvisorSection.tsx    # AI strategic advisor chat feed component
-│   │   ├── AppSidebar.tsx        # Navigation sidebar component
-│   │   ├── AuditorSection.tsx    # Anomaly list and rules editor component
-│   │   ├── LedgerSection.tsx     # Reconciled transaction records grid view
-│   │   ├── LockScreen.tsx        # Fullscreen App Lock security overlay
-│   │   ├── OverviewCharts.tsx    # Recharts line and bar graphs visualization
-│   │   ├── OverviewSection.tsx   # Dashboard main KPI metrics grid
-│   │   ├── PortalCharts.tsx      # Sparkline Recharts rendering helper
-│   │   ├── PortalSection.tsx     # Double-ledger directory entrypoints
-│   │   ├── SecuritySettingsModal.tsx # Password changing settings modal
-│   │   ├── theme-provider.tsx    # System-wide CSS dark/light theme context provider
-│   │   └── UploadModal.tsx       # Excel file upload queue component
+│   │   ├── layout/               # Main layout components (Sidebar, Header, LoadingScreen)
+│   │   ├── sections/             # Dashboard section interfaces (portal, overview, ledger, auditor, advisor)
+│   │   ├── security/             # Security lock screen and credentials settings modal
+│   │   ├── shared/               # Shared onboarding/upload wizard modals (OnboardingWizard, UploadModal)
+│   │   └── ui/                   # Primitive layout components (card, button, input)
 │   ├── hooks/                    # Custom React hooks
 │   │   ├── use-mobile.ts         # Viewport size detector hook
-│   │   └── useAccountingData.ts  # Cascading backend fetching hook
+│   │   ├── useAccountingData.ts  # Cascading backend fetching hook
+│   │   └── useDriveSync.ts       # Drive sync and local directory load hook
 │   ├── lib/
 │   │   └── utils.ts              # Tailwind CSS merging utility
 │   ├── services/

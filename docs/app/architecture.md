@@ -64,7 +64,7 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 * **Role:** Financial trends forecasting and recovery task-list compiling.
 * **Patterns:** **Factory Method** & **Adapter Design Patterns**.
 * **Decoupled Providers:**
-  * Adapters for **Groq**, **Gemini**, **OpenAI**, **Claude**, and local **Ollama** runtimes inherit from a unified `AIProvider` contract.
+  * Adapters for **Groq**, **Gemini**, **OpenAI**, **Claude**, local **Ollama**, and **none** (disabled) runtimes inherit from a unified `AIProvider` contract.
   * Prompt templates encapsulate structured business variables inside dynamic strings, feeding them to active adapter connections.
   * **Visual & Calculation Helpers:** 
     * `report-helper.ts`: Decoupled utility module that performs SVG chart coordinate math, maps tabular transaction trends, and formats operational compliance anomalies.
