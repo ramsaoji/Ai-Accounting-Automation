@@ -10,8 +10,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
 
   // AI Config
-  AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'ollama', 'groq']).default('gemini'),
-  AI_MODEL: z.string().min(1, 'AI_MODEL is required'),
+  AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'ollama', 'groq', 'none']).default('none'),
+  AI_MODEL: z.string().optional(),
 
   // API Keys (Conditional checks can be added at runtime depending on chosen provider)
   OPENAI_API_KEY: z.string().optional(),
@@ -61,6 +61,21 @@ const envSchema = z.object({
 
   // Business display name (used in AI prompts, Telegram messages, and reports)
   BUSINESS_NAME: z.string().optional().default('Hotel Gaurav'),
+}).transform((data) => {
+  const defaults: Record<string, string> = {
+    openai: 'gpt-4o-mini',
+    gemini: 'gemini-1.5-flash',
+    claude: 'claude-3-5-sonnet-20240620',
+    deepseek: 'deepseek-chat',
+    groq: 'llama-3.3-70b-versatile',
+    openrouter: 'google/gemini-2.0-flash-exp:free',
+    ollama: 'llama3',
+    none: 'none'
+  };
+  return {
+    ...data,
+    AI_MODEL: data.AI_MODEL || defaults[data.AI_PROVIDER] || 'none'
+  };
 }).refine(
   (data) => data.NODE_ENV !== 'production' || data.JWT_SECRET !== 'development_jwt_secret_fallback_key_12345',
   {

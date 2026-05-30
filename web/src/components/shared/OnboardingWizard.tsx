@@ -10,7 +10,9 @@ import {
   ArrowLeft,
   FileSpreadsheet, 
   ShieldCheck, 
-  Cpu 
+  Cpu,
+  Info,
+  ThumbsUp
 } from 'lucide-react';
 
 interface OnboardingWizardProps {
@@ -133,12 +135,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     {connectionMode} Connection
                   </span>
                 </div>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  {connectionMode === 'live'
-                    ? '👍 Google Drive API credentials detected! You can perform seamless fully automated directory syncing.'
-                    : 'ℹ️ No Google Drive keys detected or operating offline. You can upload files manually below.'
-                  }
-                </p>
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground leading-relaxed">
+                  {connectionMode === 'live' ? (
+                    <>
+                      <ThumbsUp className="size-3.5 text-emerald-500 shrink-0" />
+                      <span>Google Drive API credentials detected! You can perform seamless fully automated directory syncing.</span>
+                    </>
+                  ) : (
+                    <>
+                      <Info className="size-3.5 text-blue-500 shrink-0" />
+                      <span>No Google Drive keys detected or operating offline. You can upload files manually below.</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -182,6 +191,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                         <Cloud className="size-4" />
                       )}
                       <span>Sync Drive</span>
+                    </Button>
+                  )}
+                  {connectionMode === 'static' && (
+                    <Button
+                      onClick={onDriveSync}
+                      disabled={isSyncingDrive || isLoading}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 cursor-pointer border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 disabled:opacity-50 h-9"
+                    >
+                      {isSyncingDrive ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <FileSpreadsheet className="size-4" />
+                      )}
+                      <span>Load Local Files</span>
                     </Button>
                   )}
                 </div>
@@ -228,6 +253,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Button
               size="sm"
               onClick={() => setStep(prev => Math.min(4, prev + 1))}
+              disabled={step === 3}
               className="gap-1.5 text-xs font-semibold cursor-pointer h-9 px-4"
             >
               Continue

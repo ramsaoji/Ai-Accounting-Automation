@@ -28,6 +28,16 @@ async function start() {
   // 0.5 Validate AI provider credentials at startup (not at first use)
   AiProviderFactory.validateProviderConfig();
 
+  // 0.6 Log Google Drive integration status
+  const isMockDrive =
+    config.GOOGLE_CLIENT_EMAIL.includes('your-project-id') ||
+    config.GOOGLE_PRIVATE_KEY.includes('MIIEvgIBADANBgkqhkiG9w0');
+  if (isMockDrive) {
+    logger.warn('[Google Drive] Integration is in MOCK mode. API syncing is disabled. Reading spreadsheets from local "data/input/" directory.');
+  } else {
+    logger.info('[Google Drive] Google Drive integration is ACTIVE (Live Sync Mode enabled).');
+  }
+
   // 1. Initialize background cron scheduler
   try {
     schedulerJob.start();

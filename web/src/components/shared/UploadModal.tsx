@@ -73,7 +73,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
         toast.error("Invalid upload password. Access denied.");
       }
     } catch {
-      toast.error("Security verification request failed.");
+      toast.error("Could not connect to the backend server. Please verify it is running.");
     } finally {
       setIsVerifying(false);
     }

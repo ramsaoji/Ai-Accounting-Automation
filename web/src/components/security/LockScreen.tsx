@@ -33,7 +33,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
         toast.error("Invalid passcode. Access denied.");
       }
     } catch {
-      toast.error("Server authorization request failed.");
+      toast.error("Could not connect to the backend server. Please verify it is running.");
     } finally {
       setIsVerifying(false);
     }

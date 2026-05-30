@@ -81,6 +81,8 @@ export class OrchestratorService {
    * Whether the pipeline is currently executing. Prevents concurrent runs.
    */
   private isRunning = false;
+  private syncStatus: 'idle' | 'running' | 'success' | 'error' = 'idle';
+  private syncError: string | null = null;
 
   /**
    * Checks if there are any new or modified Excel spreadsheets on Google Drive or local input directory.
@@ -103,9 +105,14 @@ export class OrchestratorService {
 
     if (isMockDrive) {
       if (!fs.existsSync(inputDir)) {
-        return { hasNew: false, newFilesCount: 0 };
+        fs.mkdirSync(inputDir, { recursive: true });
       }
       const localFiles = fs.readdirSync(inputDir).filter(f => f.endsWith('.xlsx'));
+
+      if (localFiles.length === 0) {
+        throw new Error("No Excel spreadsheets found in 'data/input' directory. Please place .xlsx files in 'data/input/' and retry.");
+      }
+
       for (const f of localFiles) {
         const filePath = path.join(inputDir, f);
         const stat = fs.statSync(filePath);
@@ -126,8 +133,8 @@ export class OrchestratorService {
           }
         }
       } catch (err) {
-        logger.error({ err }, 'Failed to check new files in Google Drive. Assuming new files exist to be safe.');
-        return { hasNew: true, newFilesCount: 1 };
+        logger.error({ err }, 'Failed to check new files in Google Drive.');
+        throw new Error('Google Drive API connection failed. Verify your credentials in configuration.');
       }
     }
 
@@ -148,35 +155,76 @@ export class OrchestratorService {
       return;
     }
     this.isRunning = true;
+    this.syncStatus = 'running';
+    this.syncError = null;
 
     logger.info('Initiating background worker thread for AI Accounting Ingestion...');
 
     return new Promise<void>((resolve, reject) => {
-      // Spawn worker thread targeting this same file (tsx in dev / js in dist in prod)
-      const worker = new Worker(new URL(import.meta.url));
+      const isTs = import.meta.url.endsWith('.ts') || import.meta.url.includes('.ts?');
+      let worker: Worker;
+      try {
+        if (isTs) {
+          worker = new Worker(
+            `
+            import { register } from 'tsx/esm/api';
+            register();
+            await import('${import.meta.url}');
+            `,
+            { eval: true }
+          );
+        } else {
+          worker = new Worker(new URL(import.meta.url));
+        }
+      } catch (err: any) {
+        logger.error({ err }, 'Failed to initialize worker thread');
+        this.isRunning = false;
+        this.syncStatus = 'error';
+        this.syncError = err.message || String(err);
+        reject(err);
+        return;
+      }
 
       worker.on('message', (msg) => {
         if (msg.status === 'success') {
           logger.info('Background worker completed pipeline run successfully');
           this.isRunning = false;
+          this.syncStatus = 'success';
+          this.syncError = null;
           resolve();
         } else if (msg.status === 'error') {
+          const errStr = msg.error || 'Unknown worker error';
           this.isRunning = false;
-          reject(new Error(msg.error));
+          this.syncStatus = 'error';
+          this.syncError = errStr;
+          reject(new Error(errStr));
         }
       });
 
       worker.on('error', (err) => {
         logger.error({ err }, 'Worker thread encountered a critical error');
+        const errStr = err.message || String(err);
         this.isRunning = false;
+        this.syncStatus = 'error';
+        this.syncError = errStr;
         reject(err);
       });
 
       worker.on('exit', (code) => {
         this.isRunning = false;
         if (code !== 0) {
-          reject(new Error(`Worker thread stopped unexpectedly with exit code ${code}`));
+          if (this.syncStatus === 'running') {
+            const errStr = `Worker thread stopped unexpectedly with exit code ${code}`;
+            this.syncStatus = 'error';
+            this.syncError = errStr;
+            reject(new Error(errStr));
+          } else {
+            resolve();
+          }
         } else {
+          if (this.syncStatus === 'running') {
+            this.syncStatus = 'success';
+          }
           resolve();
         }
       });
@@ -492,6 +540,20 @@ export class OrchestratorService {
    */
   get running(): boolean {
     return this.isRunning;
+  }
+
+  /**
+   * Returns the current sync process state.
+   */
+  get status(): 'idle' | 'running' | 'success' | 'error' {
+    return this.syncStatus;
+  }
+
+  /**
+   * Returns the error message from the last failed sync run, if any.
+   */
+  get error(): string | null {
+    return this.syncError;
   }
 
   /**

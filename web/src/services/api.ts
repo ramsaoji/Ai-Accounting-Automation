@@ -59,9 +59,9 @@ export interface SyncResult {
  * Communicates directly with the live database backend.
  */
 export async function fetchAccountingData(): Promise<SyncResult> {
-  // Concurrent live API fetch
+  // Concurrent API fetch including system health to dynamically check Google Drive status
   try {
-    const [salesRes, debitorsRes] = await Promise.all([
+    const [salesRes, debitorsRes, healthRes] = await Promise.all([
       authFetch(`${apiBaseUrl}/api/v1/data/sales?t=${Date.now()}`, {
         headers: getAuthHeaders(),
         cache: 'no-store'
@@ -69,16 +69,25 @@ export async function fetchAccountingData(): Promise<SyncResult> {
       authFetch(`${apiBaseUrl}/api/v1/data/debitors?t=${Date.now()}`, {
         headers: getAuthHeaders(),
         cache: 'no-store'
+      }),
+      fetch(`${apiBaseUrl}/api/v1/health?t=${Date.now()}`, {
+        cache: 'no-store'
       })
     ]);
 
     const sales = salesRes.ok ? mapMasterSummary(await salesRes.json(), false) : null;
     const debitors = debitorsRes.ok ? mapMasterSummary(await debitorsRes.json(), true) : null;
+    
+    let mode: 'live' | 'static' | 'empty' = 'static';
+    if (healthRes.ok) {
+      const healthData = await healthRes.json();
+      mode = healthData.connectionMode || 'static';
+    }
 
     return {
       sales,
       debitors,
-      mode: 'live'
+      mode
     };
   } catch (err) {
     console.warn('Backend API connection failed.', err);
@@ -143,8 +152,8 @@ export async function verifyUploadPassword(password: string): Promise<string | n
       return data.sessionToken || null;
     }
     return null;
-  } catch {
-    return null;
+  } catch (err) {
+    throw err;
   }
 }
 
@@ -194,6 +203,22 @@ export async function triggerDriveSync(): Promise<{ status: 'up-to-date' | 'proc
 }
 
 /**
+ * Fetches the current background sync pipeline execution state and error status.
+ */
+export async function fetchSyncStatus(): Promise<{ status: 'idle' | 'running' | 'success' | 'error'; error: string | null; isRunning: boolean }> {
+  const res = await authFetch(`${apiBaseUrl}/api/v1/sync-status`, {
+    method: 'GET',
+    headers: getAuthHeaders()
+  });
+
+  if (!res.ok) {
+    throw new Error(`Server responded with status ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
  * Fetches server configuration and health metadata (including cron schedule).
  */
 export async function fetchSystemHealth(): Promise<{ cron: string; status: string } | null> {
@@ -231,7 +256,7 @@ export async function verifyAppLockPassword(password: string, remember: boolean)
     return null;
   } catch (err) {
     console.error('Failed to verify app password:', err);
-    return null;
+    throw err;
   }
 }
 

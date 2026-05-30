@@ -1,10 +1,17 @@
-import { AiProvider } from './ai.types.js';
+import { AiProvider, AiOptions } from './ai.types.js';
 import { OpenAiProvider } from './providers/openai.provider.js';
 import { GeminiProvider } from './providers/gemini.provider.js';
 import { ClaudeProvider } from './providers/claude.provider.js';
 import { OllamaProvider } from './providers/ollama.provider.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
+
+export class DisabledAiProvider implements AiProvider {
+  readonly id = 'none';
+  async generateText(prompt: string, options?: AiOptions): Promise<string> {
+    throw new Error('AI generation is disabled (AI_PROVIDER is configured as "none").');
+  }
+}
 
 /** Maps provider name to the env variable name that must be set. Ollama uses a base URL, not a key. */
 const PROVIDER_KEY_MAP: Record<string, { envVar: string; getValue: () => string | undefined }> = {
@@ -25,10 +32,16 @@ export class AiProviderFactory {
    */
   static validateProviderConfig(): void {
     const providerName = config.AI_PROVIDER.toLowerCase();
+
+    if (providerName === 'none') {
+      logger.warn('[AI Provider] AI features are disabled (AI_PROVIDER is set to "none").');
+      return;
+    }
+
     const mapping = PROVIDER_KEY_MAP[providerName];
 
     if (!mapping) {
-      logger.warn({ providerName }, 'Unknown AI_PROVIDER — no key validation performed. Will fall back to Gemini.');
+      logger.warn({ providerName }, 'Unknown AI_PROVIDER — no key validation performed.');
       return;
     }
 
@@ -51,9 +64,15 @@ export class AiProviderFactory {
   static createProvider(): AiProvider {
     const providerName = config.AI_PROVIDER.toLowerCase();
     
-    logger.info({ providerName }, 'AI Provider Factory creating provider instance');
+    if (providerName === 'none') {
+      logger.warn({ providerName }, 'AI Provider Factory creating provider instance (disabled)');
+    } else {
+      logger.info({ providerName }, 'AI Provider Factory creating provider instance');
+    }
 
     switch (providerName) {
+      case 'none':
+        return new DisabledAiProvider();
       case 'openai':
         return new OpenAiProvider(
           'openai', 
@@ -85,8 +104,8 @@ export class AiProviderFactory {
       case 'ollama':
         return new OllamaProvider();
       default:
-        logger.warn({ providerName }, 'Unknown provider specified, falling back to Google Gemini');
-        return new GeminiProvider();
+        logger.warn({ providerName }, 'Unknown provider specified, defaulting to disabled/none');
+        return new DisabledAiProvider();
     }
   }
 }

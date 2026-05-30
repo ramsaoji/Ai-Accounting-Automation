@@ -94,6 +94,7 @@ export function App() {
   const { isSyncingDrive, handleDriveSync } = useDriveSync({
     salesData,
     debitorsData,
+    connectionMode,
     fetchRealData
   });
 

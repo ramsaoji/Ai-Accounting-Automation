@@ -106,7 +106,8 @@ export async function triggerPipeline(request: FastifyRequest, reply: FastifyRep
     reply.code(202).send({ status: 'processing', message: `Sync started. Ingesting ${newFilesCount} spreadsheet(s)...` });
   } catch (err) {
     logger.error({ err }, 'Failed during pre-sync check');
-    reply.code(500).send(Errors.internalError('Sync request failed due to an internal server error'));
+    const errMsg = err instanceof Error ? err.message : String(err);
+    reply.code(400).send({ error: errMsg });
   }
 }
 
@@ -173,4 +174,16 @@ export async function handleFileUpload(request: FastifyRequest, reply: FastifyRe
     logger.error({ err: message }, 'Error handling file upload');
     reply.code(500).send(Errors.internalError('Failed to process spreadsheet file'));
   }
+}
+
+/**
+ * GET /api/v1/sync-status
+ * Retrieves the current execution state and any error message of the background sync pipeline.
+ */
+export async function getSyncStatus(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  reply.send({
+    status: orchestratorService.status,
+    error: orchestratorService.error,
+    isRunning: orchestratorService.running
+  });
 }

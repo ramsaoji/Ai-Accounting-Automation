@@ -14,7 +14,7 @@ import {
   checkSessionStatus,
   logoutUser
 } from './controllers/security.controller.js';
-import { getSalesReport, getDebitorsReport, triggerPipeline, handleFileUpload } from './controllers/report.controller.js';
+import { getSalesReport, getDebitorsReport, triggerPipeline, handleFileUpload, getSyncStatus } from './controllers/report.controller.js';
 import { handleAdvisorChat, chatSchema } from './controllers/chat.controller.js';
 import { checkFastifyAuth } from './fastify.auth.js';
 import { validateBody } from './middleware/validate.js';
@@ -88,6 +88,7 @@ export function createFastifyApp() {
     authRoutes.get('/api/data/sales', getSalesReport);
     authRoutes.get('/api/data/debitors', getDebitorsReport);
     authRoutes.post('/api/trigger-pipeline', triggerPipeline);
+    authRoutes.get('/api/sync-status', getSyncStatus);
     authRoutes.post('/api/chat', { preHandler: validateBody(chatSchema) }, handleAdvisorChat);
     authRoutes.post('/api/security/verify-upload', { preHandler: validateBody(verifyUploadSchema) }, verifyUploadPasscode);
     authRoutes.post('/api/ledger/upload', handleFileUpload);
@@ -101,6 +102,7 @@ export function createFastifyApp() {
     v1Routes.get('/api/v1/data/sales', getSalesReport);
     v1Routes.get('/api/v1/data/debitors', getDebitorsReport);
     v1Routes.post('/api/v1/trigger-pipeline', triggerPipeline);
+    v1Routes.get('/api/v1/sync-status', getSyncStatus);
     v1Routes.post('/api/v1/chat', { preHandler: validateBody(chatSchema) }, handleAdvisorChat);
     v1Routes.post('/api/v1/security/verify-upload', { preHandler: validateBody(verifyUploadSchema) }, verifyUploadPasscode);
     v1Routes.post('/api/v1/ledger/upload', handleFileUpload);
