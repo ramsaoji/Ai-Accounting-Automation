@@ -2,7 +2,7 @@ import { schedulerJob } from './scheduler/scheduler.job.js';
 import { config } from './config/config.js';
 import { logger } from './logger/logger.js';
 import { telegramBot } from './telegram/telegram.bot.js';
-import { initDb, initSecurityConfig } from './db/db.client.js';
+import { initDb, initSecurityConfig, initSystemSettings } from './db/db.client.js';
 import { createFastifyApp } from './api/fastify.app.js';
 import { AiProviderFactory } from './ai/ai.factory.js';
 import type { FastifyInstance } from 'fastify';
@@ -20,6 +20,7 @@ async function start() {
   try {
     await initDb();
     await initSecurityConfig();
+    await initSystemSettings();
   } catch (dbErr) {
     logger.fatal({ err: dbErr }, 'CRITICAL: Failed to initialize PostgreSQL database. The application requires PostgreSQL to be running. Exiting.');
     process.exit(1);

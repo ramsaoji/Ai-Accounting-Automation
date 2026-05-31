@@ -98,6 +98,13 @@ export const syncMetadata = pgTable('sync_metadata', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// 9. System Settings (Enable/Disable features)
+export const systemSettings = pgTable('system_settings', {
+  key: varchar('key', { length: 50 }).primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // ─── Schema Relations ────────────────────────────────────────────────────────
 export const filesRelations = relations(files, ({ many }) => ({
   transactions: many(transactions),

@@ -45,12 +45,15 @@ ai-accounting-automation/
 │   │   │   ├── health.controller.ts   # Minimal health check status endpoint
 │   │   │   ├── report.controller.ts   # Database report getters and uploader
 │   │   │   └── security.controller.ts # Passcode verification and sessions manager
+│   │   ├── middleware/
+│   │   │   └── validate.ts           # Reusable Zod request body/query/params validation hooks
+│   │   ├── errors.ts                  # Standardized API error responses and envelopes
 │   │   ├── fastify.app.ts        # Fastify app builder with CORS & Cookie plugin config
 │   │   └── fastify.auth.ts       # Authentication hook checking HttpOnly cookies
 │   ├── config/
 │   │   └── config.ts             # Strongly-typed config loader & Zod validator
 │   ├── db/
-│   │   └── db.client.ts          # Neon DB Pool client with table/security initialization
+│   │   ├── db.client.ts          # Neon DB Pool client with table/security initialization
 │   │   └── schema.ts             # Relational database tables (Drizzle ORM)
 │   ├── drive/
 │   │   ├── drive.client.ts       # Authorized Google Drive Client (JWT auth)
@@ -73,6 +76,8 @@ ai-accounting-automation/
 │   │   ├── ai.types.ts           # Swappable AI provider contract
 │   │   ├── ai.factory.ts         # Env-driven runtime provider factory
 │   │   ├── ai.prompts.ts         # Shared AI prompt input type definitions
+│   │   ├── ai.calculator.ts      # Specialized stats calculator for sales & debitors
+│   │   ├── ai.parser.ts          # AI response parser and text format cleaner
 │   │   ├── report-helper.ts      # Visual charts coordinate math & HTML trend row builders
 │   │   ├── report-template.ts    # Daily Sales Register HTML console UI shell
 │   │   ├── debitors-template.ts  # Customer outstanding Udhari HTML console UI shell
@@ -94,7 +99,9 @@ ai-accounting-automation/
 │   ├── scripts/
 │   │   └── reset-drizzle.ts      # Developer tool: wipes database schemas and reapplies migrations
 │   ├── utils/
-│   │   └── cron.ts               # Cron expression humanization utility
+│   │   ├── cron.ts               # Cron expression humanization utility
+│   │   ├── file.ts               # Local file resolution helpers
+│   │   └── accounting.ts         # In-memory daily sales aggregation utilities
 │   └── index.ts                  # App entrypoint (initializes DB, scheduler, Telegram bot, and Fastify server)
 │── Dockerfile                    # Multi-stage, low footprint production container
 ├── .dockerignore                 # Container build context filtering rules
@@ -143,15 +150,14 @@ Define the following environment variables in your `.env` configuration file:
 | **`NODE_ENV`** | No | `development` | Runtime mode (`development` enables verbose debug logs, `production` enables clean info logs) |
 | **`PORT`** | No | `8080` | Bind port for cloud environment container health checks |
 | **`DATABASE_URL`** | **Yes** | - | PostgreSQL connection string. A running database is strictly required for application startup |
-| **`AI_PROVIDER`** | No | `none` | Core provider: `openai`, `gemini`, `claude`, `openrouter`, `deepseek`, `ollama`, `groq`, `none`. If omitted or set to `none`, AI summaries are bypassed |
-| **`AI_MODEL`** | No | - | The specific model ID to call (e.g. `gpt-4o-mini`, `gemini-1.5-flash`, etc.). If omitted, falls back to a default model matching your provider |
-| **`GEMINI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=gemini` |
-| **`OPENAI_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=openai` |
-| **`CLAUDE_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=claude` |
-| **`OPENROUTER_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=openrouter` |
-| **`DEEPSEEK_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=deepseek` |
-| **`GROQ_API_KEY`** | Conditional | - | API key required if `AI_PROVIDER=groq` |
-| **`OLLAMA_BASE_URL`** | No | `http://localhost:11434` | Endpoint for local model serving |
+| **`DEFAULT_AI_PROVIDER`** | No | `none` | Fallback AI provider used once during first-time database seeding: `openai`, `gemini`, `claude`, `openrouter`, `deepseek`, `groq`, `none`. If set to `none`, AI is disabled |
+| **`DEFAULT_AI_MODEL`** | No | - | Fallback AI model ID used once during database seeding (e.g. `gpt-4o-mini`, `gemini-2.5-flash`, etc.). If omitted, falls back to standard provider defaults |
+| **`GEMINI_API_KEY`** | Conditional | - | API key required if active provider is `gemini` |
+| **`OPENAI_API_KEY`** | Conditional | - | API key required if active provider is `openai` |
+| **`CLAUDE_API_KEY`** | Conditional | - | API key required if active provider is `claude` |
+| **`OPENROUTER_API_KEY`** | Conditional | - | API key required if active provider is `openrouter` |
+| **`DEEPSEEK_API_KEY`** | Conditional | - | API key required if active provider is `deepseek` |
+| **`GROQ_API_KEY`** | Conditional | - | API key required if active provider is `groq` |
 | **`GOOGLE_CLIENT_EMAIL`** | No | `accounting-worker@your-project-id.iam.gserviceaccount.com` | Google Service Account email for Drive Sync. If left at mock defaults, cloud syncing is skipped |
 | **`GOOGLE_PRIVATE_KEY`** | No | `MIIEvgIBADANBgkqhkiG9w0` | Service Account Private Key PEM string. If left at defaults, cloud syncing is skipped |
 | **`GOOGLE_DRIVE_FOLDER_ID`** | No | `your_google_drive_folder_id_here` | Target Google Drive Folder ID containing your excel sheets |
@@ -159,8 +165,8 @@ Define the following environment variables in your `.env` configuration file:
 | **`TELEGRAM_CHAT_ID`** | No | `-1001234567890` | Comma-separated list of authorized Chat IDs. If left at this default or omitted, Telegram features are bypassed |
 | **`TELEGRAM_TIMEZONES`** | No | `Asia/Kolkata,Asia/Hong_Kong` | Comma-separated list of IANA timezones to format times in Telegram messages |
 | **`CRON_SCHEDULE`** | No | `0 0 * * *` | Cron task schedule (defaults to daily at midnight) |
-| **`UPLOAD_PASSWORD`** | **Yes** | - | Passcode used to authorize spreadsheet ingestion uploads |
-| **`APP_PASSWORD`** | **Yes** | - | Passcode used to unlock the fullscreen App Lock screen |
+| **`DEFAULT_UPLOAD_PASSWORD`** | **Yes** | - | Fallback passcode used to authorize spreadsheet ingestion uploads during first-time database seeding |
+| **`DEFAULT_APP_PASSWORD`** | **Yes** | - | Fallback passcode used to secure the fullscreen App Lock screen during first-time database seeding |
 | **`JWT_SECRET`** | No | `development_jwt_secret_fallback_key_12345` | Signing secret key used to generate and verify JWT admin session tokens |
 | **`ENABLE_FILE_LOGGING`** | No | `false` | Enable/disable appending structured logs to `logs/system.log` |
 | **`ALLOWED_ORIGINS`** | No | - | Comma-separated list of allowed CORS domains (e.g. `http://localhost:5173`) |

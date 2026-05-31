@@ -10,8 +10,8 @@ import {
   MessageSquare,
   Sun,
   Moon,
-  Lock,
-  LogOut
+  LogOut,
+  Settings
 } from 'lucide-react';
 import {
   Sidebar,
@@ -34,7 +34,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
+
 
 export interface AppSidebarProps {
   activeWorkspace: 'sales' | 'debitors';
@@ -70,7 +70,6 @@ export function AppSidebar({
   const handleWorkspaceSelect = (workspace: 'sales' | 'debitors') => {
     setActiveWorkspace(workspace);
     if (activeView === 'portal') setActiveView('overview');
-    toast.info(`Switched to ${workspace === 'sales' ? 'Daily Sales Register' : 'Debitors Outstanding Ledger'}`);
     if (isMobile) {
       setOpenMobile(false);
     }
@@ -251,10 +250,10 @@ export function AppSidebar({
                 }
               }}
               className="text-xs font-semibold"
-              tooltip="Security Settings"
+              tooltip="Settings & Security"
             >
-              <Lock className="size-4" />
-              <span>Change Security Passcodes</span>
+              <Settings className="size-4" />
+              <span>Settings & Security</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
 

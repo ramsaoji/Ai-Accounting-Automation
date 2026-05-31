@@ -17,18 +17,67 @@ import { PlaybookSidebar } from './advisor/PlaybookSidebar';
 import type { Playbook } from './advisor/PlaybookSidebar';
 import { ChatFeed } from './advisor/ChatFeed';
 import { ChatInputForm } from './advisor/ChatInputForm';
+import { fetchSystemSettings } from '@/services/api';
 
 interface AdvisorSectionProps {
   summary: MasterSummary;
   aiProvider: string;
 }
 
-export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvider }) => {
+export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvider: initialAiProvider }) => {
   const isDebitors = summary.isDebitorsList === true;
   
   const businessName = useMemo(() => {
     return deriveBusinessName(summary?.fileName);
   }, [summary?.fileName]);
+
+  const [webChatEnabled, setWebChatEnabled] = useState<boolean>(true);
+  const [activeAiProvider, setActiveAiProvider] = useState<string>(initialAiProvider);
+  const [activeAiModel, setActiveAiModel] = useState<string>('none');
+  const [isLoadingSettings, setIsLoadingSettings] = useState<boolean>(true);
+
+  useEffect(() => {
+    let active = true;
+    const loadSettings = async () => {
+      try {
+        const data = await fetchSystemSettings();
+        if (active) {
+          setWebChatEnabled(data.webChatEnabled);
+          setActiveAiProvider(data.aiProvider || initialAiProvider);
+          setActiveAiModel(data.aiModel || 'none');
+        }
+      } catch (err) {
+        console.error("Failed to fetch system settings:", err);
+      } finally {
+        if (active) {
+          setIsLoadingSettings(false);
+        }
+      }
+    };
+    loadSettings();
+
+    const handleSettingsUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        if (typeof customEvent.detail.webChatEnabled === 'boolean') {
+          setWebChatEnabled(customEvent.detail.webChatEnabled);
+        }
+        if (customEvent.detail.aiProvider) {
+          setActiveAiProvider(customEvent.detail.aiProvider);
+        }
+        if (customEvent.detail.aiModel) {
+          setActiveAiModel(customEvent.detail.aiModel);
+        }
+      }
+    };
+
+    window.addEventListener('system-settings-updated', handleSettingsUpdate);
+
+    return () => {
+      active = false;
+      window.removeEventListener('system-settings-updated', handleSettingsUpdate);
+    };
+  }, []);
 
   // Active playbook selection
   const [activePlaybook, setActivePlaybook] = useState<'revenue' | 'recovery' | 'auditing'>('revenue');
@@ -159,7 +208,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
   }, [isDebitors, activePlaybook]);
 
   const handleSend = async (textToSend: string) => {
-    if (!textToSend.trim()) return;
+    if (!textToSend.trim() || !webChatEnabled) return;
 
     const userMsg: ChatMessage = {
       sender: 'user',
@@ -239,19 +288,24 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
                   <CardTitle className="text-xs font-bold leading-tight truncate max-w-[120px] xs:max-w-[180px] sm:max-w-[320px] md:max-w-none">
                     {businessName} Advisory Agent
                   </CardTitle>
-                  {aiProvider !== 'none' ? (
+                  {activeAiProvider !== 'none' && activeAiModel !== 'none' && activeAiModel.trim() !== '' && webChatEnabled ? (
                     <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-1.5 py-0.5 rounded-full leading-none shrink-0 animate-in fade-in duration-300">
                       <span className="size-1.5 bg-success rounded-full animate-pulse"></span>
-                      Online
+                      Online ({activeAiProvider.toUpperCase()})
+                    </span>
+                  ) : activeAiProvider === 'none' || activeAiModel === 'none' || !activeAiModel.trim() ? (
+                    <span className="flex items-center gap-1 text-[0.58rem] font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full leading-none shrink-0 animate-in fade-in duration-300">
+                      <span className="size-1.5 bg-amber-500 rounded-full"></span>
+                      Offline (Unconfigured)
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-[0.58rem] font-bold text-muted-foreground bg-muted border border-muted-foreground/20 px-1.5 py-0.5 rounded-full leading-none shrink-0 animate-in fade-in duration-300">
-                      <span className="size-1.5 bg-muted-foreground/60 rounded-full"></span>
-                      Offline
+                    <span className="flex items-center gap-1 text-[0.58rem] font-bold text-destructive bg-destructive/10 border border-destructive/20 px-1.5 py-0.5 rounded-full leading-none shrink-0 animate-in fade-in duration-300">
+                      <span className="size-1.5 bg-destructive rounded-full"></span>
+                      Offline (Deactivated)
                     </span>
                   )}
                 </div>
-                <p className="text-[0.65rem] text-muted-foreground truncate hidden sm:block mt-0.5">Context: {summary.fileName}</p>
+                <p className="text-[0.65rem] text-muted-foreground truncate hidden sm:block mt-0.5">Model: {activeAiModel !== 'none' && activeAiModel.trim() !== '' ? activeAiModel : 'None'} • Context: {summary.fileName}</p>
               </div>
             </div>
             <Button
@@ -264,7 +318,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
               <span className="hidden sm:inline ml-1.5">Clear Chat</span>
             </Button>
           </CardHeader>
-
+ 
           {/* Message Thread (Scrollable Viewport) */}
           <ChatFeed
             messages={messages}
@@ -272,7 +326,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
             scrollContainerRef={scrollContainerRef}
             messagesEndRef={messagesEndRef}
           />
-
+ 
           {/* Form / Actions */}
           <ChatInputForm
             input={input}
@@ -281,6 +335,9 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
             suggestions={suggestions}
             textareaRef={textareaRef}
             handleKeyDown={handleKeyDown}
+            disabled={!webChatEnabled || activeAiProvider === 'none' || activeAiModel === 'none' || !activeAiModel.trim() || isLoadingSettings}
+            aiProvider={activeAiProvider}
+            aiModel={activeAiModel}
           />
         </Card>
 

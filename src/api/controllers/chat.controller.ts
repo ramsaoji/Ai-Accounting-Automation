@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { getReconstructedReport } from './report.controller.js';
 import { AiProviderFactory } from '../../ai/ai.factory.js';
+import { getSystemSetting } from '../../db/db.client.js';
 import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
 import { z } from 'zod';
@@ -31,6 +32,15 @@ export async function handleAdvisorChat(
 ): Promise<void> {
   try {
     const { message, workspace, history } = request.body;
+
+    const webChatEnabled = (await getSystemSetting('web_chat_enabled', 'true')) === 'true';
+    const providerName = await getSystemSetting('ai_provider', config.AI_PROVIDER);
+    const modelName = await getSystemSetting('ai_model', config.AI_MODEL);
+
+    if (!webChatEnabled || providerName === 'none' || !modelName || modelName === 'none' || !modelName.trim()) {
+      reply.code(503).send({ error: 'AI advisor chat is disabled because no active AI model is configured. Please configure an AI Provider and Model in settings first.' });
+      return;
+    }
 
     // Determine correct summary file based on requested workspace
     const isDebitors = workspace === 'debitors';
@@ -77,12 +87,8 @@ export async function handleAdvisorChat(
     };
     const prunedSummaryString = JSON.stringify(prunedSummary, null, 2);
 
-    // Load AI Provider from factory
-    const provider = AiProviderFactory.createProvider();
-    if (provider.id === 'none') {
-      reply.code(503).send({ error: 'AI advisor chat is disabled by configuration. To enable it, please configure a valid AI_PROVIDER and API key.' });
-      return;
-    }
+    // Load AI Provider from factory dynamically
+    const provider = AiProviderFactory.createProvider(providerName, modelName);
 
     const businessName = config.BUSINESS_NAME;
     let domainContext = '';

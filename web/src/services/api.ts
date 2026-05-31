@@ -355,3 +355,37 @@ export async function logoutUser(): Promise<void> {
     console.error('Failed to logout user:', err);
   }
 }
+
+export interface SystemSettings {
+  webChatEnabled: boolean;
+  telegramChatEnabled: boolean;
+  aiProvider: string;
+  aiModel: string;
+  availableProviders?: string[];
+}
+
+export async function fetchSystemSettings(): Promise<SystemSettings> {
+  const res = await authFetch(`${apiBaseUrl}/api/v1/system/settings`, {
+    headers: getAuthHeaders(),
+    cache: 'no-store'
+  });
+  if (!res.ok) {
+    throw new Error('Failed to fetch system settings');
+  }
+  return res.json();
+}
+
+export async function updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
+  const res = await authFetch(`${apiBaseUrl}/api/v1/system/settings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(settings)
+  });
+  if (!res.ok) {
+    throw new Error('Failed to update system settings');
+  }
+  return res.json();
+}

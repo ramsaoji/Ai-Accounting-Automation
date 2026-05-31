@@ -6,8 +6,10 @@ import { logger } from '../../logger/logger.js';
 export class OllamaProvider implements AiProvider {
   readonly id = 'ollama';
 
+  constructor(private readonly modelOverride?: string) {}
+
   async generateText(prompt: string, options?: AiOptions): Promise<string> {
-    const model = options?.model || config.AI_MODEL || 'llama3';
+    const model = this.modelOverride || options?.model || config.AI_MODEL || 'llama3';
     const temperature = options?.temperature ?? 0.2;
     const baseUrl = config.OLLAMA_BASE_URL || 'http://localhost:11434';
 

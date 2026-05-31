@@ -7,7 +7,8 @@ export class OpenAiProvider implements AiProvider {
   constructor(
     readonly id: string = 'openai',
     private readonly baseUrl: string = 'https://api.openai.com/v1/chat/completions',
-    private readonly apiKeyName: 'OPENAI_API_KEY' | 'DEEPSEEK_API_KEY' | 'OPENROUTER_API_KEY' | 'GROQ_API_KEY' = 'OPENAI_API_KEY'
+    private readonly apiKeyName: 'OPENAI_API_KEY' | 'DEEPSEEK_API_KEY' | 'OPENROUTER_API_KEY' | 'GROQ_API_KEY' = 'OPENAI_API_KEY',
+    private readonly modelOverride?: string
   ) {}
 
   async generateText(prompt: string, options?: AiOptions): Promise<string> {
@@ -16,7 +17,7 @@ export class OpenAiProvider implements AiProvider {
       throw new Error(`API key for provider '${this.id}' (${this.apiKeyName}) is not defined in the environment variables`);
     }
 
-    const model = options?.model || config.AI_MODEL;
+    const model = this.modelOverride || options?.model || config.AI_MODEL;
     const temperature = options?.temperature ?? 0.2;
     const maxTokens = options?.maxTokens ?? 1500;
 

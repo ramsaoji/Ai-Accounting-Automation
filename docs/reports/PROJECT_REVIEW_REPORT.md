@@ -12,7 +12,10 @@
 
 This is a **well-architected, production-deployed** AI-powered accounting automation platform tailored for a small hospitality business. It ingests Excel spreadsheets (from Google Drive or manual upload), applies rule-based auditing, generates AI-powered financial insights, and delivers them through a polished web dashboard and an interactive Telegram bot.
 
-**Overall Grade: B+** — The project demonstrates strong domain-specific engineering with good separation of concerns, a clean module architecture, and thoughtful UX. However, it has significant gaps in **testing**, **database design**, **error recovery**, **scalability**, and **generalization** that will become blockers as the product matures.
+> [!NOTE]
+> **Post-Review Updates (May 31, 2026)**: A subsequent refactoring sprint successfully resolved the majority of the critical and high-priority architectural issues (such as the database design, AI service decomposition, business name parameterization, startup race conditions, and frontend component modularization). These resolved issues are marked as **[RESOLVED]** below.
+
+**Overall Grade: A-** (Updated from B+) — The project has been modernized and cleaned up. Major architectural risks have been mitigated. The main remaining gap is **testing coverage (CRIT-01)**.
 
 ### Quick Stats
 | Metric | Value |
@@ -22,7 +25,7 @@ This is a **well-architected, production-deployed** AI-powered accounting automa
 | HTML Report Templates | ~56K (2 template files) |
 | Backend Modules | 14 directories |
 | Frontend Components | 12 custom + 17 ShadCN UI |
-| AI Providers Supported | 7 (OpenAI, Gemini, Claude, DeepSeek, OpenRouter, Groq, Ollama) |
+| AI Providers Supported | 6 (OpenAI, Gemini, Claude, DeepSeek, OpenRouter, Groq) |
 | Test Files | **0** ⚠️ |
 | API Endpoints | 9 (2 public, 7 authenticated) |
 
@@ -32,7 +35,7 @@ This is a **well-architected, production-deployed** AI-powered accounting automa
 
 ### ✅ Architecture & Design
 - **Clean modular structure**: Backend is well-organized into `ai/`, `api/`, `config/`, `db/`, `drive/`, `excel/`, `rules/`, `scheduler/`, `services/`, `telegram/` — each with a focused responsibility.
-- **Provider Factory pattern**: The [ai.factory.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/ai/ai.factory.ts) cleanly abstracts 7 AI providers behind a common `AiProvider` interface, making it trivial to swap models.
+- **Provider Factory pattern**: The [ai.factory.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/ai/ai.factory.ts) cleanly abstracts 6 AI providers behind a common `AiProvider` interface, making it trivial to swap models.
 - **Zod-validated config**: The [config.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/config/config.ts) uses Zod schemas with production-aware refinements (e.g., JWT_SECRET validation in prod).
 - **Dual-mode operation**: Graceful fallback from DB to local file system when `DATABASE_URL` is not set — excellent for dev/prod parity.
 
@@ -80,82 +83,53 @@ There are **zero test files** in the entire project — no unit tests, no integr
 
 ---
 
-### 🔴 CRIT-02: Single-Table Database Design
+### 🟢 CRIT-02: Single-Table Database Design [RESOLVED]
 
 **Impact: High** | **Risk: High**
 
-The entire application stores **all data** in a single `financial_reports` table with a `VARCHAR(50)` primary key and a `JSONB` blob:
+> [!NOTE]
+> **Resolution (May 31, 2026)**: The single-table layout was completely refactored to a fully normalized relational database schema using Drizzle ORM inside `src/db/schema.ts`. 
 
-```sql
-CREATE TABLE IF NOT EXISTS financial_reports (
-  report_type VARCHAR(50) PRIMARY KEY,  -- 'sales', 'debitors', 'daily-sales', 'sync-metadata', 'security-config'
-  data JSONB NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**Problems:**
-- **No data history**: Every upsert overwrites the previous report. There is no audit trail, no version history, no ability to compare reports over time.
-- **No query capability**: All analysis happens in application code. You can't run SQL queries against financial data.
-- **Schema conflicts**: Security credentials, sync metadata, and financial reports all share the same table with the same schema.
-- **No transactions/ACID guarantees** for multi-report writes (sales + daily-sales written separately).
-
-**Recommendation:** Introduce proper relational tables: `reports`, `report_versions`, `transactions`, `debitors`, `security_config`, `sync_metadata`.
+The system now creates and utilizes proper, strongly typed tables:
+* `files` (Versioned tracking of files processed, storage of AI summary run metadata, and processing state flags)
+* `transactions` (Normalized transaction ledger entries with columns for date, type, category, amount, etc.)
+* `stock_items` (Inventory listings for godown or counter stocks)
+* `party_balances` (Active debtor outstanding ledger records)
+* `audit_alerts` (Relational warnings triggered by the custom Rules engine)
+* `parsing_errors` (Individual ledger ingestion errors logged with fileId context)
+* `security_config` (Argon2 secure password hash management)
+* `sync_metadata` (Google Drive synchronization tracker)
 
 ---
 
-### 🔴 CRIT-03: AI Service Is an 818-Line God Method
+### 🟢 CRIT-03: AI Service Is an 818-Line God Method [RESOLVED]
 
 **Impact: High** | **Risk: Medium**
 
-[ai.service.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/ai/ai.service.ts) is **818 lines** containing a single `generateFinancialSummary()` method with two massive branches (debitors vs. sales). This method:
-- Computes all aggregate statistics
-- Builds AI prompts
-- Calls AI providers
-- Parses AI responses with regex
-- Generates Markdown reports
-- Generates JSON summaries
-- Manages fallback logic
-- Delegates to HTML template functions
-
-This violates SRP (Single Responsibility Principle) and makes the code extremely difficult to test, debug, or extend.
-
-**Recommendation:** Extract into separate concerns:
-1. `StatisticsCalculator` — pure math/aggregation
-2. `PromptBuilder` — AI prompt construction
-3. `AiResponseParser` — response parsing with regex
-4. `ReportRenderer` — Markdown/JSON/HTML generation
-5. `FallbackEngine` — offline insight generation
+> [!NOTE]
+> **Resolution (May 31, 2026)**: The monolithic `ai.service.ts` has been decomposed into modular helper utilities, reducing its footprint and moving key logic into separate files:
+> - `ai.calculator.ts` handles pure math/aggregation calculations (debitors and sales metrics).
+> - `ai.parser.ts` handles response text parsing and list item cleaners.
+> - `ai.prompts.ts` houses prompts constructions.
+> - `report-helper.ts` manages HTML row rendering, dynamic chart calculations, and fallback insights computing.
 
 ---
 
-### 🔴 CRIT-04: Hardcoded Business Name Throughout
+### 🟢 CRIT-04: Hardcoded Business Name Throughout [RESOLVED]
 
 **Impact: Medium** | **Risk: Medium**
 
-Despite having `BUSINESS_NAME` in config, "Hotel Gaurav" is hardcoded in **dozens of places**:
-- [telegram.bot.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/telegram/telegram.bot.ts): `'Hotel Gaurav'` appears 15+ times
-- [ai.service.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/ai/ai.service.ts): Markdown report headers
-- [excel.parser.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/excel/excel.parser.ts): `row1Val.includes('hotel gaurav')`
-- [business.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/web/src/utils/business.ts): Fallback default
-- [useAccountingData.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/web/src/hooks/useAccountingData.ts): Static toast messages
-
-This makes it impossible to use this system for any other business without a full codebase search-and-replace.
-
-**Recommendation:** Replace all hardcoded strings with `config.BUSINESS_NAME`. Make the Excel parser detect business names dynamically from cell content rather than checking for a specific string.
+> [!NOTE]
+> **Resolution (May 31, 2026)**: Hardcoded strings have been parameterized to read `config.BUSINESS_NAME` dynamically. The Excel parser (`excel.parser.ts`) now matches sheet header contents against `config.BUSINESS_NAME.toLowerCase()` rather than a hardcoded target string, and the Telegram bot draws the business display name from config variables.
 
 ---
 
-### 🔴 CRIT-05: .env File Committed to Repository
+### 🟢 CRIT-05: .env File Committed to Repository [RESOLVED]
 
 **Impact: Critical** | **Risk: Critical**
 
-The `.env` file (3,569 bytes) exists in the project root. While `.gitignore` lists `.env`, the file's presence suggests it may have been committed at some point and could contain real credentials in git history.
-
-**Recommendation:** 
-1. Run `git log --all --diff-filter=A -- .env` to check if it was ever committed.
-2. If so, use `git filter-branch` or BFG Repo-Cleaner to purge it from history.
-3. Rotate all secrets that may have been exposed.
+> [!NOTE]
+> **Resolution (May 31, 2026)**: An audit of the git history (`git log --all --diff-filter=A -- .env` and `git ls-files`) verified that the local `.env` file is completely untracked and has **never** been committed to the repository history in the past. It exists purely as a local developer configuration file.
 
 ---
 
@@ -171,22 +145,9 @@ The `/api/security/verify-app` and `/api/security/verify-upload` endpoints have 
 
 ## 4. Improvement Opportunities
 
-### 🟡 IMP-01: Startup Race Condition
+### 🟢 IMP-01: Startup Race Condition [RESOLVED]
 
-In [index.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/index.ts), database initialization is fire-and-forget:
-
-```typescript
-initDb().then(async () => {
-  await initSecurityConfig();
-}).catch((dbErr) => { ... });
-
-// Immediately starts scheduler and server without awaiting DB
-schedulerJob.start();
-```
-
-The scheduler and Fastify server can start handling requests **before the database is ready**, leading to undefined behavior on the first request.
-
-**Fix:** Await `initDb()` before starting the scheduler and server.
+**Fix:** Sequential startup is now enforced in `src/index.ts`. The application explicitly awaits both `initDb()` and `initSecurityConfig()` to complete seeding before initializing the cron scheduler, background long polling bot, and starting Fastify listener binds.
 
 ---
 
@@ -201,56 +162,43 @@ Despite `strict: true` in tsconfig, there are 20+ instances of `any` types acros
 
 ---
 
-### 🟡 IMP-03: Monolithic Frontend Components
+### 🟢 IMP-03: Monolithic Frontend Components [RESOLVED]
 
-Several frontend components are excessively large:
-- [AuditorSection.tsx](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/web/src/components/AuditorSection.tsx): **34,842 bytes**
-- [OverviewSection.tsx](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/web/src/components/OverviewSection.tsx): **34,612 bytes**
-- [LedgerSection.tsx](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/web/src/components/LedgerSection.tsx): **29,884 bytes**
-- [UploadModal.tsx](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/web/src/components/UploadModal.tsx): **20,001 bytes**
-- [SecuritySettingsModal.tsx](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/web/src/components/SecuritySettingsModal.tsx): **19,964 bytes**
-
-Each of these should be decomposed into smaller, focused sub-components (e.g., `StatCard`, `TrendChart`, `AlertList`, `FilterBar`).
+**Fix:** Big section components have been decomposed into smaller modular subcomponents under their respective directories:
+- `AuditorSection.tsx` delegates to `AnomalyInspector.tsx`, `AuditorStats.tsx`, and `ExceptionsFeed.tsx`.
+- `OverviewSection.tsx` delegates to `OverviewCharts.tsx`, `AiRecommendationsQueue.tsx`, `OverviewKpiCards.tsx`, and `RecoveryBoard.tsx`.
+- `LedgerSection.tsx` delegates to `DebitorLedgerTable.tsx`, `LedgerTable.tsx`, and `MonthlySalesLedgerTable.tsx`.
+- `UploadModal.tsx` was optimized and simplified.
 
 ---
 
-### 🟡 IMP-04: No API Versioning
+### 🟢 IMP-04: No API Versioning [RESOLVED]
 
-All routes are under `/api/` without versioning. When the API evolves, breaking changes will affect all clients.
-
-**Recommendation:** Prefix with `/api/v1/` and document the API contract.
+**Fix:** Standard routes are now cleanly grouped and registered under the `/api/v1/` route prefix inside `src/api/fastify.app.ts` (e.g. `/api/v1/data/sales`, `/api/v1/chat`).
 
 ---
 
-### 🟡 IMP-05: No Request Validation Middleware
+### 🟢 IMP-05: No Request Validation Middleware [RESOLVED]
 
-Zod validation is done manually inside each controller handler. This is repetitive and error-prone.
-
-**Recommendation:** Create a reusable Fastify preHandler that validates `request.body` against a Zod schema, reducing boilerplate in every controller.
+**Fix:** Implemented reusable Zod request schema validation middleware preHandlers (`validateBody`, `validateQuery`, `validateParams`) inside `src/api/middleware/validate.ts`. These validate and parse payloads securely before controller execution.
 
 ---
 
-### 🟡 IMP-06: Synchronous File I/O in Hot Paths
+### 🟢 IMP-06: Synchronous File I/O in Hot Paths [RESOLVED]
 
-[orchestrator.service.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/services/orchestrator.service.ts) uses synchronous file operations (`fs.readFileSync`, `fs.writeFileSync`, `fs.existsSync`, `fs.mkdirSync`) throughout the pipeline. In a server context, this blocks the event loop during file processing.
-
-**Recommendation:** Replace all `fs.*Sync` calls with their async equivalents (`fs.promises.*`).
+**Fix:** Refactored `orchestrator.service.ts` to execute asynchronous file reads/writes via native `fs.promises.*` APIs (such as `fs.promises.readFile`), keeping the Node.js event loop free.
 
 ---
 
-### 🟡 IMP-07: No Graceful Degradation for Missing AI Keys
+### 🟢 IMP-07: No Graceful Degradation for Missing AI Keys [RESOLVED]
 
-If `AI_PROVIDER=gemini` but `GEMINI_API_KEY` is empty, the error only surfaces at runtime when an AI call is made. The config schema marks all API keys as `optional()`.
-
-**Recommendation:** Add a runtime validation in `AiProviderFactory.createProvider()` that checks the required key for the configured provider at startup, not at first use.
+**Fix:** Startup validation check `AiProviderFactory.validateProviderConfig()` has been added in `src/index.ts` to inspect the environment variable config for the selected AI provider upon system boot, logging a warning/fatal message before runtime calls.
 
 ---
 
-### 🟡 IMP-08: Inconsistent Error Response Shapes
+### 🟢 IMP-08: Inconsistent Error Response Shapes [RESOLVED]
 
-Some endpoints return `{ error: string }`, others return `{ status: string, message: string }`. There is no standardized error response envelope.
-
-**Recommendation:** Define a consistent error schema: `{ error: string, code?: string, details?: unknown }` and use it everywhere.
+**Fix:** Standardized API error envelopes are established using the `Errors` helper class inside `src/api/errors.ts`, ensuring that all backend API handlers return consistent error objects (`{ error: string, code: string, details?: unknown }`).
 
 ---
 

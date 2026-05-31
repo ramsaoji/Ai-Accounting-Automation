@@ -28,9 +28,9 @@ If you run into `Authentication Error` or `401 Unauthorized` during the pipeline
 
 ### Swapping AI Providers
 Ensure your active provider matches the configured API keys in `.env`:
-* If `AI_PROVIDER=groq`, verify `GROQ_API_KEY` is present and active.
-* If `AI_PROVIDER=gemini`, verify `GEMINI_API_KEY` is present.
-* If `AI_PROVIDER=openai`, verify `OPENAI_API_KEY` is present.
+* If `DEFAULT_AI_PROVIDER=groq`, verify `GROQ_API_KEY` is present and active.
+* If `DEFAULT_AI_PROVIDER=gemini`, verify `GEMINI_API_KEY` is present.
+* If `DEFAULT_AI_PROVIDER=openai`, verify `OPENAI_API_KEY` is present.
 
 ### Safe Fallback & Dry-Run Mode
 If all external AI keys are unavailable or expired, the service **does not crash**.
@@ -72,4 +72,4 @@ If all external AI keys are unavailable or expired, the service **does not crash
      ```sql
      TRUNCATE TABLE security_config;
      ```
-  3. Restart the backend server process. The service will detect the missing records on startup and automatically re-initialize the credentials using the `APP_PASSWORD` and `UPLOAD_PASSWORD` values defined in your `.env` file.
+  3. Restart the backend server process. The service will detect the missing records on startup and automatically re-initialize the credentials using the `DEFAULT_APP_PASSWORD` and `DEFAULT_UPLOAD_PASSWORD` values defined in your `.env` file.

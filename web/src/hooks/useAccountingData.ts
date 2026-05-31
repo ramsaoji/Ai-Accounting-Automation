@@ -2,7 +2,6 @@ import { useState, useCallback, useRef } from 'react';
 import type { MasterSummary } from '@/types';
 import { fetchAccountingData, fetchSystemHealth } from '@/services/api';
 import { toast } from 'sonner';
-import { BUSINESS_NAME } from '@/utils/business';
 
 export function useAccountingData() {
   const [salesData, setSalesData] = useState<MasterSummary | null>(null);
@@ -33,9 +32,7 @@ export function useAccountingData() {
     try {
       const result = await fetchAccountingData();
 
-      const salesChanged = result.sales?.runTimestamp !== lastSalesTimestamp.current;
-      const debitorsChanged = result.debitors?.runTimestamp !== lastDebitorsTimestamp.current;
-      const dataChanged = salesChanged || debitorsChanged;
+
 
       lastSalesTimestamp.current = result.sales?.runTimestamp;
       lastDebitorsTimestamp.current = result.debitors?.runTimestamp;
@@ -49,22 +46,7 @@ export function useAccountingData() {
       setHasSyncedBefore(!!result.hasSyncedBefore);
       setAiProvider(result.aiProvider || 'none');
 
-      if (!silent) {
-        // Only fire toasts during explicit (non-background) refreshes
-        if (result.mode === 'live') {
-          if ((result.sales || result.debitors) && (!hasInitiallySynced.current || dataChanged)) {
-            toast.success(`Successfully synced live data from ${BUSINESS_NAME} accounting server.`);
-          }
-        } else if (result.mode === 'static') {
-          if (!hasInitiallySynced.current) {
-            toast.success(`Loaded offline static sync data (${BUSINESS_NAME} Excel).`);
-          }
-        } else {
-          if (!hasInitiallySynced.current) {
-            toast.info('Console ready. Upload Excel sheets to begin.');
-          }
-        }
-      }
+
 
       hasInitiallySynced.current = true;
 

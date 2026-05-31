@@ -9,9 +9,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(8080),
   DATABASE_URL: z.string().optional(),
 
-  // AI Config
-  AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'ollama', 'groq', 'none']).default('none'),
-  AI_MODEL: z.string().optional(),
+  // AI Config (Default fallback values for first-time seeding)
+  DEFAULT_AI_PROVIDER: z.enum(['openai', 'gemini', 'claude', 'openrouter', 'deepseek', 'groq', 'none']).default('none'),
+  DEFAULT_AI_MODEL: z.string().optional(),
 
   // API Keys (Conditional checks can be added at runtime depending on chosen provider)
   OPENAI_API_KEY: z.string().optional(),
@@ -44,15 +44,17 @@ const envSchema = z.object({
   // Scheduler Config
   CRON_SCHEDULE: z.string().default('0 0 * * *'), // Default to every day at 00:00
 
-  // Authorization Config
-  UPLOAD_PASSWORD: z.string({
-    required_error: 'UPLOAD_PASSWORD must be configured in your .env file to authorize spreadsheet ingestion uploads.',
-  }).min(1, 'UPLOAD_PASSWORD must not be empty inside .env.'),
-  APP_PASSWORD: z.string({
-    required_error: 'APP_PASSWORD must be configured in your .env file to secure the App Lock screen.',
-  }).min(1, 'APP_PASSWORD must not be empty inside .env.'),
+  // Authorization Config (Default fallback values for first-time seeding)
+  DEFAULT_UPLOAD_PASSWORD: z.string({
+    required_error: 'DEFAULT_UPLOAD_PASSWORD must be configured in your .env file to authorize spreadsheet ingestion uploads.',
+  }).min(1, 'DEFAULT_UPLOAD_PASSWORD must not be empty inside .env.'),
+  DEFAULT_APP_PASSWORD: z.string({
+    required_error: 'DEFAULT_APP_PASSWORD must be configured in your .env file to secure the App Lock screen.',
+  }).min(1, 'DEFAULT_APP_PASSWORD must not be empty inside .env.'),
   JWT_SECRET: z.string().default('development_jwt_secret_fallback_key_12345'),
   ENABLE_FILE_LOGGING: z.string().default('false').transform((val) => val === 'true'),
+  DEFAULT_WEB_CHAT_ENABLED: z.string().default('true').transform((val) => val === 'true'),
+  DEFAULT_TELEGRAM_CHAT_ENABLED: z.string().default('true').transform((val) => val === 'true'),
 
   // CORS — comma-separated list of allowed production origins (e.g. "https://yourdomain.com")
   ALLOWED_ORIGINS: z.string().optional().default('').transform((val) =>
@@ -64,17 +66,20 @@ const envSchema = z.object({
 }).transform((data) => {
   const defaults: Record<string, string> = {
     openai: 'gpt-4o-mini',
-    gemini: 'gemini-1.5-flash',
+    gemini: 'gemini-2.5-flash',
     claude: 'claude-3-5-sonnet-20240620',
     deepseek: 'deepseek-chat',
     groq: 'llama-3.3-70b-versatile',
     openrouter: 'google/gemini-2.0-flash-exp:free',
-    ollama: 'llama3',
     none: 'none'
   };
+  const resolvedModel = data.DEFAULT_AI_MODEL || defaults[data.DEFAULT_AI_PROVIDER] || 'none';
   return {
     ...data,
-    AI_MODEL: data.AI_MODEL || defaults[data.AI_PROVIDER] || 'none'
+    AI_PROVIDER: data.DEFAULT_AI_PROVIDER,
+    AI_MODEL: resolvedModel,
+    UPLOAD_PASSWORD: data.DEFAULT_UPLOAD_PASSWORD,
+    APP_PASSWORD: data.DEFAULT_APP_PASSWORD
   };
 }).refine(
   (data) => data.NODE_ENV !== 'production' || data.JWT_SECRET !== 'development_jwt_secret_fallback_key_12345',

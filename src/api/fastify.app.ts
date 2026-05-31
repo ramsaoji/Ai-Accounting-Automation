@@ -16,6 +16,7 @@ import {
 } from './controllers/security.controller.js';
 import { getSalesReport, getDebitorsReport, triggerPipeline, handleFileUpload, getSyncStatus } from './controllers/report.controller.js';
 import { handleAdvisorChat, chatSchema } from './controllers/chat.controller.js';
+import { getSettings, updateSettings, updateSettingsSchema } from './controllers/settings.controller.js';
 import { checkFastifyAuth } from './fastify.auth.js';
 import { validateBody } from './middleware/validate.js';
 
@@ -87,6 +88,8 @@ export function createFastifyApp() {
     v1Routes.post('/api/v1/security/verify-upload', { preHandler: validateBody(verifyUploadSchema) }, verifyUploadPasscode);
     v1Routes.post('/api/v1/ledger/upload', handleFileUpload);
     v1Routes.post('/api/v1/security/change', { preHandler: validateBody(changePasswordsSchema) }, changePasswords);
+    v1Routes.get('/api/v1/system/settings', getSettings);
+    v1Routes.post('/api/v1/system/settings', { preHandler: validateBody(updateSettingsSchema) }, updateSettings);
     v1Routes.get('/api/v1/system/config', getSystemConfig);
   });
 

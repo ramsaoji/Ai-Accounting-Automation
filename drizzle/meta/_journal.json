@@ -15,6 +15,13 @@
       "when": 1780218450281,
       "tag": "0001_greedy_timeslip",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780234381701,
+      "tag": "0002_ambitious_northstar",
+      "breakpoints": true
     }
   ]
 }

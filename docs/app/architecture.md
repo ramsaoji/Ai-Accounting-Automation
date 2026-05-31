@@ -64,7 +64,7 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 * **Role:** Financial trends forecasting and recovery task-list compiling.
 * **Patterns:** **Factory Method** & **Adapter Design Patterns**.
 * **Decoupled Runtimes:**
-  * Adapters for **Groq**, **Gemini**, **OpenAI**, **Claude**, local **Ollama**, and **none** (disabled) runtimes inherit from a unified `AIProvider` contract.
+  * Adapters for **Groq**, **Gemini**, **OpenAI**, **Claude**, and **none** (disabled) runtimes inherit from a unified `AIProvider` contract.
   * Prompt templates encapsulate structured business variables inside dynamic strings, feeding them to active adapter connections.
 
 ### 6. Throttled Messaging Dispatch & Polling Bot (`src/telegram/`)

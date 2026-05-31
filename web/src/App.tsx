@@ -136,7 +136,6 @@ export function App() {
   const handleLaunchWorkspace = (workspace: 'sales' | 'debitors', view: 'overview' | 'ledger' | 'auditor' | 'advisor' = 'overview') => {
     setActiveWorkspace(workspace);
     setActiveView(view);
-    toast.info(`Switched Workspace: ${workspace === 'sales' ? 'Sales Register' : 'Customer Debitors'}`);
   };
 
   // App Passcode Lock Screen verification check

@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../../config/config.js';
-import { db, isLocalDb } from '../../db/db.client.js';
+import { db, isLocalDb, getSystemSetting } from '../../db/db.client.js';
 import * as schema from '../../db/schema.js';
 
 /**
@@ -32,10 +32,13 @@ export async function getSystemConfig(_request: FastifyRequest, reply: FastifyRe
     // Fail silently, default to false (e.g. table not created yet)
   }
 
+  const aiProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
+  const aiModel = await getSystemSetting('ai_model', config.AI_MODEL);
+
   reply.code(200).send({
     service: 'AI Accounting Automation Service',
-    provider: config.AI_PROVIDER,
-    model: config.AI_MODEL,
+    provider: aiProvider,
+    model: aiModel,
     cron: config.CRON_SCHEDULE,
     connectionMode: isMockDrive ? 'static' : 'live',
     isDbConnected: !!db,

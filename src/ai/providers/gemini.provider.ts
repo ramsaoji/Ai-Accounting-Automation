@@ -6,6 +6,8 @@ import { logger } from '../../logger/logger.js';
 export class GeminiProvider implements AiProvider {
   readonly id = 'gemini';
 
+  constructor(private readonly modelOverride?: string) {}
+
   async generateText(prompt: string, options?: AiOptions): Promise<string> {
     const apiKey = config.GEMINI_API_KEY;
     if (!apiKey) {
@@ -13,7 +15,7 @@ export class GeminiProvider implements AiProvider {
     }
 
     // Default model if not overridden
-    const model = options?.model || config.AI_MODEL || 'gemini-1.5-flash';
+    const model = this.modelOverride || options?.model || config.AI_MODEL || 'gemini-2.5-flash';
     const temperature = options?.temperature ?? 0.2;
     const maxTokens = options?.maxTokens ?? 1500;
 

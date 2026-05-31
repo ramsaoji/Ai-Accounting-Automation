@@ -6,6 +6,7 @@ import { orchestratorService } from '../services/orchestrator.service.js';
 import { AiProviderFactory } from '../ai/ai.factory.js';
 import { getReconstructedReport } from '../api/controllers/report.controller.js';
 import { formatCronExpression } from '../utils/cron.js';
+import { getSystemSetting } from '../db/db.client.js';
 
 /**
  * Formats an ISO timestamp or date string to show all configured user timezones.
@@ -45,9 +46,45 @@ function formatTimestampToDual(ts?: string): string {
   return formatted.join(' / ');
 }
 
+const MONTH_NAMES = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december'
+];
+
+/**
+ * Extracts a Date object from a month-year label (e.g. "May 2026")
+ * for accurate chronological sorting.
+ */
+function getMonthYearDate(label: string): Date {
+  const cleanLabel = label.trim().toLowerCase();
+  const parts = cleanLabel.split(/\s+/);
+  if (parts.length === 2) {
+    const monthIndex = MONTH_NAMES.indexOf(parts[0]);
+    const year = parseInt(parts[1], 10);
+    if (monthIndex !== -1 && !isNaN(year)) {
+      return new Date(year, monthIndex, 1);
+    }
+  }
+  // Fallback pattern matching
+  let foundMonth = 0;
+  for (let i = 0; i < MONTH_NAMES.length; i++) {
+    if (cleanLabel.includes(MONTH_NAMES[i])) {
+      foundMonth = i;
+      break;
+    }
+  }
+  const yearMatch = cleanLabel.match(/\b(20\d{2})\b/);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[1], 10);
+    return new Date(year, foundMonth, 1);
+  }
+  return new Date(0); // Return epoch fallback
+}
+
 interface InlineKeyboardButton {
   text: string;
-  callback_data: string;
+  callback_data?: string;
+  url?: string;
 }
 
 interface TelegramUpdate {
@@ -213,7 +250,7 @@ export class TelegramBot {
       }
 
       try {
-        await this.handleCallbackData(data, chatId);
+        await this.handleCallbackData(data, chatId, callbackQuery.message.message_id);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error({ error: message, data }, 'Error processing Telegram callback action');
@@ -221,7 +258,8 @@ export class TelegramBot {
           await telegramClient.sendMessage(
             this.formatBotError(error),
             'Markdown',
-            this.getMainMenuKeyboard()
+            this.getMainMenuKeyboard(),
+            chatId
           );
         } catch (err) {
           logger.error({ err }, 'Failed to send callback crash message back to chat');
@@ -266,6 +304,25 @@ export class TelegramBot {
       if (isKnownCommand) {
         await this.handleCommand(text, chatId);
       } else {
+        const telegramChatEnabled = (await getSystemSetting('telegram_chat_enabled', 'true')) === 'true';
+        const aiProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
+        const aiModel = await getSystemSetting('ai_model', config.AI_MODEL);
+
+        const isAiConfigured = aiProvider !== 'none' && aiModel && aiModel !== 'none' && aiModel.trim() !== '';
+
+        if (!telegramChatEnabled || !isAiConfigured) {
+          const customExplanation = !isAiConfigured
+            ? `no AI model or provider is currently configured in the system settings.`
+            : `custom typing and AI consultations are currently disabled by the administrator.`;
+          await telegramClient.sendMessage(
+            `💬 *AI Chat Advisory Offline*\n\nCustom typing and AI consultations are currently offline because ${customExplanation}\n\n` +
+            `💡 *Menu Options Remain Fully Active!* You can still tap the keyboard buttons below (e.g. 📊 *Sales Summary* or 👥 *Debitors List*) to instantly pull real-time numbers from our database!`,
+            'Markdown',
+            this.getMainMenuKeyboard(),
+            chatId
+          );
+          return;
+        }
         await this.handleAiQuery(text, chatId);
       }
     } catch (error: any) {
@@ -284,20 +341,31 @@ export class TelegramBot {
     }
   }
 
-  private async handleCallbackData(data: string, chatId: string): Promise<void> {
-    logger.info({ data, chatId }, '[Telegram Bot] Routing callback query');
+  private async handleCallbackData(data: string, chatId: string, messageId?: number): Promise<void> {
+    logger.info({ data, chatId, messageId }, '[Telegram Bot] Routing callback query');
 
     if (data === 'sales_today') {
       await this.sendTodaySales(chatId);
     } else if (data === 'sales_month_menu') {
-      await this.sendMonthSelectionMenu(chatId);
+      await this.sendMonthSelectionMenu(chatId, messageId);
     } else if (data === 'sales_master') {
-      await this.sendSalesSummary(chatId);
+      await this.sendSalesSummary(chatId, messageId);
     } else if (data === 'sales_back') {
-      await this.sendSalesSummaryOptions(chatId);
+      await this.sendSalesSummaryOptions(chatId, messageId);
     } else if (data.startsWith('month_')) {
       const targetMonth = data.replace('month_', '');
-      await this.sendSpecificMonthSales(chatId, targetMonth);
+      await this.sendSpecificMonthSales(chatId, targetMonth, messageId);
+    } else if (data.startsWith('year_')) {
+      const targetYear = parseInt(data.replace('year_', ''), 10);
+      await this.sendMonthsForYearMenu(chatId, targetYear, messageId);
+    } else if (data === 'debitors_menu') {
+      await this.sendDebitorsSummary(chatId, messageId);
+    } else if (data === 'debitors_summary_metrics') {
+      await this.sendDebitorsMetrics(chatId, messageId);
+    } else if (data === 'debitors_top_5') {
+      await this.sendDebitorsTop5(chatId, messageId);
+    } else if (data === 'debitors_high_risk') {
+      await this.sendDebitorsHighRisk(chatId, messageId);
     }
   }
 
@@ -337,39 +405,62 @@ export class TelegramBot {
   }
 
   private async sendHealth(chatId: string): Promise<void> {
+    const aiProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
+    const aiModel = await getSystemSetting('ai_model', config.AI_MODEL);
+
+    const isAiConfigured = aiProvider !== 'none' && aiModel && aiModel !== 'none' && aiModel.trim() !== '';
+
+    const engineDisplay = isAiConfigured ? `\`${aiProvider.toUpperCase()}\`` : `\`DISABLED / OFFLINE\``;
+    const modelDisplay = isAiConfigured ? `\`${aiModel}\`` : `\`UNCONFIGURED\``;
+
     const healthText = `🩺 *Accounting Service Status*\n\n` +
       `🟢 *Status*: Active & Online\n` +
-      `🤖 *Active AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\`\n` +
-      `🧠 *LLM Model*: \`${config.AI_MODEL}\`\n` +
+      `🤖 *Active AI Engine*: ${engineDisplay}\n` +
+      `🧠 *LLM Model*: ${modelDisplay}\n` +
       `📅 *Sync Schedule*: \`${formatCronExpression(config.CRON_SCHEDULE)}\`\n` +
       `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n` +
       `🕒 *Server Time*: \`${formatTimestampToDual(new Date().toISOString())}\``;
-    await telegramClient.sendMessage(healthText, 'Markdown', this.getMainMenuKeyboard(), chatId);
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
+        ]
+      ]
+    };
+    await telegramClient.sendMessage(healthText, 'Markdown', inlineKeyboard, chatId);
   }
 
   private async triggerSync(chatId: string): Promise<void> {
-    await telegramClient.sendMessage(
+    const statusRes = await telegramClient.sendMessage(
       `🔄 *Triggering Google Drive Sync Pipeline...*\n\nIngesting latest spreadsheets, executing validation rules, and compiling AI financial insights. Please hold on...`,
-      'Markdown'
+      'Markdown',
+      undefined,
+      chatId
     );
+    const statusMessageId = statusRes.messageId;
 
     try {
       await orchestratorService.runPipeline();
       await telegramClient.sendMessage(
         `✅ *Accounting Ingestion Completed Successfully!*\n\nProcessed latest ledgers. The financial command center dashboard has been synchronized and reports have been generated. Use the buttons below to view updated numbers.`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId,
+        statusMessageId
       );
     } catch (err: any) {
       await telegramClient.sendMessage(
         `❌ *Pipeline Ingestion Encountered an Error:*\n\n\`${err.message}\``,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId,
+        statusMessageId
       );
     }
   }
 
-  private async sendSalesSummaryOptions(chatId: string): Promise<void> {
+  private async sendSalesSummaryOptions(chatId: string, editMessageId?: number): Promise<void> {
     const inlineKeyboard = {
       inline_keyboard: [
         [
@@ -380,6 +471,9 @@ export class TelegramBot {
         ],
         [
           { text: "📊 Master Cumulative Summary", callback_data: "sales_master" }
+        ],
+        [
+          { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
         ]
       ]
     };
@@ -388,7 +482,8 @@ export class TelegramBot {
       `📊 *${config.BUSINESS_NAME} - Sales Performance Portal*\n\nPlease select the timeframe you wish to view below:`,
       'Markdown',
       inlineKeyboard,
-      chatId
+      chatId,
+      editMessageId
     );
   }
 
@@ -467,14 +562,15 @@ export class TelegramBot {
     }
   }
 
-  private async sendMonthSelectionMenu(chatId: string): Promise<void> {
+  private async sendMonthSelectionMenu(chatId: string, editMessageId?: number): Promise<void> {
     const data = await this.loadReport('sales');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*\n\nPlease trigger a sync first using /sync to ingest spreadsheets.`,
         'Markdown',
         this.getMainMenuKeyboard(),
-        chatId
+        chatId,
+        editMessageId
       );
       return;
     }
@@ -487,59 +583,149 @@ export class TelegramBot {
           `⚠️ *No monthly sheets found in register.*`,
           'Markdown',
           this.getMainMenuKeyboard(),
-          chatId
+          chatId,
+          editMessageId
         );
         return;
       }
 
-      // Present the months in reverse chronological order (newest first)
-      const sortedMonths = [...months].reverse();
-      const buttons: InlineKeyboardButton[][] = [];
-
-      for (let i = 0; i < sortedMonths.length; i += 3) {
-        const row: InlineKeyboardButton[] = [];
-        const m1 = sortedMonths[i];
-        row.push({ text: m1.sheetName, callback_data: `month_${m1.sheetName.replace(/\s/g, '_')}` });
-        
-        if (i + 1 < sortedMonths.length) {
-          const m2 = sortedMonths[i + 1];
-          row.push({ text: m2.sheetName, callback_data: `month_${m2.sheetName.replace(/\s/g, '_')}` });
+      // Group unique years from the monthly registers
+      const yearsSet = new Set<number>();
+      let hasOther = false;
+      for (const m of months) {
+        const dVal = getMonthYearDate(m.sheetName);
+        if (dVal.getTime() > 0 && dVal.getFullYear() > 1970) {
+          yearsSet.add(dVal.getFullYear());
+        } else {
+          hasOther = true;
         }
-        
-        if (i + 2 < sortedMonths.length) {
-          const m3 = sortedMonths[i + 2];
-          row.push({ text: m3.sheetName, callback_data: `month_${m3.sheetName.replace(/\s/g, '_')}` });
+      }
+
+      const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
+
+      const buttons: InlineKeyboardButton[][] = [];
+      for (let i = 0; i < sortedYears.length; i += 2) {
+        const row: InlineKeyboardButton[] = [];
+        row.push({ text: `📅 Year ${sortedYears[i]}`, callback_data: `year_${sortedYears[i]}` });
+        if (i + 1 < sortedYears.length) {
+          row.push({ text: `📅 Year ${sortedYears[i + 1]}`, callback_data: `year_${sortedYears[i + 1]}` });
         }
         buttons.push(row);
+      }
+
+      if (hasOther) {
+        buttons.push([{ text: '📁 Other Sheets', callback_data: 'year_0' }]);
       }
 
       buttons.push([{ text: '◀️ Back to Options', callback_data: 'sales_back' }]);
 
       await telegramClient.sendMessage(
-        `📅 *${config.BUSINESS_NAME} - Select Month*\n\nPlease tap a month below to view its performance summary:`,
+        `📅 *${config.BUSINESS_NAME} - Select Year*\n\nPlease select a year to view its monthly performance summaries:`,
         'Markdown',
         { inline_keyboard: buttons },
-        chatId
+        chatId,
+        editMessageId
       );
     } catch (err: any) {
-      logger.error({ err }, 'Failed to generate month selection menu');
+      logger.error({ err }, 'Failed to generate year selection menu');
       await telegramClient.sendMessage(
-        `❌ *Error generating month menu:*\n\n\`${err.message}\``,
+        `❌ *Error generating year menu:*\n\n\`${err.message}\``,
         'Markdown',
         this.getMainMenuKeyboard(),
-        chatId
+        chatId,
+        editMessageId
       );
     }
   }
 
-  private async sendSpecificMonthSales(chatId: string, targetMonth: string): Promise<void> {
+  private async sendMonthsForYearMenu(chatId: string, year: number, editMessageId?: number): Promise<void> {
     const data = await this.loadReport('sales');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*`,
         'Markdown',
         this.getMainMenuKeyboard(),
-        chatId
+        chatId,
+        editMessageId
+      );
+      return;
+    }
+
+    try {
+      const months = data.months || [];
+      
+      // Filter months by year
+      const filtered = months.filter((m: any) => {
+        const dVal = getMonthYearDate(m.sheetName);
+        const y = dVal.getTime() > 0 ? dVal.getFullYear() : 0;
+        if (year === 0) {
+          return y <= 1970;
+        }
+        return y === year;
+      });
+
+      if (filtered.length === 0) {
+        await telegramClient.sendMessage(
+          `⚠️ *No monthly sheets found for Year ${year === 0 ? 'Other' : year}.*`,
+          'Markdown',
+          this.getMainMenuKeyboard(),
+          chatId,
+          editMessageId
+        );
+        return;
+      }
+
+      // Sort chronologically from newest (latest) to oldest
+      const sortedYearMonths = filtered.sort((a: any, b: any) => getMonthYearDate(b.sheetName).getTime() - getMonthYearDate(a.sheetName).getTime());
+      
+      const buttons: InlineKeyboardButton[][] = [];
+      for (let i = 0; i < sortedYearMonths.length; i += 3) {
+        const row: InlineKeyboardButton[] = [];
+        row.push({ text: sortedYearMonths[i].sheetName, callback_data: `month_${sortedYearMonths[i].sheetName.replace(/\s/g, '_')}` });
+        
+        if (i + 1 < sortedYearMonths.length) {
+          row.push({ text: sortedYearMonths[i + 1].sheetName, callback_data: `month_${sortedYearMonths[i + 1].sheetName.replace(/\s/g, '_')}` });
+        }
+        
+        if (i + 2 < sortedYearMonths.length) {
+          row.push({ text: sortedYearMonths[i + 2].sheetName, callback_data: `month_${sortedYearMonths[i + 2].sheetName.replace(/\s/g, '_')}` });
+        }
+        buttons.push(row);
+      }
+
+      buttons.push([
+        { text: '◀️ Back to Years', callback_data: 'sales_month_menu' },
+        { text: '📊 Back to Options', callback_data: 'sales_back' }
+      ]);
+
+      await telegramClient.sendMessage(
+        `📅 *${config.BUSINESS_NAME} - ${year === 0 ? 'Other Sheets' : `Year ${year}`}* \n\nPlease select a month to view its performance summary:`,
+        'Markdown',
+        { inline_keyboard: buttons },
+        chatId,
+        editMessageId
+      );
+    } catch (err: any) {
+      logger.error({ err, year }, 'Failed to generate months selection menu for year');
+      await telegramClient.sendMessage(
+        `❌ *Error generating months menu for year:*\n\n\`${err.message}\``,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
+      );
+    }
+  }
+
+  private async sendSpecificMonthSales(chatId: string, targetMonth: string, editMessageId?: number): Promise<void> {
+    const data = await this.loadReport('sales');
+    if (!data) {
+      await telegramClient.sendMessage(
+        `⚠️ *No Sales Ledger Available*`,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
       );
       return;
     }
@@ -555,7 +741,8 @@ export class TelegramBot {
           `⚠️ *Month not found in ledger database: "${targetMonth.replace(/_/g, ' ')}"*`,
           'Markdown',
           this.getMainMenuKeyboard(),
-          chatId
+          chatId,
+          editMessageId
         );
         return;
       }
@@ -577,34 +764,43 @@ export class TelegramBot {
         `• 💵 *Net Cashflow*: *₹${Math.round(net || 0).toLocaleString()}* (${statusLabel})\n\n` +
         `💬 _Tip: Tap 'Select Another Month' to compare different periods!_`;
 
+      const match = mData.sheetName.match(/\b(20\d{2})\b/);
+      const year = match ? parseInt(match[1], 10) : 0;
+
       const inlineKeyboard = {
         inline_keyboard: [
           [
-            { text: '📅 Select Another Month', callback_data: 'sales_month_menu' },
+            ...(year ? [{ text: `◀️ Back to ${year}`, callback_data: `year_${year}` }] : []),
+            { text: '📅 Select Month', callback_data: 'sales_month_menu' }
+          ],
+          [
             { text: '📊 Back to Options', callback_data: 'sales_back' }
           ]
         ]
       };
 
-      await telegramClient.sendMessage(summaryText, 'Markdown', inlineKeyboard, chatId);
+      await telegramClient.sendMessage(summaryText, 'Markdown', inlineKeyboard, chatId, editMessageId);
     } catch (err: any) {
       logger.error({ err }, 'Failed to read specific month sales');
       await telegramClient.sendMessage(
         `❌ *Error loading month sales:*\n\n\`${err.message}\``,
         'Markdown',
         this.getMainMenuKeyboard(),
-        chatId
+        chatId,
+        editMessageId
       );
     }
   }
 
-  private async sendSalesSummary(chatId: string): Promise<void> {
+  private async sendSalesSummary(chatId: string, editMessageId?: number): Promise<void> {
     const data = await this.loadReport('sales');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
         'Markdown',
-        this.getMainMenuKeyboard()
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
       );
       return;
     }
@@ -621,22 +817,204 @@ export class TelegramBot {
         `• 🌟 *Best Month*: ${data.benchmarks?.bestRevenueMonth} (₹${Math.round(data.benchmarks?.bestRevenueValue || 0).toLocaleString()})\n\n` +
         `💬 _Tip: Ask me 'Compare sales across months' or 'Explain cashflow surplus' for an AI breakdown!_`;
 
-      await telegramClient.sendMessage(summaryText, 'Markdown', this.getMainMenuKeyboard(), chatId);
+      const inlineKeyboard = {
+        inline_keyboard: [
+          [
+            { text: '◀️ Back to Options', callback_data: 'sales_back' }
+          ]
+        ]
+      };
+
+      await telegramClient.sendMessage(summaryText, 'Markdown', inlineKeyboard, chatId, editMessageId);
     } catch (err: any) {
       await telegramClient.sendMessage(
         `❌ *Failed to Read Sales Summary:*\n\n\`${err.message}\``,
         'Markdown',
         this.getMainMenuKeyboard(),
-        chatId
+        chatId,
+        editMessageId
       );
     }
   }
 
-  private async sendDebitorsSummary(chatId: string): Promise<void> {
+  private async sendDebitorsSummary(chatId: string, editMessageId?: number): Promise<void> {
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "📊 Credit & Collection Summary", callback_data: "debitors_summary_metrics" }
+        ],
+        [
+          { text: "🔥 Top Outstanding Debits", callback_data: "debitors_top_5" }
+        ],
+        [
+          { text: "🚨 High Risk Accounts (>₹20k)", callback_data: "debitors_high_risk" }
+        ],
+        [
+          { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
+        ]
+      ]
+    };
+
+    await telegramClient.sendMessage(
+      `👥 *${config.BUSINESS_NAME} - Debitors & Credit Directory*\n\nSelect an option below to view customer debts and credit tracking details:`,
+      'Markdown',
+      inlineKeyboard,
+      chatId,
+      editMessageId
+    );
+  }
+
+  private async sendDebitorsMetrics(chatId: string, editMessageId?: number): Promise<void> {
     const data = await this.loadReport('debitors');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Debitors Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
+      );
+      return;
+    }
+
+    try {
+      const agg = data.aggregates || {};
+      const metricsText = `📊 *${config.BUSINESS_NAME} - Credit & Collection Metrics*\n` +
+        `🕒 *Last Ingested*: \`${formatTimestampToDual(data.timestamp || data.runTimestamp)}\`\n\n` +
+        `• 📖 *Active Credit Accounts*: ${agg.activeDebitorsCount || 0} customers\n` +
+        `• 📉 *Total Credit Extended*: ₹${Math.round(agg.totalDebitSum || 0).toLocaleString()}\n` +
+        `• 📈 *Total Credit Recovered*: ₹${Math.round(agg.totalCreditSum || 0).toLocaleString()}\n` +
+        `• 💰 *Net Balance Outstanding*: *₹${Math.round(agg.totalPendingSum || 0).toLocaleString()}*\n` +
+        `• ✅ *Collection Success Rate*: *${agg.collectionSuccessRate || 0}%*\n\n` +
+        `💡 _Collection rate measures the percentage of total credit extended that has been successfully recovered._`;
+
+      const inlineKeyboard = {
+        inline_keyboard: [
+          [
+            { text: '◀️ Back to Debitors Menu', callback_data: 'debitors_menu' }
+          ]
+        ]
+      };
+
+      await telegramClient.sendMessage(metricsText, 'Markdown', inlineKeyboard, chatId, editMessageId);
+    } catch (err: any) {
+      await telegramClient.sendMessage(
+        `❌ *Failed to Read Debitors Metrics:*\n\n\`${err.message}\``,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
+      );
+    }
+  }
+
+  private async sendDebitorsTop5(chatId: string, editMessageId?: number): Promise<void> {
+    const data = await this.loadReport('debitors');
+    if (!data) {
+      await telegramClient.sendMessage(
+        `⚠️ *No Debitors Summary Found*`,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
+      );
+      return;
+    }
+
+    try {
+      const top = data.topDebitors || [];
+      let text = `🔥 *${config.BUSINESS_NAME} - Top 5 Outstanding Customer Debits*\n\n`;
+
+      if (top.length > 0) {
+         top.slice(0, 5).forEach((d: { name: string; pending?: number; pendingBalance?: number }, i: number) => {
+           const pendingVal = d.pending ?? d.pendingBalance ?? 0;
+           const riskLevel = pendingVal > 20000 ? 'High Risk 🚨' : pendingVal > 5000 ? 'Medium Alert ⚠️' : 'Healthy ✅';
+           text += `${i + 1}. *${d.name}*: *₹${Math.round(pendingVal).toLocaleString()}* (Risk: _${riskLevel}_)\n`;
+         });
+      } else {
+        text += `_No pending debtor accounts found!_\n`;
+      }
+
+      text += `\n💬 _Tip: Ask me 'Suggest a recovery plan for ${top[0]?.name || 'debtors'}' for AI strategic advice!_`;
+
+      const inlineKeyboard = {
+        inline_keyboard: [
+          [
+            { text: '◀️ Back to Debitors Menu', callback_data: 'debitors_menu' }
+          ]
+        ]
+      };
+
+      await telegramClient.sendMessage(text, 'Markdown', inlineKeyboard, chatId, editMessageId);
+    } catch (err: any) {
+      await telegramClient.sendMessage(
+        `❌ *Failed to Read Top Debitors:*\n\n\`${err.message}\``,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
+      );
+    }
+  }
+
+  private async sendDebitorsHighRisk(chatId: string, editMessageId?: number): Promise<void> {
+    const data = await this.loadReport('debitors');
+    if (!data) {
+      await telegramClient.sendMessage(
+        `⚠️ *No Debitors Summary Found*`,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
+      );
+      return;
+    }
+
+    try {
+      const top = data.allDebitors || data.topDebitors || [];
+      const highRisk = top.filter((d: any) => {
+        const pendingVal = d.pending ?? d.pendingBalance ?? 0;
+        return pendingVal > 20000;
+      });
+
+      let text = `🚨 *${config.BUSINESS_NAME} - High Risk Customer Debits (>₹20,000)*\n\n`;
+
+      if (highRisk.length > 0) {
+         highRisk.forEach((d: { name: string; pending?: number; pendingBalance?: number }, i: number) => {
+           const pendingVal = d.pending ?? d.pendingBalance ?? 0;
+           text += `${i + 1}. *${d.name}*: *₹${Math.round(pendingVal).toLocaleString()}*\n`;
+         });
+      } else {
+        text += `_No high risk debtor accounts found with outstanding balances exceeding ₹20,000!_\n`;
+      }
+
+      text += `\n💬 _Tip: Direct collection effort immediately to these accounts to recover cashflow._`;
+
+      const inlineKeyboard = {
+        inline_keyboard: [
+          [
+            { text: '◀️ Back to Debitors Menu', callback_data: 'debitors_menu' }
+          ]
+        ]
+      };
+
+      await telegramClient.sendMessage(text, 'Markdown', inlineKeyboard, chatId, editMessageId);
+    } catch (err: any) {
+      await telegramClient.sendMessage(
+        `❌ *Failed to Read High Risk Debitors:*\n\n\`${err.message}\``,
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        editMessageId
+      );
+    }
+  }
+
+  private async handleAiQuery(query: string, chatId: string): Promise<void> {
+    // Guard query length for AI queries
+    if (query.length > 1000) {
+      await telegramClient.sendMessage(
+        `⚠️ *Query Too Long*\n\nYour question is too long (*${query.length}* characters). Please keep your analysis queries under *1,000 characters* so the AI engine can focus and process it efficiently.`,
         'Markdown',
         this.getMainMenuKeyboard(),
         chatId
@@ -644,51 +1022,14 @@ export class TelegramBot {
       return;
     }
 
-    try {
-      const agg = data.aggregates || {};
-      const top = data.topDebitors || [];
-
-      let debitorsText = `👥 *${config.BUSINESS_NAME} - Debitors & Credit Summary*\n` +
-        `🕒 *Last Ingested*: \`${formatTimestampToDual(data.timestamp || data.runTimestamp)}\`\n\n` +
-        `*Credit Book Aggregates:*\n` +
-        `• 📖 *Active Credit Accounts*: ${agg.activeDebitorsCount || 0} customers\n` +
-        `• 📉 *Total Credit Extended*: ₹${Math.round(agg.totalDebitSum || 0).toLocaleString()}\n` +
-        `• 📈 *Total Credit Recovered*: ₹${Math.round(agg.totalCreditSum || 0).toLocaleString()}\n` +
-        `• 💰 *Net Balance Outstanding*: ₹${Math.round(agg.totalPendingSum || 0).toLocaleString()}\n` +
-        `• ✅ *Collection Success Rate*: ${agg.collectionSuccessRate || 0}%\n\n` +
-        `🔥 *Top Outstanding Debits:*\n`;
-
-      if (top.length > 0) {
-         top.slice(0, 5).forEach((d: { name: string; pending?: number; pendingBalance?: number }, i: number) => {
-           const pendingVal = d.pending ?? d.pendingBalance ?? 0;
-           const riskLevel = pendingVal > 20000 ? 'High Risk 🚨' : pendingVal > 5000 ? 'Medium Alert ⚠️' : 'Healthy ✅';
-           debitorsText += `${i + 1}. *${d.name}*: ₹${Math.round(pendingVal).toLocaleString()} (Risk: _${riskLevel}_)\n`;
-         });
-      } else {
-        debitorsText += `_No pending debtor accounts found!_\n`;
-      }
-
-      debitorsText += `\n💬 _Tip: Ask me 'Suggest a recovery plan for ${top[0]?.name || 'debtors'}' for AI strategic advice!_`;
-
-      await telegramClient.sendMessage(debitorsText, 'Markdown', this.getMainMenuKeyboard(), chatId);
-    } catch (err: any) {
-      await telegramClient.sendMessage(
-        `❌ *Failed to Read Debitors Summary:*\n\n\`${err.message}\``,
-        'Markdown',
-        this.getMainMenuKeyboard(),
-        chatId
-      );
-    }
-  }
-
-  private async handleAiQuery(query: string, chatId: string): Promise<void> {
-    // Send standard analysis acknowledgement only to the querying user
-    await telegramClient.sendMessage(
+    // Send standard analysis acknowledgement only to the querying user and store its ID
+    const statusRes = await telegramClient.sendMessage(
       `🤖 *Analyzing ledger data. Just a moment...*`,
       'Markdown',
       this.getMainMenuKeyboard(),
       chatId
     );
+    const statusMessageId = statusRes.messageId;
 
     let combinedContext = '';
 
@@ -760,13 +1101,17 @@ export class TelegramBot {
         `⚠️ *No Financial Records Found*\n\nUnable to access ledger summaries. Please run /sync first to ingest spreadsheets.`,
         'Markdown',
         this.getMainMenuKeyboard(),
-        chatId
+        chatId,
+        statusMessageId
       );
       return;
     }
 
-    const provider = AiProviderFactory.createProvider();
-    const prompt = `
+    try {
+      const activeProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
+      const activeModel = await getSystemSetting('ai_model', config.AI_MODEL);
+      const provider = AiProviderFactory.createProvider(activeProvider, activeModel);
+      const prompt = `
 You are a friendly, encouraging, and experienced local bar-and-restaurant financial consultant.
 You are helping the owner of "${config.BUSINESS_NAME}" understand their accounting ledger spreadsheet data.
 Use ONLY the following pre-calculated Master Ledger Summary data to answer their question:
@@ -802,15 +1147,25 @@ ${combinedContext}
    - Keep paragraphs short, punchy, and highly readable.
 `;
 
-    const response = await provider.generateText(prompt, {
-      temperature: 0.15,
-      maxTokens: 1000,
-    });
+      const response = await provider.generateText(prompt, {
+        temperature: 0.15,
+        maxTokens: 1000,
+      });
 
-    const cleanResponse = response.trim();
-    
-    // Reply only to the user who asked the question
-    await telegramClient.sendMessage(cleanResponse, 'Markdown', this.getMainMenuKeyboard(), chatId);
+      const cleanResponse = response.trim();
+      
+      // Edit the loading status message in-place with the final response
+      await telegramClient.sendMessage(cleanResponse, 'Markdown', this.getMainMenuKeyboard(), chatId, statusMessageId);
+    } catch (err: any) {
+      logger.error({ err: err.message }, 'Failed to generate AI insights for query');
+      await telegramClient.sendMessage(
+        this.formatBotError(err),
+        'Markdown',
+        this.getMainMenuKeyboard(),
+        chatId,
+        statusMessageId
+      );
+    }
   }
 
   private formatBotError(err: Error | unknown): string {
@@ -818,7 +1173,6 @@ ${combinedContext}
     const msgLower = msg.toLowerCase();
 
     if (msgLower.includes('rate limit') || msgLower.includes('rate_limit') || msgLower.includes('429')) {
-      // Find the wait duration if present, e.g. "try again in 33m47.808s"
       const match = msg.match(/try again in ([^\s]+)/i);
       const waitTime = match ? match[1] || match[0] : 'a few minutes';
       

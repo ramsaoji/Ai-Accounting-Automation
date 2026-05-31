@@ -6,13 +6,15 @@ import { logger } from '../../logger/logger.js';
 export class ClaudeProvider implements AiProvider {
   readonly id = 'claude';
 
+  constructor(private readonly modelOverride?: string) {}
+
   async generateText(prompt: string, options?: AiOptions): Promise<string> {
     const apiKey = config.CLAUDE_API_KEY;
     if (!apiKey) {
       throw new Error('CLAUDE_API_KEY environment variable is not defined');
     }
 
-    const model = options?.model || config.AI_MODEL || 'claude-3-5-sonnet-20240620';
+    const model = this.modelOverride || options?.model || config.AI_MODEL || 'claude-3-5-sonnet-20240620';
     const temperature = options?.temperature ?? 0.2;
     const maxTokens = options?.maxTokens ?? 1500;
 

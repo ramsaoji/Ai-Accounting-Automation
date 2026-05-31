@@ -79,3 +79,115 @@ export async function initSecurityConfig(): Promise<void> {
     logger.error({ err }, 'Failed to initialize or seed relational security configuration');
   }
 }
+
+/**
+ * Fetches a system configuration setting value from the relational database by its unique key.
+ * Returns default value if not present.
+ */
+export async function getSystemSetting(key: string, defaultValue: string): Promise<string> {
+  try {
+    const existing = await db
+      .select()
+      .from(schema.systemSettings)
+      .where(eq(schema.systemSettings.key, key))
+      .limit(1);
+
+    if (existing.length === 0) {
+      return defaultValue;
+    }
+    return existing[0].value;
+  } catch (err) {
+    logger.error({ err, key }, 'Failed to fetch system setting from database');
+    return defaultValue;
+  }
+}
+
+/**
+ * Persists or updates a system configuration setting value inside the relational database using an upsert.
+ */
+export async function setSystemSetting(key: string, value: string): Promise<void> {
+  try {
+    await db
+      .insert(schema.systemSettings)
+      .values({ key, value })
+      .onConflictDoUpdate({
+        target: schema.systemSettings.key,
+        set: { value, updatedAt: new Date() },
+      });
+    logger.info({ key, value }, 'System configuration setting saved successfully');
+  } catch (err) {
+    logger.error({ err, key, value }, 'Failed to save system setting to database');
+    throw err;
+  }
+}
+
+/**
+ * Seeds initial system configurations on boot if not already present.
+ */
+export async function initSystemSettings(): Promise<void> {
+  try {
+    // 1. Check if the old 'ai_chat_enabled' exists in the database to migrate preference
+    const oldSetting = await db
+      .select()
+      .from(schema.systemSettings)
+      .where(eq(schema.systemSettings.key, 'ai_chat_enabled'))
+      .limit(1);
+
+    let initialValue = 'true';
+    if (oldSetting.length > 0) {
+      initialValue = oldSetting[0].value;
+      logger.info({ initialValue }, 'Found historical "ai_chat_enabled" setting. Migrating to new separate keys...');
+    }
+
+    const isAiConfigured = config.AI_PROVIDER !== 'none' && config.AI_MODEL && config.AI_MODEL !== 'none' && config.AI_MODEL.trim() !== '';
+    const initialWebChat = isAiConfigured && config.DEFAULT_WEB_CHAT_ENABLED;
+    const initialTelegramChat = isAiConfigured && config.DEFAULT_TELEGRAM_CHAT_ENABLED;
+
+    const keysToSeed = [
+      { 
+        key: 'web_chat_enabled', 
+        value: oldSetting.length > 0 ? initialValue : (initialWebChat ? 'true' : 'false') 
+      },
+      { 
+        key: 'telegram_chat_enabled', 
+        value: oldSetting.length > 0 ? initialValue : (initialTelegramChat ? 'true' : 'false') 
+      },
+      {
+        key: 'ai_provider',
+        value: config.AI_PROVIDER
+      },
+      {
+        key: 'ai_model',
+        value: config.AI_MODEL
+      }
+    ];
+
+    for (const item of keysToSeed) {
+      const existing = await db
+        .select()
+        .from(schema.systemSettings)
+        .where(eq(schema.systemSettings.key, item.key))
+        .limit(1);
+
+      if (existing.length === 0) {
+        logger.info({ key: item.key, value: item.value }, 'Seeding default system setting...');
+        await db.insert(schema.systemSettings).values({
+          key: item.key,
+          value: item.value,
+        });
+      }
+    }
+
+    // 2. Delete the old 'ai_chat_enabled' key so it doesn't clutter the database
+    if (oldSetting.length > 0) {
+      logger.info('Deleting old "ai_chat_enabled" configuration key from database...');
+      await db
+        .delete(schema.systemSettings)
+        .where(eq(schema.systemSettings.key, 'ai_chat_enabled'));
+    }
+
+    logger.info('Database system settings initialization completed.');
+  } catch (err) {
+    logger.error({ err }, 'Failed to initialize or seed system configuration settings');
+  }
+}

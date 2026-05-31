@@ -59,15 +59,15 @@ export class AiProviderFactory {
   }
 
   /**
-   * Instantiates and returns the configured AI provider based on environment variables.
+   * Instantiates and returns the configured AI provider based on environment variables or dynamic database overrides.
    */
-  static createProvider(): AiProvider {
-    const providerName = config.AI_PROVIDER.toLowerCase();
+  static createProvider(overrideProvider?: string, overrideModel?: string): AiProvider {
+    const providerName = (overrideProvider || config.AI_PROVIDER).toLowerCase();
     
     if (providerName === 'none') {
       logger.warn({ providerName }, 'AI Provider Factory creating provider instance (disabled)');
     } else {
-      logger.info({ providerName }, 'AI Provider Factory creating provider instance');
+      logger.info({ providerName, model: overrideModel }, 'AI Provider Factory creating provider instance');
     }
 
     switch (providerName) {
@@ -77,32 +77,36 @@ export class AiProviderFactory {
         return new OpenAiProvider(
           'openai', 
           'https://api.openai.com/v1/chat/completions', 
-          'OPENAI_API_KEY'
+          'OPENAI_API_KEY',
+          overrideModel
         );
       case 'deepseek':
         return new OpenAiProvider(
           'deepseek', 
           'https://api.deepseek.com/chat/completions', 
-          'DEEPSEEK_API_KEY'
+          'DEEPSEEK_API_KEY',
+          overrideModel
         );
       case 'openrouter':
         return new OpenAiProvider(
           'openrouter', 
           'https://openrouter.ai/api/v1/chat/completions', 
-          'OPENROUTER_API_KEY'
+          'OPENROUTER_API_KEY',
+          overrideModel
         );
       case 'groq':
         return new OpenAiProvider(
           'groq',
           'https://api.groq.com/openai/v1/chat/completions',
-          'GROQ_API_KEY'
+          'GROQ_API_KEY',
+          overrideModel
         );
       case 'gemini':
-        return new GeminiProvider();
+        return new GeminiProvider(overrideModel);
       case 'claude':
-        return new ClaudeProvider();
+        return new ClaudeProvider(overrideModel);
       case 'ollama':
-        return new OllamaProvider();
+        return new OllamaProvider(overrideModel);
       default:
         logger.warn({ providerName }, 'Unknown provider specified, defaulting to disabled/none');
         return new DisabledAiProvider();
