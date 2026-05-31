@@ -19,18 +19,47 @@ interface AccountingState {
   setChatHistory: (workspace: 'sales' | 'debitors', fileName: string, history: ChatMessage[]) => void;
 }
 
+const getInitialToken = () => {
+  try {
+    return sessionStorage.getItem('app_session_token') || localStorage.getItem('app_session_token') || '';
+  } catch {
+    return '';
+  }
+};
+
 export const useAccountingStore = create<AccountingState>((set, get) => {
   return {
-    appSessionToken: '',
+    appSessionToken: getInitialToken(),
     activeWorkspace: 'sales',
     activeView: 'portal',
     chatHistories: {},
 
-    setToken: (token) => {
+    setToken: (token, remember) => {
       set({ appSessionToken: token });
+      try {
+        if (token) {
+          sessionStorage.setItem('app_session_token', token);
+          if (remember) {
+            localStorage.setItem('app_session_token', token);
+          } else {
+            localStorage.removeItem('app_session_token');
+          }
+        } else {
+          sessionStorage.removeItem('app_session_token');
+          localStorage.removeItem('app_session_token');
+        }
+      } catch (e) {
+        console.warn('Failed to persist token in storage:', e);
+      }
     },
     clearToken: () => {
       set({ appSessionToken: '' });
+      try {
+        sessionStorage.removeItem('app_session_token');
+        localStorage.removeItem('app_session_token');
+      } catch (e) {
+        console.warn('Failed to clear token from storage:', e);
+      }
     },
     setActiveWorkspace: (workspace) => {
       set({ activeWorkspace: workspace });

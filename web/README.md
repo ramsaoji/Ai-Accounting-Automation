@@ -65,15 +65,21 @@ web/
 │   ├── hooks/                    # Custom React hooks
 │   │   ├── use-mobile.ts         # Viewport size detector hook
 │   │   ├── useAccountingData.ts  # Cascading backend fetching hook
-│   │   └── useDriveSync.ts       # Drive sync status tracking hook
+│   │   ├── useDriveSync.ts       # Drive sync status tracking hook
+│   │   └── useManualUpload.ts    # Manual uploader queue hook
 │   ├── lib/
 │   │   └── utils.ts              # Tailwind CSS merging utility
+│   ├── providers/                # Theme and app providers
+│   │   └── theme-provider.tsx    # Tailwind dark/light theme context provider
 │   ├── services/
 │   │   └── api.ts                # Client API wrappers with auth fetch
 │   ├── store/
 │   │   └── useAccountingStore.ts # Zustand global state manager
+│   ├── types/                    # Frontend specific type subfolders
+│   │   └── ingestion.ts          # Ingestion queue and state types
 │   ├── utils/
 │   │   ├── business.ts           # Business name filename-to-display converter
+│   │   ├── format.ts             # Currency, date, percentage formatters
 │   │   └── markdown.tsx          # Custom safe regex-based block tokenizer
 │   ├── types.ts                  # Shared frontend types
 │   ├── App.tsx                   # Main routing hub

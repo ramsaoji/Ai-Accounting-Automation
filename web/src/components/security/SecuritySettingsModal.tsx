@@ -14,11 +14,66 @@ import { toast } from 'sonner';
 import { Key, Eye, EyeOff, Loader2, Lock, Upload, Settings, Laptop, Send, Sparkles, Bot } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface SecuritySettingsModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const SystemSettingsSkeleton: React.FC = () => {
+  return (
+    <div className="flex flex-col gap-5 px-1 py-1">
+      {/* Section 1: AI Engine Configuration */}
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-3.5 w-24" />
+        
+        {/* Active AI Provider */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <Skeleton className="h-8 w-full sm:w-[180px]" />
+        </div>
+
+        {/* Active Model Name */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <Skeleton className="h-8 w-full sm:w-[180px]" />
+        </div>
+      </div>
+
+      <div className="h-px bg-border/40 my-1" />
+
+      {/* Section 2: Channel Activations */}
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-3.5 w-28" />
+        
+        {/* Web UI AI Chat Toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <Skeleton className="h-6 w-11 rounded-full" />
+        </div>
+
+        {/* Telegram Bot AI Chat Toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <Skeleton className="h-6 w-11 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   isOpen,
@@ -277,8 +332,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0 gap-4 mt-2">
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col min-h-0">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0 gap-4 mt-2 overflow-hidden">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <TooltipProvider>
               <TabsList className="w-full flex h-12 sm:h-11 p-1 bg-muted rounded-xl">
                 <Tooltip>
@@ -374,7 +429,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
             </>
           )}
 
-          <TabsContent value="app-lock" className="overflow-y-auto pr-1 mt-2 flex-1 focus-visible:outline-none">
+          <TabsContent value="app-lock" className="overflow-y-auto overscroll-contain pr-1 mt-2 flex-1 focus-visible:outline-none">
             <div className="flex flex-col gap-4">
               {/* New App Lock Password */}
               <div className="flex flex-col gap-1 text-left">
@@ -462,7 +517,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
             </div>
           </TabsContent>
 
-          <TabsContent value="upload" className="overflow-y-auto pr-1 mt-2 flex-1 focus-visible:outline-none">
+          <TabsContent value="upload" className="overflow-y-auto overscroll-contain pr-1 mt-2 flex-1 focus-visible:outline-none">
             <div className="flex flex-col gap-4">
               {/* New Upload Password */}
               <div className="flex flex-col gap-1 text-left">
@@ -550,164 +605,167 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
             </div>
           </TabsContent>
 
-          <TabsContent value="system-settings" className="overflow-y-auto pr-1 mt-2 flex-1 focus-visible:outline-none text-left">
-            <div className="flex flex-col gap-5 animate-in fade-in duration-200 px-1 py-1">
-              
-              {/* Section 1: AI Engine Configuration */}
-              <div className="flex flex-col gap-3">
-                <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
-                  AI Engine Config
-                </h3>
+          <TabsContent value="system-settings" className="overflow-y-auto overscroll-contain pr-1 mt-2 flex-1 focus-visible:outline-none text-left">
+            {isLoadingSettings ? (
+              <SystemSettingsSkeleton />
+            ) : (
+              <div className="flex flex-col gap-5 animate-in fade-in duration-200 px-1 py-1">
                 
-                {/* Active AI Provider (Select on the right) */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-2">
-                    <Sparkles className="size-4 text-primary shrink-0" />
-                    AI Provider
-                  </span>
-                  <div className="w-full sm:w-auto">
-                    <Select
-                      value={aiProvider}
-                      onValueChange={handleProviderChange}
-                      disabled={isLoadingSettings || isUpdating}
-                    >
-                      <SelectTrigger id="ai-provider-select" className="w-full sm:w-[180px] bg-background border border-border rounded-md px-3 py-2 text-xs text-foreground cursor-pointer justify-between focus:ring-1 focus:ring-primary focus:border-primary transition-all">
-                        <SelectValue placeholder="Select active AI engine..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border border-border/80 shadow-lg rounded-lg text-xs z-50">
-                        {availableProviders.includes('none') && <SelectItem value="none">Disabled (No AI)</SelectItem>}
-                        {availableProviders.includes('openai') && <SelectItem value="openai">OpenAI (ChatGPT)</SelectItem>}
-                        {availableProviders.includes('gemini') && <SelectItem value="gemini">Google Gemini</SelectItem>}
-                        {availableProviders.includes('claude') && <SelectItem value="claude">Anthropic Claude</SelectItem>}
-                        {availableProviders.includes('deepseek') && <SelectItem value="deepseek">DeepSeek AI</SelectItem>}
-                        {availableProviders.includes('groq') && <SelectItem value="groq">Groq (Ultra-Fast)</SelectItem>}
-                        {availableProviders.includes('openrouter') && <SelectItem value="openrouter">OpenRouter (Free Tiers)</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Active Model Name (Input on the right) */}
-                {aiProvider !== 'none' && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 animate-in slide-in-from-top-1 duration-200">
+                {/* Section 1: AI Engine Configuration */}
+                <div className="flex flex-col gap-3">
+                  <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
+                    AI Engine Config
+                  </h3>
+                  
+                  {/* Active AI Provider (Select on the right) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
                     <span className="text-xs font-semibold text-foreground flex items-center gap-2">
-                      <Bot className="size-4 text-primary shrink-0" />
-                      Model Identifier
+                      <Sparkles className="size-4 text-primary shrink-0" />
+                      AI Provider
                     </span>
                     <div className="w-full sm:w-auto">
-                      <input
-                        id="ai-model-input"
-                        type="text"
-                        value={aiModel}
-                        onChange={(e) => handleModelChange(e.target.value)}
-                        onBlur={(e) => handleModelBlur(e.target.value)}
+                      <Select
+                        value={aiProvider}
+                        onValueChange={handleProviderChange}
                         disabled={isLoadingSettings || isUpdating}
-                        placeholder="e.g. gemini-2.5-flash"
-                        className="w-full sm:w-[180px] bg-background border border-border rounded-md px-3.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/45 text-left focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
-                      />
+                      >
+                        <SelectTrigger id="ai-provider-select" className="w-full sm:w-[180px] bg-background border border-border rounded-md px-3 py-2 text-xs text-foreground cursor-pointer justify-between focus:ring-1 focus:ring-primary focus:border-primary transition-all">
+                          <SelectValue placeholder="Select active AI engine..." />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border border-border/80 shadow-lg rounded-lg text-xs z-50">
+                          {availableProviders.includes('none') && <SelectItem value="none">Disabled (No AI)</SelectItem>}
+                          {availableProviders.includes('openai') && <SelectItem value="openai">OpenAI (ChatGPT)</SelectItem>}
+                          {availableProviders.includes('gemini') && <SelectItem value="gemini">Google Gemini</SelectItem>}
+                          {availableProviders.includes('claude') && <SelectItem value="claude">Anthropic Claude</SelectItem>}
+                          {availableProviders.includes('deepseek') && <SelectItem value="deepseek">DeepSeek AI</SelectItem>}
+                          {availableProviders.includes('groq') && <SelectItem value="groq">Groq (Ultra-Fast)</SelectItem>}
+                          {availableProviders.includes('openrouter') && <SelectItem value="openrouter">OpenRouter (Free Tiers)</SelectItem>}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                )}
-              </div>
 
-              <div className="h-px bg-border/40 my-1" />
-
-              {/* Section 2: Channel Activations */}
-              <div className="flex flex-col gap-3">
-                <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
-                  Access Channels
-                </h3>
-                
-                {/* 1. Web UI AI Chat Toggle */}
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-2">
-                    {webChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? (
-                      <Laptop className="size-4 text-emerald-500 animate-pulse" />
-                    ) : (
-                      <Laptop className="size-4 text-muted-foreground" />
-                    )}
-                    Web Advisor Chat
-                  </span>
-
-                  {isLoadingSettings ? (
-                    <Loader2 className="size-5 text-primary animate-spin shrink-0" />
-                  ) : (
-                    <div
-                      onClick={() => {
-                        if (aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()) {
-                          toast.warning("Cannot enable chat: Please configure an active AI Provider and Model first.");
-                        }
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleWebChat(!webChatEnabled);
-                        }}
-                        aria-label="Toggle Web UI Advisor Chat"
-                        disabled={aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed ${
-                          webChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'bg-primary' : 'bg-muted'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${
-                            webChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'translate-x-5' : 'translate-x-0'
-                          }`}
+                  {/* Active Model Name (Input on the right) */}
+                  {aiProvider !== 'none' && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 animate-in slide-in-from-top-1 duration-200">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-2">
+                        <Bot className="size-4 text-primary shrink-0" />
+                        Model Identifier
+                      </span>
+                      <div className="w-full sm:w-auto">
+                        <input
+                          id="ai-model-input"
+                          type="text"
+                          value={aiModel}
+                          onChange={(e) => handleModelChange(e.target.value)}
+                          onBlur={(e) => handleModelBlur(e.target.value)}
+                          disabled={isLoadingSettings || isUpdating}
+                          placeholder="e.g. gemini-2.5-flash"
+                          className="w-full sm:w-[180px] bg-background border border-border rounded-md px-3.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/45 text-left focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                         />
-                      </button>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* 2. Telegram Bot AI Chat Toggle */}
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-2">
-                    {telegramChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? (
-                      <Send className="size-4 text-emerald-500 animate-pulse" />
-                    ) : (
-                      <Send className="size-4 text-muted-foreground" />
-                    )}
-                    Telegram Bot Advisor
-                  </span>
+                <div className="h-px bg-border/40 my-1" />
 
-                  {isLoadingSettings ? (
-                    <Loader2 className="size-5 text-primary animate-spin shrink-0" />
-                  ) : (
-                    <div
-                      onClick={() => {
-                        if (aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()) {
-                          toast.warning("Cannot enable chat: Please configure an active AI Provider and Model first.");
-                        }
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleTelegramChat(!telegramChatEnabled);
+                {/* Section 2: Channel Activations */}
+                <div className="flex flex-col gap-3">
+                  <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
+                    Access Channels
+                  </h3>
+                  
+                  {/* 1. Web UI AI Chat Toggle */}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs font-semibold text-foreground flex items-center gap-2">
+                      {webChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? (
+                        <Laptop className="size-4 text-emerald-500 animate-pulse" />
+                      ) : (
+                        <Laptop className="size-4 text-muted-foreground" />
+                      )}
+                      Web Advisor Chat
+                    </span>
+
+                    {isLoadingSettings ? (
+                      <Loader2 className="size-5 text-primary animate-spin shrink-0" />
+                    ) : (
+                      <div
+                        onClick={() => {
+                          if (aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()) {
+                            toast.warning("Cannot enable chat: Please configure an active AI Provider and Model first.");
+                          }
                         }}
-                        aria-label="Toggle Telegram Bot Chat"
-                        disabled={aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed ${
-                          telegramChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'bg-primary' : 'bg-muted'
-                        }`}
+                        className="cursor-pointer"
                       >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${
-                            telegramChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'translate-x-5' : 'translate-x-0'
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleWebChat(!webChatEnabled);
+                          }}
+                          aria-label="Toggle Web UI Advisor Chat"
+                          disabled={aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed ${
+                            webChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'bg-primary' : 'bg-muted'
                           }`}
-                        />
-                      </button>
-                    </div>
-                  )}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${
+                              webChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Telegram Bot AI Chat Toggle */}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs font-semibold text-foreground flex items-center gap-2">
+                      {telegramChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? (
+                        <Send className="size-4 text-emerald-500 animate-pulse" />
+                      ) : (
+                        <Send className="size-4 text-muted-foreground" />
+                      )}
+                      Telegram Bot Advisor
+                    </span>
+
+                    {isLoadingSettings ? (
+                      <Loader2 className="size-5 text-primary animate-spin shrink-0" />
+                    ) : (
+                      <div
+                        onClick={() => {
+                          if (aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()) {
+                            toast.warning("Cannot enable chat: Please configure an active AI Provider and Model first.");
+                          }
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleTelegramChat(!telegramChatEnabled);
+                          }}
+                          aria-label="Toggle Telegram Bot Chat"
+                          disabled={aiProvider === 'none' || aiModel === 'none' || !aiModel.trim()}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed ${
+                            telegramChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'bg-primary' : 'bg-muted'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${
+                              telegramChatEnabled && aiProvider !== 'none' && aiModel !== 'none' && aiModel.trim() !== '' ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-
-            </div>
+            )}
           </TabsContent>
           </Tabs>
 

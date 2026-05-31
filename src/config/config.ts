@@ -20,7 +20,6 @@ const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
-  OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
 
   // Google Config (optional — falls back to local file mode if absent/placeholder)
   GOOGLE_CLIENT_EMAIL: z.string().default('accounting-worker@your-project-id.iam.gserviceaccount.com'),

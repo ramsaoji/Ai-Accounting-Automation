@@ -93,18 +93,27 @@ export function App() {
   // Load real database data with modular 3-tier cascading fallback hook
   const { salesData, debitorsData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, aiProvider, sync: fetchRealData } = useAccountingData();
 
+  const isSyncingDriveRef = useRef(false);
+  const isUploadingRef = useRef(false);
+
   // Custom Drive Sync hook to isolate background polling/interval logic
   const { isSyncingDrive, syncProgress, handleDriveSync, resetDriveSync } = useDriveSync({
     salesData,
     debitorsData,
     connectionMode,
-    fetchRealData
+    fetchRealData,
+    isUploadingRef
   });
 
   // Manual upload hook — owns upload logic and progress state
   const { isUploading, uploadProgress, startUpload, resetUpload } = useManualUpload({
     onSuccess: fetchRealData,
+    isSyncingDriveRef
   });
+
+  // Sync state values to refs synchronously on each render
+  isSyncingDriveRef.current = isSyncingDrive;
+  isUploadingRef.current = isUploading;
 
   // Trigger sync on mount if already authenticated
   useEffect(() => {
@@ -145,7 +154,6 @@ export function App() {
         <LockScreen
           onUnlock={(token, remember) => {
             setToken(token, remember);
-            fetchRealData();
           }}
         />
         <Toaster position="top-right" />

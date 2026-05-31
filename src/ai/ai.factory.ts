@@ -2,7 +2,6 @@ import { AiProvider, AiOptions } from './ai.types.js';
 import { OpenAiProvider } from './providers/openai.provider.js';
 import { GeminiProvider } from './providers/gemini.provider.js';
 import { ClaudeProvider } from './providers/claude.provider.js';
-import { OllamaProvider } from './providers/ollama.provider.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 
@@ -13,7 +12,7 @@ export class DisabledAiProvider implements AiProvider {
   }
 }
 
-/** Maps provider name to the env variable name that must be set. Ollama uses a base URL, not a key. */
+/** Maps provider name to the env variable name that must be set. */
 const PROVIDER_KEY_MAP: Record<string, { envVar: string; getValue: () => string | undefined }> = {
   openai:     { envVar: 'OPENAI_API_KEY',     getValue: () => config.OPENAI_API_KEY },
   deepseek:   { envVar: 'DEEPSEEK_API_KEY',   getValue: () => config.DEEPSEEK_API_KEY },
@@ -21,7 +20,6 @@ const PROVIDER_KEY_MAP: Record<string, { envVar: string; getValue: () => string 
   groq:       { envVar: 'GROQ_API_KEY',       getValue: () => config.GROQ_API_KEY },
   gemini:     { envVar: 'GEMINI_API_KEY',     getValue: () => config.GEMINI_API_KEY },
   claude:     { envVar: 'CLAUDE_API_KEY',     getValue: () => config.CLAUDE_API_KEY },
-  ollama:     { envVar: 'OLLAMA_BASE_URL',    getValue: () => config.OLLAMA_BASE_URL },
 };
 
 export class AiProviderFactory {
@@ -105,8 +103,6 @@ export class AiProviderFactory {
         return new GeminiProvider(overrideModel);
       case 'claude':
         return new ClaudeProvider(overrideModel);
-      case 'ollama':
-        return new OllamaProvider(overrideModel);
       default:
         logger.warn({ providerName }, 'Unknown provider specified, defaulting to disabled/none');
         return new DisabledAiProvider();

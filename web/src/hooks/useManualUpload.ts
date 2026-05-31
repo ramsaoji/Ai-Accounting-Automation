@@ -1,19 +1,27 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import type { RefObject } from 'react';
 import { toast } from 'sonner';
 import { uploadSpreadsheet } from '@/services/api';
 import type { IngestionFile, IngestionProgress } from '@/types/ingestion';
 
 interface UseManualUploadProps {
   onSuccess: (silent?: boolean) => Promise<void>;
+  isSyncingDriveRef?: RefObject<boolean>;
 }
 
-export function useManualUpload({ onSuccess }: UseManualUploadProps) {
+export function useManualUpload({ onSuccess, isSyncingDriveRef }: UseManualUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<IngestionProgress | null>(null);
+  const isUploadingRef = useRef(false);
 
   const startUpload = useCallback(async (files: File[], sessionToken: string) => {
-    if (isUploading || files.length === 0) return;
+    if (isUploading || isUploadingRef.current || files.length === 0) return;
+    if (isSyncingDriveRef?.current) {
+      toast.warning("Manual file upload cannot be initiated while a Google Drive sync is in progress.");
+      return;
+    }
 
+    isUploadingRef.current = true;
     setIsUploading(true);
 
     // Build initial progress with all files pending
@@ -120,11 +128,13 @@ export function useManualUpload({ onSuccess }: UseManualUploadProps) {
         await onSuccess(true);
       }
     } finally {
+      isUploadingRef.current = false;
       setIsUploading(false);
     }
-  }, [isUploading, onSuccess]);
+  }, [isUploading, onSuccess, isSyncingDriveRef]);
 
   const resetUpload = useCallback(() => {
+    isUploadingRef.current = false;
     setIsUploading(false);
     setUploadProgress(null);
   }, []);

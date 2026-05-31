@@ -18,6 +18,7 @@ export function useAccountingData() {
   const lastSalesTimestamp = useRef<string | undefined>(undefined);
   const lastDebitorsTimestamp = useRef<string | undefined>(undefined);
   const hasInitiallySynced = useRef<boolean>(false);
+  const syncRequestId = useRef<number>(0);
 
   /**
    * Fetches latest accounting data and updates UI state.
@@ -26,13 +27,15 @@ export function useAccountingData() {
    *                 full-page loading screen is not triggered on an already-loaded dashboard.
    */
   const sync = useCallback(async (silent = false) => {
+    const currentRequestId = ++syncRequestId.current;
     if (!silent) {
       setIsLoading(true);
     }
     try {
       const result = await fetchAccountingData();
-
-
+      if (currentRequestId !== syncRequestId.current) {
+        return; // Discard stale request responses
+      }
 
       lastSalesTimestamp.current = result.sales?.runTimestamp;
       lastDebitorsTimestamp.current = result.debitors?.runTimestamp;

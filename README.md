@@ -44,7 +44,8 @@ ai-accounting-automation/
 │   │   │   ├── chat.controller.ts     # LLM advisor chat context loader
 │   │   │   ├── health.controller.ts   # Minimal health check status endpoint
 │   │   │   ├── report.controller.ts   # Database report getters and uploader
-│   │   │   └── security.controller.ts # Passcode verification and sessions manager
+│   │   │   ├── security.controller.ts # Passcode verification and sessions manager
+│   │   │   └── settings.controller.ts # Database setting toggle manager
 │   │   ├── middleware/
 │   │   │   └── validate.ts           # Reusable Zod request body/query/params validation hooks
 │   │   ├── errors.ts                  # Standardized API error responses and envelopes
@@ -66,13 +67,20 @@ ai-accounting-automation/
 │   │       └── debitors.parser.ts # Customer outstanding udhari parser
 │   ├── rules/
 │   │   ├── rules.types.ts        # Modular Rules Engine interfaces
-│   │   └── rules.engine.ts       # Concrete Rule implementations (Spikes, Duplicates)
+│   │   ├── rules.engine.ts       # Concrete Rule implementations (Spikes, Duplicates)
+│   │   └── definitions/          # Individual modular audit rules
+│   │       ├── cross-workbook.rule.ts
+│   │       ├── duplicate-date.rule.ts
+│   │       ├── duplicate-invoice.rule.ts
+│   │       ├── high-expense.rule.ts
+│   │       ├── negative-or-zero.rule.ts
+│   │       ├── off-hours-transaction.rule.ts
+│   │       └── suspicious-spike.rule.ts
 │   ├── ai/
 │   │   ├── providers/
 │   │   │   ├── openai.provider.ts # OpenAI, DeepSeek, & OpenRouter client
 │   │   │   ├── gemini.provider.ts # Google Gemini REST client
-│   │   │   ├── claude.provider.ts # Anthropic Claude REST client
-│   │   │   └── ollama.provider.ts # Local LLM client
+│   │   │   └── claude.provider.ts # Anthropic Claude REST client
 │   │   ├── ai.types.ts           # Swappable AI provider contract
 │   │   ├── ai.factory.ts         # Env-driven runtime provider factory
 │   │   ├── ai.prompts.ts         # Shared AI prompt input type definitions
@@ -167,6 +175,8 @@ Define the following environment variables in your `.env` configuration file:
 | **`CRON_SCHEDULE`** | No | `0 0 * * *` | Cron task schedule (defaults to daily at midnight) |
 | **`DEFAULT_UPLOAD_PASSWORD`** | **Yes** | - | Fallback passcode used to authorize spreadsheet ingestion uploads during first-time database seeding |
 | **`DEFAULT_APP_PASSWORD`** | **Yes** | - | Fallback passcode used to secure the fullscreen App Lock screen during first-time database seeding |
+| **`DEFAULT_WEB_CHAT_ENABLED`** | No | `true` | Enable/disable AI strategic advisor chat in the Web UI on initial seeding |
+| **`DEFAULT_TELEGRAM_CHAT_ENABLED`** | No | `true` | Enable/disable AI chat responses in the Telegram Bot on initial seeding |
 | **`JWT_SECRET`** | No | `development_jwt_secret_fallback_key_12345` | Signing secret key used to generate and verify JWT admin session tokens |
 | **`ENABLE_FILE_LOGGING`** | No | `false` | Enable/disable appending structured logs to `logs/system.log` |
 | **`ALLOWED_ORIGINS`** | No | - | Comma-separated list of allowed CORS domains (e.g. `http://localhost:5173`) |

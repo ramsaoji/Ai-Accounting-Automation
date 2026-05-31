@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { verifyAppLockPassword } from '@/services/api';
@@ -15,11 +15,13 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const isVerifyingRef = useRef(false);
 
   const handleUnlock = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!password.trim()) return;
+    if (isVerifying || isVerifyingRef.current || !password.trim()) return;
 
+    isVerifyingRef.current = true;
     setIsVerifying(true);
     setHasError(false);
 
@@ -31,10 +33,12 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
       } else {
         setHasError(true);
         toast.error("Invalid passcode. Access denied.");
+        isVerifyingRef.current = false;
+        setIsVerifying(false);
       }
     } catch {
       toast.error("Could not connect to the backend server. Please verify it is running.");
-    } finally {
+      isVerifyingRef.current = false;
       setIsVerifying(false);
     }
   };

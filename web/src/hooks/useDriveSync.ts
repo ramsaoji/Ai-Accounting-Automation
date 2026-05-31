@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import type { RefObject } from 'react';
 import { toast } from 'sonner';
 import { triggerDriveSync, fetchAccountingData, fetchSyncStatus } from '@/services/api';
 import type { MasterSummary } from '@/types';
@@ -8,12 +9,14 @@ interface UseDriveSyncProps {
   debitorsData: MasterSummary | null;
   connectionMode?: 'live' | 'static' | 'empty';
   fetchRealData: (silent?: boolean) => Promise<any>;
+  isUploadingRef?: RefObject<boolean>;
 }
 
-export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriveSyncProps) {
+export function useDriveSync({ salesData, debitorsData, fetchRealData, isUploadingRef }: UseDriveSyncProps) {
   const [isSyncingDrive, setIsSyncingDrive] = useState<boolean>(false);
   const [syncProgress, setSyncProgress] = useState<any>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isSyncingRef = useRef<boolean>(false);
 
   // Clean up sync polling interval on unmount
   useEffect(() => {
@@ -25,8 +28,13 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
   }, []);
 
   const handleDriveSync = useCallback(async () => {
-    if (isSyncingDrive) return;
+    if (isSyncingDrive || isSyncingRef.current) return;
+    if (isUploadingRef?.current) {
+      toast.warning("Google Drive sync cannot be triggered while a manual file upload is in progress.");
+      return;
+    }
     
+    isSyncingRef.current = true;
     setIsSyncingDrive(true);
     setSyncProgress(null);
 
@@ -47,6 +55,7 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
 
       // Edge case 1: Drive is already up-to-date — no new files, no need to refresh data
       if (result.status === 'up-to-date') {
+        isSyncingRef.current = false;
         setIsSyncingDrive(false);
         setSyncProgress(null);
         toast.dismiss(toastId);
@@ -98,6 +107,7 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
             }
             await fetchRealData(true); // silent refresh
             toast.success(successMsg);
+            isSyncingRef.current = false;
             setIsSyncingDrive(false);
             return;
           }
@@ -108,6 +118,7 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
               intervalRef.current = null;
             }
             toast.error(`${failMsg}: ${statusResult.error || 'Server error.'}`);
+            isSyncingRef.current = false;
             setIsSyncingDrive(false);
             return;
           }
@@ -132,6 +143,7 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
             }
             await fetchRealData(true);
             toast.success(successMsg);
+            isSyncingRef.current = false;
             setIsSyncingDrive(false);
 
           } else if (attempts >= maxAttempts) {
@@ -141,6 +153,7 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
             }
             await fetchRealData(true);
             toast.info('Sync is still processing. Dashboard refreshed with latest available data.');
+            isSyncingRef.current = false;
             setIsSyncingDrive(false);
           }
 
@@ -151,6 +164,7 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
               intervalRef.current = null;
             }
             toast.error('Sync polling timed out due to a network error. Please retry.');
+            isSyncingRef.current = false;
             setIsSyncingDrive(false);
             setSyncProgress((prev: any) => ({
               ...(prev || { totalFiles: 0, processedFiles: 0, currentFile: '', statusText: 'Sync failed', files: [] }),
@@ -161,15 +175,17 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
       }, 2500);
 
     } catch (err: unknown) {
+      isSyncingRef.current = false;
       setIsSyncingDrive(false);
       setSyncProgress(null);
       const errMsg = err instanceof Error ? err.message : String(err);
       toast.dismiss(toastId);
       toast.error(`${failMsg}: ${errMsg}`);
     }
-  }, [isSyncingDrive, salesData, debitorsData, fetchRealData]);
+  }, [isSyncingDrive, salesData, debitorsData, fetchRealData, isUploadingRef]);
 
   const resetDriveSync = useCallback(() => {
+    isSyncingRef.current = false;
     setIsSyncingDrive(false);
     setSyncProgress(null);
   }, []);
