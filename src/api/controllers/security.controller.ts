@@ -94,10 +94,16 @@ export function verifyToken(token: string): TokenPayload | null {
 
 // ─── Security Credentials ────────────────────────────────────────────────────
 
+let cachedCredentials: { uploadPassword?: string; appPassword?: string } | null = null;
+
 /**
  * Gets the current security credentials (from DB if active, otherwise env fallback in dev only).
  */
 export async function getSecurityCredentials(): Promise<{ uploadPassword?: string; appPassword?: string }> {
+  if (cachedCredentials) {
+    return cachedCredentials;
+  }
+
   try {
     if (db) {
       const dbData = await db
@@ -106,10 +112,11 @@ export async function getSecurityCredentials(): Promise<{ uploadPassword?: strin
         .where(eq(schema.securityConfig.key, 'credentials'))
         .limit(1);
       if (dbData.length > 0) {
-        return {
+        cachedCredentials = {
           uploadPassword: dbData[0].uploadPasswordHash,
           appPassword: dbData[0].appPasswordHash,
         };
+        return cachedCredentials;
       }
     }
     if (config.NODE_ENV === 'production') {
@@ -277,6 +284,7 @@ export async function changePasswords(
           },
         });
     }
+    cachedCredentials = null;
     logger.info('Database security credentials config updated successfully.');
 
     reply.code(200).send({ status: 'success', message: 'Credentials updated successfully' });

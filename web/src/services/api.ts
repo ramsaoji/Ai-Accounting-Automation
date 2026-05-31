@@ -57,6 +57,7 @@ export interface SyncResult {
   isDevMode?: boolean;
   hasSyncedBefore?: boolean;
   aiProvider?: string;
+  cronSchedule?: string;
 }
 
 /**
@@ -90,6 +91,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
     let isDevMode = false;
     let hasSyncedBefore = false;
     let aiProvider = 'none';
+    let cronSchedule = undefined;
     if (healthRes.ok) {
       const healthData = await healthRes.json();
       mode = healthData.connectionMode || 'static';
@@ -98,6 +100,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
       isDevMode = !!healthData.isDevMode;
       hasSyncedBefore = !!healthData.hasSyncedBefore;
       aiProvider = healthData.provider || 'none';
+      cronSchedule = healthData.cron;
     }
 
     return {
@@ -108,7 +111,8 @@ export async function fetchAccountingData(): Promise<SyncResult> {
       isLocalDb,
       isDevMode,
       hasSyncedBefore,
-      aiProvider
+      aiProvider,
+      cronSchedule
     };
   } catch (err) {
     console.warn('Backend API connection failed.', err);

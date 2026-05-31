@@ -817,7 +817,7 @@ export class TelegramBot {
 
     try {
       const summaryText = `📊 *${config.BUSINESS_NAME} - Daily Sales Summary*\n` +
-        `📅 *Audited Months*: ${data.totalMonths} months (${data.totalTransactions} transactions)\n` +
+        `📅 *Audited Months*: ${data.totalMonths ?? data.months?.length ?? 0} months (${data.totalTransactions} transactions)\n` +
         `🕒 *Last Ingested*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
         `*Key Financial Metrics:*\n` +
         `• 🍷 *Liquor Sales*: ₹${Math.round(data.masterTotals?.liquorSales || 0).toLocaleString()} (${data.benchmarks?.liquorPercentage || 0}% of sales)\n` +
@@ -1049,23 +1049,20 @@ export class TelegramBot {
       const prunedSales = {
         fileName: salesData.fileName,
         timestamp: salesData.runTimestamp || salesData.timestamp || 'N/A',
-        totalMonths: salesData.totalMonths,
+        totalMonths: salesData.totalMonths ?? salesData.months?.length ?? 0,
         totalTransactions: salesData.totalTransactions,
         masterTotals: salesData.masterTotals,
         benchmarks: salesData.benchmarks,
-        months: salesData.months?.map((m: {
-          month: string;
-          totalSales: number;
-          netCashflow: number;
-          liquorPercentage: number;
-          foodPercentage: number;
-        }) => ({
-          month: m.month,
-          totalSales: m.totalSales,
-          netCashflow: m.netCashflow,
-          liquorPercentage: m.liquorPercentage,
-          foodPercentage: m.foodPercentage
-        })) || []
+        months: salesData.months?.map((m: any) => {
+          const totalSales = (m.liquor || 0) + (m.food || 0);
+          return {
+            month: m.sheetName,
+            totalSales,
+            netCashflow: m.net || 0,
+            liquorPercentage: totalSales > 0 ? Number(((m.liquor / totalSales) * 100).toFixed(1)) : 0,
+            foodPercentage: totalSales > 0 ? Number(((m.food / totalSales) * 100).toFixed(1)) : 0
+          };
+        }) || []
       };
 
       combinedContext += `\n=== ${config.BUSINESS_NAME.toUpperCase()} DAILY SALES SUMMARY ===\n` +
@@ -1078,24 +1075,14 @@ export class TelegramBot {
         fileName: debitorsData.fileName,
         timestamp: debitorsData.timestamp || debitorsData.runTimestamp || 'N/A',
         aggregates: debitorsData.aggregates,
-        topDebitors: debitorsData.topDebitors?.map((d: {
-          name: string;
-          pending?: number;
-          pendingBalance?: number;
-          debit?: number;
-          credit?: number;
-        }) => ({
+        topDebitors: debitorsData.topDebitors?.slice(0, 5).map((d: any) => ({
           name: d.name,
           pending: d.pending ?? d.pendingBalance ?? 0,
           debit: d.debit,
           credit: d.credit,
           riskLevel: (d.pending ?? d.pendingBalance ?? 0) > 20000 ? 'High Risk' : (d.pending ?? d.pendingBalance ?? 0) > 5000 ? 'Medium Alert' : 'Healthy'
         })) || [],
-        allDebitors: debitorsData.allDebitors?.slice(0, 30).map((d: {
-          name: string;
-          pending?: number;
-          pendingBalance?: number;
-        }) => ({
+        allDebitors: debitorsData.topDebitors?.slice(0, 30).map((d: any) => ({
           name: d.name,
           pending: d.pending ?? d.pendingBalance ?? 0,
           riskLevel: (d.pending ?? d.pendingBalance ?? 0) > 20000 ? 'High Risk' : (d.pending ?? d.pendingBalance ?? 0) > 5000 ? 'Medium Alert' : 'Healthy'

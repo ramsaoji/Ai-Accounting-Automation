@@ -183,6 +183,7 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
       fileName: activeFile.fileName,
       runTimestamp: activeFile.runTimestamp.toISOString(),
       totalTransactions: activeFile.totalRows,
+      totalMonths: months.length,
       masterTotals,
       benchmarks,
       months,
@@ -598,6 +599,7 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors'): 
         fileName: activeFile.fileName,
         runTimestamp: activeFile.runTimestamp.toISOString(),
         totalTransactions: activeFile.totalRows,
+        totalMonths: months.length,
         masterTotals: {
           liquorSales,
           foodSales,

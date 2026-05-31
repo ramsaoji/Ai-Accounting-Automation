@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { MasterSummary } from '@/types';
-import { fetchAccountingData, fetchSystemHealth } from '@/services/api';
+import { fetchAccountingData } from '@/services/api';
 import { toast } from 'sonner';
 
 export function useAccountingData() {
@@ -53,12 +53,8 @@ export function useAccountingData() {
 
       hasInitiallySynced.current = true;
 
-      // Always keep cron schedule up to date in live mode
-      if (result.mode === 'live') {
-        const health = await fetchSystemHealth();
-        if (health && health.cron) {
-          setCronSchedule(health.cron);
-        }
+      if (result.cronSchedule) {
+        setCronSchedule(result.cronSchedule);
       }
     } catch (error) {
       console.error("Critical error in accounting sync hook:", error);

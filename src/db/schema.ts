@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, integer, timestamp, boolean, text, jsonb, serial, date, numeric } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, integer, timestamp, boolean, text, jsonb, serial, date, numeric, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // 1. Files / Ingestion Runs
@@ -31,7 +31,9 @@ export const transactions = pgTable('transactions', {
   particulars: text('particulars'),
   metadata: jsonb('metadata'), // Dynamic metadata catches columns/drift
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('transactions_file_id_idx').on(table.fileId)
+]);
 
 // 3. Stock Items (For godown and counter inventory registers)
 export const stockItems = pgTable('stock_items', {
@@ -47,7 +49,9 @@ export const stockItems = pgTable('stock_items', {
   location: varchar('location', { length: 100 }).notNull(), // 'godown' | 'counter'
   metadata: jsonb('metadata'), // Captures custom inventory columns
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('stock_items_file_id_idx').on(table.fileId)
+]);
 
 // 4. Party Balances (Outstanding credit balances for debtors and creditors/suppliers)
 export const partyBalances = pgTable('party_balances', {
@@ -60,7 +64,9 @@ export const partyBalances = pgTable('party_balances', {
   pending: numeric('pending', { precision: 12, scale: 2 }).notNull(),
   metadata: jsonb('metadata'), // Credit rating, contact number, etc.
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('party_balances_file_id_idx').on(table.fileId)
+]);
 
 // 5. Audit Exception Alerts
 export const auditAlerts = pgTable('audit_alerts', {
@@ -71,7 +77,9 @@ export const auditAlerts = pgTable('audit_alerts', {
   severity: varchar('severity', { length: 20 }).notNull(), // 'info' | 'low' | 'medium' | 'high' | 'critical'
   message: text('message').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('audit_alerts_file_id_idx').on(table.fileId)
+]);
 
 // 6. Ingestion Parsing Errors & Warnings
 export const parsingErrors = pgTable('parsing_errors', {
@@ -81,7 +89,9 @@ export const parsingErrors = pgTable('parsing_errors', {
   invoiceNumber: varchar('invoice_number', { length: 100 }),
   errorMessage: text('error_message').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('parsing_errors_file_id_idx').on(table.fileId)
+]);
 
 // 7. Security Credentials (Argon2 hashes)
 export const securityConfig = pgTable('security_config', {
