@@ -151,10 +151,10 @@ export class OrchestratorService {
    * Protected by a concurrency guard — duplicate invocations while the pipeline is running are safely ignored.
    * Spawns a background Node.js Worker Thread to keep the main Fastify event loop responsive.
    */
-  async runPipeline(options?: PipelineOptions): Promise<void> {
+  async runPipeline(options?: PipelineOptions): Promise<number> {
     if (this.isRunning) {
       logger.warn('Pipeline is already running. Ignoring duplicate execution request.');
-      return;
+      return 0;
     }
     this.isRunning = true;
     this.syncStatus = 'running';
@@ -169,7 +169,7 @@ export class OrchestratorService {
 
     logger.info('Initiating background worker thread for AI Accounting Ingestion...');
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<number>((resolve, reject) => {
       const isTs = import.meta.url.endsWith('.ts') || import.meta.url.includes('.ts?');
       let worker: Worker;
       try {
@@ -202,7 +202,7 @@ export class OrchestratorService {
           this.isRunning = false;
           this.syncStatus = 'success';
           this.syncError = null;
-          resolve();
+          resolve(msg.filesProcessed ?? 0);
         } else if (msg.status === 'error') {
           const errStr = msg.error || 'Unknown worker error';
           this.isRunning = false;
@@ -230,13 +230,13 @@ export class OrchestratorService {
             this.syncError = errStr;
             reject(new Error(errStr));
           } else {
-            resolve();
+            resolve(0);
           }
         } else {
           if (this.syncStatus === 'running') {
             this.syncStatus = 'success';
           }
-          resolve();
+          resolve(0);
         }
       });
 
@@ -248,10 +248,10 @@ export class OrchestratorService {
   /**
    * The actual pipeline run logic executed inside the Worker Thread isolate.
    */
-  async runPipelineInternal(options?: PipelineOptions): Promise<void> {
+  async runPipelineInternal(options?: PipelineOptions): Promise<number> {
     if (this.isRunning) {
       logger.warn('Pipeline is already running in worker thread. Ignoring duplicate execution request.');
-      return;
+      return 0;
     }
     this.isRunning = true;
 
@@ -289,7 +289,7 @@ export class OrchestratorService {
         const driveFiles = await driveService.getAllExcelFiles();
         if (driveFiles.length === 0) {
           logger.warn('[WARN] Pipeline aborted: No accounting spreadsheets found in target Google Drive folder.');
-          return;
+          return 0;
         }
 
         logger.info(`Loaded ${driveFiles.length} file(s) from Google Drive for batch processing.`);
@@ -315,7 +315,7 @@ export class OrchestratorService {
 
       if (filesToIngest.length === 0) {
         logger.info('All spreadsheets are already synced and up-to-date. Skipping pipeline execution.');
-        return;
+        return 0;
       }
 
       logger.info(`Processing ${filesToIngest.length} of ${filesToProcess.length} file(s) that are new or modified.`);
@@ -335,6 +335,8 @@ export class OrchestratorService {
       if (!isMainThread) {
         parentPort?.postMessage({ type: 'progress', progress });
       }
+
+      let filesProcessedCount = 0;
 
       // Process loaded files sequentially
       for (const fileItem of filesToIngest) {
@@ -485,6 +487,7 @@ export class OrchestratorService {
             fileProgress.status = 'success';
           }
           progress.processedFiles++;
+          filesProcessedCount++;
           if (!isMainThread) {
             parentPort?.postMessage({ type: 'progress', progress });
           }
@@ -523,6 +526,7 @@ export class OrchestratorService {
         },
         '[SUCCESS] AI Accounting Automation Pipeline completed batch execution!'
       );
+      return filesProcessedCount;
     } catch (error) {
       logger.error({ error }, '[ERROR] Critical failure in orchestrator runPipeline');
       throw error;
@@ -760,8 +764,8 @@ if (!isMainThread) {
   parentPort?.on('message', async (message) => {
     if (message?.type === 'start') {
       try {
-        await orchestratorService.runPipelineInternal(message.options);
-        parentPort?.postMessage({ status: 'success' });
+        const filesProcessed = await orchestratorService.runPipelineInternal(message.options);
+        parentPort?.postMessage({ status: 'success', filesProcessed });
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         parentPort?.postMessage({ status: 'error', error: errorMsg });

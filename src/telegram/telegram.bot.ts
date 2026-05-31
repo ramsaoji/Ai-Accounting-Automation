@@ -441,14 +441,24 @@ export class TelegramBot {
     const statusMessageId = statusRes.messageId;
 
     try {
-      await orchestratorService.runPipeline();
-      await telegramClient.sendMessage(
-        `✅ *Accounting Ingestion Completed Successfully!*\n\nProcessed latest ledgers. The financial command center dashboard has been synchronized and reports have been generated. Use the buttons below to view updated numbers.`,
-        'Markdown',
-        this.getMainMenuKeyboard(),
-        chatId,
-        statusMessageId
-      );
+      const filesProcessed = await orchestratorService.runPipeline();
+      if (filesProcessed === 0) {
+        await telegramClient.sendMessage(
+          `All spreadsheets are already synced and up-to-date. Skipping pipeline execution.`,
+          'Markdown',
+          this.getMainMenuKeyboard(),
+          chatId,
+          statusMessageId
+        );
+      } else {
+        await telegramClient.sendMessage(
+          `✅ *Accounting Ingestion Completed Successfully!*\n\nProcessed latest ledgers. The financial command center dashboard has been synchronized and reports have been generated. Use the buttons below to view updated numbers.`,
+          'Markdown',
+          this.getMainMenuKeyboard(),
+          chatId,
+          statusMessageId
+        );
+      }
     } catch (err: any) {
       await telegramClient.sendMessage(
         `❌ *Pipeline Ingestion Encountered an Error:*\n\n\`${err.message}\``,
