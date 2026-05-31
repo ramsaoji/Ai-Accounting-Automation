@@ -32,6 +32,9 @@ RUN npm ci --only=production
 # Copy compiled JavaScript files from builder stage
 COPY --from=builder /app/dist ./dist
 
+# Copy migrations folder for Drizzle migrations at startup
+COPY drizzle ./drizzle
+
 # Create a non-privileged system user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 -G nodejs && \
