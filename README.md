@@ -91,9 +91,14 @@ ai-accounting-automation/
 │   │   ├── debitors-template.ts  # Customer outstanding Udhari HTML console UI shell
 │   │   └── ai.service.ts         # Central orchestrator for LLM prompt connections
 │   ├── telegram/
-│   │   ├── telegram.bot.ts       # Telegram long polling bot interactive listener
+│   │   ├── telegram.bot.ts       # Telegram long polling entrypoint & lifecycle router
 │   │   ├── telegram.client.ts    # Telegram client with markdown recovery safety
-│   │   └── telegram.service.ts   # Chunking and interval delivery manager
+│   │   ├── telegram.service.ts   # Chunking and interval delivery manager
+│   │   ├── bot.utils.ts          # Bot timezone formats, report loading & error translation
+│   │   ├── bot.keyboards.ts      # Telegram UI reply keyboard markup configurations
+│   │   ├── bot.commands.ts       # Inbound text command logic (/start, /help, /health, /sync)
+│   │   ├── bot.callbacks.ts      # Inline callback query handler for reports & select sub-menus
+│   │   └── bot.ai.ts             # AI custom question and advisor framing orchestrator
 │   ├── scheduler/
 │   │   └── scheduler.job.ts      # Cron job coordinator with overlapping guard
 │   ├── services/
