@@ -5,13 +5,13 @@ import { UploadModal } from '@/components/shared/UploadModal';
 interface EmptyWorkspaceStateProps {
   activeWorkspace: 'sales' | 'debitors';
   connectionMode: 'live' | 'static' | 'empty';
-  fetchRealData: (silent?: boolean) => Promise<any>;
+  onFilesReady: (files: File[], sessionToken: string) => void;
 }
 
 export const EmptyWorkspaceState: React.FC<EmptyWorkspaceStateProps> = ({
   activeWorkspace,
   connectionMode,
-  fetchRealData,
+  onFilesReady,
 }) => {
   return (
     <div className="flex flex-col items-center justify-center text-center p-12 border border-dashed border-border/80 bg-muted/10 rounded-2xl gap-4 select-none my-6 animate-in fade-in duration-300">
@@ -31,7 +31,7 @@ export const EmptyWorkspaceState: React.FC<EmptyWorkspaceStateProps> = ({
         </p>
       </div>
       <div className="mt-2">
-        <UploadModal disabled={connectionMode !== 'live' && connectionMode !== 'static'} onSuccess={fetchRealData} />
+        <UploadModal disabled={connectionMode !== 'live' && connectionMode !== 'static'} onFilesReady={onFilesReady} />
       </div>
     </div>
   );

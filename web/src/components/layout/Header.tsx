@@ -10,10 +10,11 @@ interface HeaderProps {
   activeWorkspace: 'sales' | 'debitors';
   connectionMode: 'live' | 'static' | 'empty';
   isSyncingDrive: boolean;
+  isUploading: boolean;
   isLoading: boolean;
   hasSyncedBefore?: boolean;
   handleDriveSync: () => Promise<void>;
-  fetchRealData: (silent?: boolean) => Promise<any>;
+  onFilesReady: (files: File[], sessionToken: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,10 +23,11 @@ export const Header: React.FC<HeaderProps> = ({
   activeWorkspace,
   connectionMode,
   isSyncingDrive,
+  isUploading,
   isLoading,
   hasSyncedBefore,
   handleDriveSync,
-  fetchRealData,
+  onFilesReady,
 }) => {
   return (
     <header className="h-16 border-b border-border/80 px-4 md:px-6 flex items-center justify-between bg-card select-none">
@@ -59,12 +61,17 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Header Actions Tray */}
       <div className="flex items-center gap-3">
-        <UploadModal hasSyncedBefore={hasSyncedBefore} connectionMode={connectionMode} disabled={isSyncingDrive || connectionMode !== 'live' && connectionMode !== 'static'} onSuccess={fetchRealData} />
+        <UploadModal
+          hasSyncedBefore={hasSyncedBefore}
+          connectionMode={connectionMode}
+          disabled={isSyncingDrive || isUploading || (connectionMode !== 'live' && connectionMode !== 'static')}
+          onFilesReady={onFilesReady}
+        />
 
         {connectionMode === 'live' && (
           <Button
             onClick={handleDriveSync}
-            disabled={isSyncingDrive || isLoading}
+            disabled={isSyncingDrive || isUploading || isLoading}
             variant="outline"
             size="sm"
             className="gap-2 cursor-pointer border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 disabled:opacity-50"

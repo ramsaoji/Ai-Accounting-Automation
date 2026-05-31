@@ -23,7 +23,7 @@ interface OnboardingWizardProps {
   isLoading: boolean;
   hasSyncedBefore?: boolean;
   onDriveSync: () => void;
-  onSuccess: () => void;
+  onFilesReady: (files: File[], sessionToken: string) => void;
 }
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
@@ -34,7 +34,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   isLoading,
   hasSyncedBefore,
   onDriveSync,
-  onSuccess,
+  onFilesReady,
 }) => {
   const [step, setStep] = useState(1);
 
@@ -228,7 +228,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
                 <div className="flex flex-col sm:flex-row items-center gap-2.5 mt-1 pt-1">
                   <div className="w-full sm:flex-1">
-                    <UploadModal hasSyncedBefore={hasSyncedBefore} connectionMode={connectionMode} disabled={isSyncingDrive || connectionMode !== 'live' && connectionMode !== 'static'} onSuccess={onSuccess} className="w-full" />
+                    <UploadModal hasSyncedBefore={hasSyncedBefore} connectionMode={connectionMode} disabled={isSyncingDrive || connectionMode !== 'live' && connectionMode !== 'static'} onFilesReady={onFilesReady} className="w-full" />
                   </div>
                   
                   {connectionMode === 'live' && (

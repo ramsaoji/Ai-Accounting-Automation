@@ -31,12 +31,12 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
     setSyncProgress(null);
 
     const initMsg = 'Initiating Google Drive sync...';
-    const progressMsg = 'Ingesting new spreadsheets from Google Drive...';
     const upToDateMsg = 'Drive is up-to-date. No changes detected since last sync.';
     const successMsg = 'Google Drive sync completed! Dashboard updated.';
     const failMsg = 'Drive sync failed';
 
-    const toastId = toast.loading(initMsg);
+    // Show a temporary info toast that automatically dismisses
+    const toastId = toast.info(initMsg, { duration: 2500 });
 
     // Capture timestamps before sync to detect changes
     const initialSalesTime = salesData?.runTimestamp;
@@ -49,12 +49,22 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
       if (result.status === 'up-to-date') {
         setIsSyncingDrive(false);
         setSyncProgress(null);
-        toast.success(upToDateMsg, { id: toastId });
+        toast.dismiss(toastId);
+        toast.success(upToDateMsg);
         return;
       }
 
-      // Backend confirmed new files found — start background ingestion polling
-      toast.loading(progressMsg, { id: toastId });
+      // Backend confirmed new files found — dismiss initial connection toast
+      // The DriveSyncProgressCard will handle all subsequent visual feedback
+      toast.dismiss(toastId);
+
+      setSyncProgress({
+        totalFiles: 0,
+        processedFiles: 0,
+        currentFile: '',
+        statusText: 'Connecting to Google Drive...',
+        files: []
+      });
 
       let attempts = 0;
       const maxAttempts = 48; // 2 minutes max (48 × 2.5s)
@@ -70,7 +80,15 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
           const statusResult = await fetchSyncStatus();
 
           if (statusResult.progress) {
-            setSyncProgress(statusResult.progress);
+            setSyncProgress({
+              ...statusResult.progress,
+              errorMsg: statusResult.error || null
+            });
+          } else if (statusResult.error) {
+            setSyncProgress((prev: any) => ({
+              ...(prev || { totalFiles: 0, processedFiles: 0, currentFile: '', statusText: 'Drive sync failed', files: [] }),
+              errorMsg: statusResult.error
+            }));
           }
 
           if (statusResult.status === 'success') {
@@ -79,11 +97,8 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
               intervalRef.current = null;
             }
             await fetchRealData(true); // silent refresh
-            toast.success(successMsg, { id: toastId });
-            setTimeout(() => {
-              setIsSyncingDrive(false);
-              setSyncProgress(null);
-            }, 1200);
+            toast.success(successMsg);
+            setIsSyncingDrive(false);
             return;
           }
 
@@ -92,11 +107,8 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            toast.error(`${failMsg}: ${statusResult.error || 'Server error.'}`, { id: toastId });
-            setTimeout(() => {
-              setIsSyncingDrive(false);
-              setSyncProgress(null);
-            }, 3000);
+            toast.error(`${failMsg}: ${statusResult.error || 'Server error.'}`);
+            setIsSyncingDrive(false);
             return;
           }
 
@@ -119,11 +131,8 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
               intervalRef.current = null;
             }
             await fetchRealData(true);
-            toast.success(successMsg, { id: toastId });
-            setTimeout(() => {
-              setIsSyncingDrive(false);
-              setSyncProgress(null);
-            }, 1200);
+            toast.success(successMsg);
+            setIsSyncingDrive(false);
 
           } else if (attempts >= maxAttempts) {
             if (intervalRef.current) {
@@ -131,11 +140,8 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
               intervalRef.current = null;
             }
             await fetchRealData(true);
-            toast.info('Sync is still processing. Dashboard refreshed with latest available data.', { id: toastId });
-            setTimeout(() => {
-              setIsSyncingDrive(false);
-              setSyncProgress(null);
-            }, 1200);
+            toast.info('Sync is still processing. Dashboard refreshed with latest available data.');
+            setIsSyncingDrive(false);
           }
 
         } catch {
@@ -144,11 +150,12 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            toast.error('Sync polling timed out due to a network error. Please retry.', { id: toastId });
-            setTimeout(() => {
-              setIsSyncingDrive(false);
-              setSyncProgress(null);
-            }, 1200);
+            toast.error('Sync polling timed out due to a network error. Please retry.');
+            setIsSyncingDrive(false);
+            setSyncProgress((prev: any) => ({
+              ...(prev || { totalFiles: 0, processedFiles: 0, currentFile: '', statusText: 'Sync failed', files: [] }),
+              errorMsg: 'Sync polling timed out due to a network error. Please retry.'
+            }));
           }
         }
       }, 2500);
@@ -157,14 +164,21 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriv
       setIsSyncingDrive(false);
       setSyncProgress(null);
       const errMsg = err instanceof Error ? err.message : String(err);
-      toast.error(`${failMsg}: ${errMsg}`, { id: toastId });
+      toast.dismiss(toastId);
+      toast.error(`${failMsg}: ${errMsg}`);
     }
   }, [isSyncingDrive, salesData, debitorsData, fetchRealData]);
+
+  const resetDriveSync = useCallback(() => {
+    setIsSyncingDrive(false);
+    setSyncProgress(null);
+  }, []);
 
   return {
     isSyncingDrive,
     syncProgress,
     setSyncProgress,
-    handleDriveSync
+    handleDriveSync,
+    resetDriveSync
   };
 }

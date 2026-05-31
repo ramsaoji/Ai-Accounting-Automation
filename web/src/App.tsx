@@ -10,10 +10,13 @@ import { useTheme } from '@/providers/theme-provider';
 import { useAccountingStore } from '@/store/useAccountingStore';
 import { useAccountingData } from '@/hooks/useAccountingData';
 import { useDriveSync } from '@/hooks/useDriveSync';
+import { useManualUpload } from '@/hooks/useManualUpload';
+import { IngestionProgressModal } from '@/components/shared/IngestionProgressModal';
 import { LockScreen } from '@/components/security/LockScreen';
 import { checkSessionStatus, logoutUser } from '@/services/api';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { OnboardingWizard } from '@/components/shared/OnboardingWizard';
+import { DriveSyncProgressCard } from '@/components/shared/DriveSyncProgressCard';
 import { LoadingScreen } from '@/components/layout/LoadingScreen';
 import { Header } from '@/components/layout/Header';
 import { EmptyWorkspaceState } from '@/components/sections/EmptyWorkspaceState';
@@ -91,11 +94,16 @@ export function App() {
   const { salesData, debitorsData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, aiProvider, sync: fetchRealData } = useAccountingData();
 
   // Custom Drive Sync hook to isolate background polling/interval logic
-  const { isSyncingDrive, handleDriveSync } = useDriveSync({
+  const { isSyncingDrive, syncProgress, handleDriveSync, resetDriveSync } = useDriveSync({
     salesData,
     debitorsData,
     connectionMode,
     fetchRealData
+  });
+
+  // Manual upload hook — owns upload logic and progress state
+  const { isUploading, uploadProgress, startUpload, resetUpload } = useManualUpload({
+    onSuccess: fetchRealData,
   });
 
   // Trigger sync on mount if already authenticated
@@ -163,7 +171,13 @@ export function App() {
           isLoading={isLoading}
           hasSyncedBefore={hasSyncedBefore}
           onDriveSync={handleDriveSync}
-          onSuccess={fetchRealData}
+          onFilesReady={startUpload}
+        />
+        <DriveSyncProgressCard isSyncing={isSyncingDrive} progress={syncProgress} onClose={resetDriveSync} />
+        <IngestionProgressModal
+          progress={uploadProgress}
+          isActive={isUploading}
+          onClose={resetUpload}
         />
         <Toaster position="top-right" />
       </TooltipProvider>
@@ -197,10 +211,11 @@ export function App() {
               activeWorkspace={activeWorkspace}
               connectionMode={connectionMode}
               isSyncingDrive={isSyncingDrive}
+              isUploading={isUploading}
               isLoading={isLoading}
               hasSyncedBefore={hasSyncedBefore}
               handleDriveSync={handleDriveSync}
-              fetchRealData={fetchRealData}
+              onFilesReady={startUpload}
             />
 
             {/* Main Content Area — sections with fixed-height panels manage scroll internally */}
@@ -226,7 +241,7 @@ export function App() {
                     <EmptyWorkspaceState
                       activeWorkspace={activeWorkspace}
                       connectionMode={connectionMode}
-                      fetchRealData={fetchRealData}
+                      onFilesReady={startUpload}
                     />
                   ) : (
                     <>
@@ -259,6 +274,12 @@ export function App() {
         </div>
       </SidebarProvider>
       <SecuritySettingsModal isOpen={isSecurityOpen} onOpenChange={setIsSecurityOpen} />
+      <DriveSyncProgressCard isSyncing={isSyncingDrive} progress={syncProgress} onClose={resetDriveSync} />
+      <IngestionProgressModal
+        progress={uploadProgress}
+        isActive={isUploading}
+        onClose={resetUpload}
+      />
       <Toaster position="top-right" />
     </TooltipProvider>
   );
