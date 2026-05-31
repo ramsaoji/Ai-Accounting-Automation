@@ -4,7 +4,7 @@ import fs from 'fs';
 import { config } from '../config/config.js';
 
 const isDevelopment = config.NODE_ENV === 'development';
-const logDir = path.resolve(process.cwd(), 'data', 'output');
+const logDir = path.resolve(process.cwd(), 'logs');
 
 const streams: pino.StreamEntry[] = [];
 

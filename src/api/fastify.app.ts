@@ -3,7 +3,7 @@ import FastifyCors from '@fastify/cors';
 import FastifyMultipart from '@fastify/multipart';
 import FastifyCookie from '@fastify/cookie';
 import { config } from '../config/config.js';
-import { getHealth } from './controllers/health.controller.js';
+import { getHealth, getSystemConfig } from './controllers/health.controller.js';
 import {
   verifyAppPassword,
   changePasswords,
@@ -67,35 +67,15 @@ export function createFastifyApp() {
     credentials: true,
   });
 
-  // Public health-check routes
+  // Public health-check route
   app.get('/health', getHealth);
-  app.get('/', getHealth);
-  app.get('/api/health', getHealth);
-  app.get('/api/v1/health', getHealth);
-  app.post('/api/security/verify-app', { preHandler: validateBody(verifyAppSchema) }, verifyAppPassword);
-  app.post('/api/v1/security/verify-app', { preHandler: validateBody(verifyAppSchema) }, verifyAppPassword); // v1 alias
+  app.post('/api/v1/security/verify-app', { preHandler: validateBody(verifyAppSchema) }, verifyAppPassword);
 
   // Cookie-session helper routes
-  app.get('/api/security/status', checkSessionStatus);
   app.get('/api/v1/security/status', checkSessionStatus);
-  app.post('/api/security/logout', logoutUser);
   app.post('/api/v1/security/logout', logoutUser);
 
-  // Authenticated workspace routes (legacy /api prefix — kept for backward compatibility)
-  app.register(async (authRoutes) => {
-    authRoutes.addHook('preHandler', checkFastifyAuth);
-
-    authRoutes.get('/api/data/sales', getSalesReport);
-    authRoutes.get('/api/data/debitors', getDebitorsReport);
-    authRoutes.post('/api/trigger-pipeline', triggerPipeline);
-    authRoutes.get('/api/sync-status', getSyncStatus);
-    authRoutes.post('/api/chat', { preHandler: validateBody(chatSchema) }, handleAdvisorChat);
-    authRoutes.post('/api/security/verify-upload', { preHandler: validateBody(verifyUploadSchema) }, verifyUploadPasscode);
-    authRoutes.post('/api/ledger/upload', handleFileUpload);
-    authRoutes.post('/api/security/change', { preHandler: validateBody(changePasswordsSchema) }, changePasswords);
-  });
-
-  // Authenticated workspace routes (versioned /api/v1 prefix — canonical going forward)
+  // Authenticated workspace routes (canonical versioned /api/v1 prefix)
   app.register(async (v1Routes) => {
     v1Routes.addHook('preHandler', checkFastifyAuth);
 
@@ -107,6 +87,7 @@ export function createFastifyApp() {
     v1Routes.post('/api/v1/security/verify-upload', { preHandler: validateBody(verifyUploadSchema) }, verifyUploadPasscode);
     v1Routes.post('/api/v1/ledger/upload', handleFileUpload);
     v1Routes.post('/api/v1/security/change', { preHandler: validateBody(changePasswordsSchema) }, changePasswords);
+    v1Routes.get('/api/v1/system/config', getSystemConfig);
   });
 
   return app;

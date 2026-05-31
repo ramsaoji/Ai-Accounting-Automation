@@ -1,111 +1,81 @@
 import pg from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { eq } from 'drizzle-orm';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 import * as argon2 from 'argon2';
+import * as schema from './schema.js';
+import path from 'path';
 
 const { Pool } = pg;
 
-let pool: pg.Pool | null = null;
-
-if (config.DATABASE_URL) {
-  logger.info('Initializing PostgreSQL connection pool with Neon DB...');
-  pool = new Pool({
-    connectionString: config.DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false, // Required for secure connections to Neon DB
-    },
-  });
-} else {
-  logger.warn('DATABASE_URL is not set. Neon DB storage will be bypassed (falling back to local files).');
+if (!config.DATABASE_URL) {
+  logger.error('CRITICAL: DATABASE_URL is not set. A PostgreSQL database connection is strictly required.');
+  throw new Error('DATABASE_URL environment variable is missing. The application requires PostgreSQL to run.');
 }
+
+export const isLocalDb = config.DATABASE_URL.includes('localhost') || config.DATABASE_URL.includes('127.0.0.1');
+
+logger.info({ isLocalDb }, 'Initializing PostgreSQL connection pool for Drizzle ORM...');
+
+const pool = new Pool({
+  connectionString: config.DATABASE_URL,
+  ssl: isLocalDb ? false : {
+    rejectUnauthorized: false, // Required for Neon DB secure TLS connections
+  },
+});
+
+export const db = drizzle(pool, { schema });
 
 let isInitialized = false;
 
 /**
- * Initializes the database by creating the required reports table if it doesn't exist.
- * Must be called once at startup — do NOT call inside per-query methods.
+ * Initializes the database by applying all outstanding migrations from the /drizzle folder.
+ * This runs automatically on boot to ensure the relational schema matches the TypeScript models.
  */
 export async function initDb(): Promise<void> {
-  if (!pool) return;
   if (isInitialized) return;
+
   try {
-    const createTableQuery = `
-      CREATE TABLE IF NOT EXISTS financial_reports (
-        report_type VARCHAR(50) PRIMARY KEY,
-        data JSONB NOT NULL,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-    await pool.query(createTableQuery);
+    logger.info('Executing relational database schema migrations...');
+    const migrationsPath = path.resolve(process.cwd(), 'drizzle');
+    await migrate(db, { migrationsFolder: migrationsPath });
     isInitialized = true;
-    logger.info('Neon DB initialized successfully: financial_reports table is ready.');
+    logger.info('Relational schema migrations applied successfully. Database is fully up-to-date.');
   } catch (err) {
-    logger.error({ err }, 'Failed to initialize database table in Neon');
+    logger.error({ err }, 'Failed to apply Drizzle schema migrations during database initialization');
+    throw err;
   }
 }
 
 /**
- * Upserts a financial report JSON payload into the database.
- * Assumes initDb() has already been called at startup.
- */
-export async function saveReport(
-  reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config',
-  data: unknown
-): Promise<void> {
-  if (!pool) return;
-  try {
-    const query = `
-      INSERT INTO financial_reports (report_type, data, updated_at)
-      VALUES ($1, $2, NOW())
-      ON CONFLICT (report_type)
-      DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();
-    `;
-    // Explicitly stringify payload to guarantee correct JSONB serialization (prevents pg driver from parsing JS arrays as postgres native arrays)
-    const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
-    await pool.query(query, [reportType, jsonStr]);
-    logger.info({ reportType }, 'Saved report summary to Neon DB');
-  } catch (err) {
-    logger.error({ err, reportType }, 'Failed to save report to Neon DB');
-  }
-}
-
-/**
- * Retrieves a financial report JSON payload from the database.
- * Assumes initDb() has already been called at startup.
- */
-export async function getReport(
-  reportType: 'sales' | 'debitors' | 'daily-sales' | 'sync-metadata' | 'security-config'
-): Promise<unknown> {
-  if (!pool) return null;
-  try {
-    const result = await pool.query('SELECT data FROM financial_reports WHERE report_type = $1', [reportType]);
-    if (result.rows.length === 0) return null;
-    return result.rows[0].data;
-  } catch (err) {
-    logger.error({ err, reportType }, 'Failed to read report from Neon DB');
-    return null;
-  }
-}
-
-/**
- * Initializes the default security config inside Neon DB if not already existing.
- * Must be called once at startup after initDb().
+ * Initializes default security configuration inside Neon DB if not already present.
+ * Seeds Argon2-hashed credentials sourced from server environment configurations.
  */
 export async function initSecurityConfig(): Promise<void> {
-  if (!pool) return;
   try {
-    const existing = await getReport('security-config');
-    if (!existing) {
-      logger.info('No security config found in Neon DB. Initializing with credentials configured in .env...');
-      const defaultData = {
-        uploadPassword: await argon2.hash(config.UPLOAD_PASSWORD),
-        appPassword: await argon2.hash(config.APP_PASSWORD),
-      };
-      await saveReport('security-config', defaultData);
+    const existing = await db
+      .select()
+      .from(schema.securityConfig)
+      .where(eq(schema.securityConfig.key, 'credentials'))
+      .limit(1);
+
+    if (existing.length === 0) {
+      logger.info('No security config credentials found in relational DB. Seeding from environment variables...');
+      const uploadHash = await argon2.hash(config.UPLOAD_PASSWORD);
+      const appHash = await argon2.hash(config.APP_PASSWORD);
+      
+      await db.insert(schema.securityConfig).values({
+         key: 'credentials',
+         uploadPasswordHash: uploadHash,
+         appPasswordHash: appHash,
+      });
+      logger.info('Database security credentials seeded successfully.');
     } else {
-      logger.info('Security config row exists and is ready in Neon DB.');
+      logger.info('Security configuration credentials verified successfully in relational DB.');
     }
   } catch (err) {
-    logger.error({ err }, 'Failed to initialize database security credentials config');
+    logger.error({ err }, 'Failed to initialize or seed relational security configuration');
   }
 }

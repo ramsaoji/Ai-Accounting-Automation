@@ -90,11 +90,7 @@ Thumbs.db
 .env.vercel
 
 # Project-specific generated inputs/outputs
-data/input/*
-!data/input/.gitkeep
-data/output/*
-!data/output/.gitkeep
-!data/output/theme.css
+*.xlsx
 
 # Ignore dynamically generated static sync data in frontend public folder (avoids Git history bloat)
 web/public/data/*.json

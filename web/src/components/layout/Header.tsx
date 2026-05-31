@@ -11,6 +11,7 @@ interface HeaderProps {
   connectionMode: 'live' | 'static' | 'empty';
   isSyncingDrive: boolean;
   isLoading: boolean;
+  hasSyncedBefore?: boolean;
   handleDriveSync: () => Promise<void>;
   fetchRealData: (silent?: boolean) => Promise<any>;
 }
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   connectionMode,
   isSyncingDrive,
   isLoading,
+  hasSyncedBefore,
   handleDriveSync,
   fetchRealData,
 }) => {
@@ -57,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Header Actions Tray */}
       <div className="flex items-center gap-3">
-        <UploadModal disabled={connectionMode !== 'live'} onSuccess={fetchRealData} />
+        <UploadModal hasSyncedBefore={hasSyncedBefore} connectionMode={connectionMode} disabled={isSyncingDrive || connectionMode !== 'live' && connectionMode !== 'static'} onSuccess={fetchRealData} />
 
         {connectionMode === 'live' && (
           <Button

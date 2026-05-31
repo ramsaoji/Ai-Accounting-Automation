@@ -6,10 +6,10 @@ This guide provides an in-depth breakdown of the structural blueprint, design pa
 
 ## 🧭 Unidirectional ETL Pipeline Design
 
-The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Load) architectural pattern**, ensuring strict separation of concerns and predictable, stateless operations.
+The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Load) architectural pattern**, ensuring strict separation of concerns and predictable database-driven operations.
 
 ```
-[EXTRACT] Drive / Local File Ingestion
+[EXTRACT] Google Drive Ingestion or Web UI Manual Upload
     │
     ▼
 [TRANSFORM] Facade Parser Engine (excel.parser.ts)
@@ -25,9 +25,10 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     │   └── Swappable LLM Provider Factory Method
     │
     ▼
-[LOAD] Resilient Outputs Dispatch
-        ├── Isolated Folder-wise HTML Dashboards
-        └── Interactive Telegram Bot & Rate-Throttled Queue
+[LOAD] Relational Database Persistence (Neon / PostgreSQL)
+        ├── Normalized tables: files, transactions, party_balances
+        ├── Exception tracking: audit_alerts, parsing_errors
+        └── Telegram Bot Notifications & Dispatch Queue
 ```
 
 ---
@@ -39,36 +40,32 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 * **Technique:** Strongly-typed schema checking via **Zod**.
 * **Rationale:** Verifies all variables (credentials, API endpoints, scheduler schedules) during startup. The application will immediately crash with structured, informative error logs if invalid variables are passed, protecting against runtime failures.
 
-### 2. Ingestion & Search Client (`src/drive/` & Local FS)
-* **Role:** Dynamic file retrieval.
-* **Technique:** Google Drive API wrapper with dynamic JWT Authentication fallback.
-* **Rationale:** The system scans for targeted spreadsheet files in your cloud storage. If client secrets are left at mock defaults, it cleanly falls back to local batch directory scanning inside `data/input/`, maintaining execution safety.
+### 2. Ingestion & Search Client (`src/drive/`)
+* **Role:** Cloud-based file retrieval.
+* **Technique:** Google Drive API wrapper with dynamic JWT Authentication.
+* **Rationale:** The system scans for targeted spreadsheet files in your cloud storage. If credentials are not configured, cloud syncing is skipped, and the server expects manual HTTP uploads via the frontend interface.
 
 ### 3. Modular Parsing Facade (`src/excel/`)
 * **Role:** Type-safe row-by-row data extraction.
 * **Pattern:** **Facade Design Pattern**.
 * **Decoupled Engine:**
   * `excel.parser.ts`: Lightweight interface selector. Performs sheet signature detections (tab names and column layouts checks) and dynamically routes execution to specialized sub-parsers.
-  * `parsers/sales.parser.ts`: Tailored multi-month sales register parser.
+  * `parsers/sales.parser.ts`: Tailored sales register parser.
   * `parsers/debitors.parser.ts`: Tailored customer outstanding balance parser.
   * `excel.mapper.ts`: Synonym header translator. Resolves variants (e.g. `Amount` vs `Invoiced Amount`) dynamically.
-  * `portal.builder.ts`: Rebuilds the Master Dashboard Landing Hub (`data/output/index.html`) by scanning the output folder for audited ledger summaries (`summary.json`) and generating clean overview cards with live status links.
 * **Safety Patch:** Implements an in-memory monkey patch to safely intercept ExcelJS name validation bugs regarding Microsoft Excel protected tab names (e.g. `History`).
 
 ### 4. Strategy Rules Auditing (`src/rules/`)
 * **Role:** Business logic and anomaly validation.
 * **Pattern:** **Strategy Design Pattern**.
-* **Rationale:** Every rule class (e.g. `DuplicateInvoiceRule`, `SuspiciousSpikeRule`) implements a standard `Rule` interface. The `RulesEngine` aggregates and evaluates these dynamically. Developers can construct and register a new rule class in minutes without rewriting the parser or the core orchestrator.
+* **Rationale:** Every rule class (e.g. `DuplicateInvoiceRule`, `SuspiciousSpikeRule`) implements a standard `Rule` interface. The `RulesEngine` evaluates them dynamically. Developers can construct and register a new rule class in minutes without rewriting the parser or the core orchestrator.
 
 ### 5. Swappable AI Engine Factory (`src/ai/`)
 * **Role:** Financial trends forecasting and recovery task-list compiling.
 * **Patterns:** **Factory Method** & **Adapter Design Patterns**.
-* **Decoupled Providers:**
+* **Decoupled Runtimes:**
   * Adapters for **Groq**, **Gemini**, **OpenAI**, **Claude**, local **Ollama**, and **none** (disabled) runtimes inherit from a unified `AIProvider` contract.
   * Prompt templates encapsulate structured business variables inside dynamic strings, feeding them to active adapter connections.
-  * **Visual & Calculation Helpers:** 
-    * `report-helper.ts`: Decoupled utility module that performs SVG chart coordinate math, maps tabular transaction trends, and formats operational compliance anomalies.
-    * `report-template.ts` & `debitors-template.ts`: Elegant HTML/CSS shells compiling the Master Dashboard and outstanding debtors command interfaces using modern glassmorphic grids.
 
 ### 6. Throttled Messaging Dispatch & Polling Bot (`src/telegram/`)
 * **Role:** Secure alert notification delivery and interactive query handling.
@@ -78,45 +75,37 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 ### 7. PostgreSQL Neon DB Layer (`src/db/db.client.ts`)
 * **Role:** Relational persistence for processed compliance summaries.
 * **Technique:** Connection pool management via **pg** library with strict SSL requirements.
-* **Schema:** Creates and updates the `financial_reports` table dynamically:
-  ```sql
-  CREATE TABLE IF NOT EXISTS financial_reports (
-    report_type VARCHAR(50) PRIMARY KEY,
-    data JSONB NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-* **Rationalization:** Decouples the frontend dashboard queries from direct disk access. The database layer automatically upserts report payloads (`sales`, `debitors`, daily aggregates, and `argon2` hashed `security-config` credentials) upon ingestion, supporting high-speed JSON queries, secure credential storage, and scaling.
+* **Schema:** Relational schema containing tables like `files`, `transactions`, `party_balances`, `audit_alerts`, `parsing_errors`, and `security_config` to store argon2-hashed app lock passwords.
+* **Rationalization:** Decouples the frontend dashboard queries from direct disk access. The database layer automatically stores ingested rows and calculated metadata, supporting high-speed JSON queries, secure credential storage, and scaling.
 
 ### 8. Fastify HTTP Router and Controllers (`src/api/`)
 * **Role:** Expose JSON query endpoints and spreadsheet uploader channels.
 * **Technique:** Fastify server configuration with schema validation hooks and cookie support plugin.
 * **Routing Strategy:** 
-  * Public routes verify overall system health (`/health`), check unlock credentials (`/api/security/verify-app`), check session cookie status (`/api/security/status`), and clear active cookies (`/api/security/logout`).
+  * Public routes verify overall system health (`/health`), check unlock credentials (`/api/v1/security/verify-app`), check session cookie status (`/api/v1/security/status`), and clear active cookies (`/api/v1/security/logout`).
   * Authorized workspace routes are nested within Fastify pre-handler plugin validations (`fastify.auth.ts`) which intercept and verify secure **HttpOnly cookies** (`app_session_token`), falling back to Bearer tokens in headers for Telegram Bot compatibility.
   * Specialized controllers (`chat.controller.ts`, `report.controller.ts`, `security.controller.ts`) handle processing requests, parsing uploader payloads, and fetching/saving database state.
 
 ### 9. Decoupled Worker Thread Ingestion Engine (`src/services/` & `worker_threads`)
 * **Role:** Unblock the HTTP event loop during heavy parsing and audits.
 * **Technique:** Spawns a dedicated, parallel Node.js `Worker` thread targeting `orchestrator.service.ts` to process ingestion, rules checks, and AI forecasts in an isolated V8 thread.
-* **Rationale:** Keeps the Fastify API server 100% responsive during multi-month Excel parses or long-lived AI network queries.
+* **Rationale:** Keeps the Fastify API server 100% responsive during Excel parses or long-lived AI network queries.
 
 ### 10. Background Cron Job Scheduler (`src/scheduler/`)
 * **Role:** Auto-sync coordinator.
 * **Technique:** `node-cron` daemon wrapper (`scheduler.job.ts`).
 * **Rationale:** Initiates the background worker thread pipeline automatically on a scheduled interval defined by `CRON_SCHEDULE` (default: daily at midnight).
 
-### 11. General System Utilities (`src/utils/`)
-* **Role:** Shareable formatting and parse helpers.
-* **Technique:** `cron.ts` conversion methods.
-* **Rationale:** Converts standard 5-field cron configurations to human-friendly strings for dashboard UI display and startup diagnostics reports.
-
 ---
 
-## 🔑 Stateless Executions & Persistence
+## 🔑 Database Schema Layout
 
-While the backend daemon operates on stateless ETL principles, it supports dual persistence:
-1. **Relational Database**: If `DATABASE_URL` is set in the environment, summaries are written directly to PostgreSQL, allowing the dashboard UI to operate DB-first.
-2. **Local File Mirroring**: It writes markdown summaries, HTML dashboards, and raw JSON logs inside the `data/output/<workbook_name>/` directory, serving as offline assets when database integration is bypassed.
+The relational schema strictly maps parsed ledger transactions and outstanding balances to normalize data rows:
 
-This decoupled architecture allows you to scale the API server independently or run it as a pure serverless daemon.
+1. **`files`**: Ingestion runs tracking workbook metadata, AI summaries, and execution statuses.
+2. **`transactions`**: Unified sales counter registers, payroll entries, and operational payment logs.
+3. **`party_balances`**: Outstanding balance records for debtors (Udhari) and creditors/suppliers.
+4. **`audit_alerts`**: Rules engine exceptions and warning records.
+5. **`parsing_errors`**: Structural anomalies and validation failures flagged during parsing.
+6. **`security_config`**: Password Argon2 hashes (app and upload tokens).
+7. **`syncMetadata`**: Google Drive file tracking logs (modification times and filenames).

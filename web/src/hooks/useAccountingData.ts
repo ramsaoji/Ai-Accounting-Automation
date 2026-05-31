@@ -8,8 +8,13 @@ export function useAccountingData() {
   const [salesData, setSalesData] = useState<MasterSummary | null>(null);
   const [debitorsData, setDebitorsData] = useState<MasterSummary | null>(null);
   const [connectionMode, setConnectionMode] = useState<'live' | 'static' | 'empty'>('empty');
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
+  const [isLocalDb, setIsLocalDb] = useState<boolean>(false);
+  const [isDevMode, setIsDevMode] = useState<boolean>(false);
+  const [hasSyncedBefore, setHasSyncedBefore] = useState<boolean>(false);
   const [cronSchedule, setCronSchedule] = useState<string>('0 0 * * *');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [aiProvider, setAiProvider] = useState<string>('none');
 
   const lastSalesTimestamp = useRef<string | undefined>(undefined);
   const lastDebitorsTimestamp = useRef<string | undefined>(undefined);
@@ -38,6 +43,11 @@ export function useAccountingData() {
       setSalesData(result.sales);
       setDebitorsData(result.debitors);
       setConnectionMode(result.mode);
+      setIsDbConnected(!!result.isDbConnected);
+      setIsLocalDb(!!result.isLocalDb);
+      setIsDevMode(!!result.isDevMode);
+      setHasSyncedBefore(!!result.hasSyncedBefore);
+      setAiProvider(result.aiProvider || 'none');
 
       if (!silent) {
         // Only fire toasts during explicit (non-background) refreshes
@@ -81,8 +91,13 @@ export function useAccountingData() {
     salesData,
     debitorsData,
     connectionMode,
+    isDbConnected,
+    isLocalDb,
+    isDevMode,
+    hasSyncedBefore,
     cronSchedule,
     isLoading,
+    aiProvider,
     sync
   };
 }

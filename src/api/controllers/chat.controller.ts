@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getReport } from '../../db/db.client.js';
+import { getReconstructedReport } from './report.controller.js';
 import { AiProviderFactory } from '../../ai/ai.factory.js';
 import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
@@ -37,31 +37,17 @@ export async function handleAdvisorChat(
     const reportType = isDebitors ? 'debitors' : 'sales';
 
     let summaryJson: unknown = null;
-    const isDbActive = !!config.DATABASE_URL;
 
-    if (isDbActive) {
-      try {
-        summaryJson = await getReport(reportType);
-      } catch (dbErr: unknown) {
-        const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
-        logger.error({ err: msg }, 'Failed to fetch chat context from Neon DB');
-      }
+    try {
+      summaryJson = await getReconstructedReport(reportType);
+    } catch (dbErr: unknown) {
+      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      logger.error({ err: msg }, 'Failed to fetch chat context from Neon DB');
+    }
 
-      if (!summaryJson) {
-        reply.code(404).send(Errors.notFound('Summary data in database. Please upload spreadsheets.'));
-        return;
-      }
-    } else {
-      const folderName = isDebitors ? 'DEBITORS LIST' : config.BUSINESS_NAME;
-      const filePath = path.resolve(process.cwd(), 'data', 'output', folderName, 'summary.json');
-
-      try {
-        const raw = await fs.promises.readFile(filePath, 'utf8');
-        summaryJson = JSON.parse(raw);
-      } catch {
-        reply.code(404).send(Errors.notFound('Summary data on disk. Please trigger pipeline.'));
-        return;
-      }
+    if (!summaryJson) {
+      reply.code(404).send(Errors.notFound('Summary data in database. Please upload spreadsheets.'));
+      return;
     }
 
     // Cast for downstream usage — summaryJson comes from controlled DB/file output
@@ -93,6 +79,10 @@ export async function handleAdvisorChat(
 
     // Load AI Provider from factory
     const provider = AiProviderFactory.createProvider();
+    if (provider.id === 'none') {
+      reply.code(503).send({ error: 'AI advisor chat is disabled by configuration. To enable it, please configure a valid AI_PROVIDER and API key.' });
+      return;
+    }
 
     const businessName = config.BUSINESS_NAME;
     let domainContext = '';

@@ -1,6 +1,6 @@
 # 📘 Workbook Integration Guide — Adding New Excel Layouts
 
-This guide provides a comprehensive tutorial explaining how to extend the service to support a completely new Excel workbook format (e.g. `INVENTORY LIST.xlsx`) in less than 15 minutes.
+This guide explains how to extend the service to support a completely new Excel workbook format (e.g. `INVENTORY LIST.xlsx`) in the relational architecture.
 
 ---
 
@@ -95,12 +95,29 @@ if (isInventoryList) {
 
 ---
 
-## 🎨 Step 4: Design the HTML Dashboard Layout
+## 💾 Step 4: Map to Relational Database Tables
 
-Create a dedicated visual template under `src/ai/` (e.g. `src/ai/inventory-template.ts`). It should return a styled, responsive HTML string with the custom components:
-* Keep the collapsible sidebars and mobile sliding navigation drawer menus consistent.
-* Utilize the custom Google Fonts pairings (`Outfit` / `Inter`).
-* Embed tailored responsive SVG charts (e.g., product breakdown circles, bar graphs, replenishment gauges).
+1. Define or extend the SQL tables inside **`src/db/schema.ts`** to store the new parsed data relationally (e.g., `stockItems` table).
+2. Open **`src/services/orchestrator.service.ts`** and update `saveToRelationalDb` to read the parsed inventory data from the results payload and persist it into the database:
+
+```typescript
+      // Insert stock items / inventory
+      if (fileType === 'stock' && allTransactions.length > 0) {
+        const batchSize = 1000;
+        for (let i = 0; i < allTransactions.length; i += batchSize) {
+          const chunk = allTransactions.slice(i, i + batchSize).map(t => ({
+            fileId: newFile.id,
+            sheetName: t.sheetName || 'Stock',
+            itemName: t.itemName,
+            quantity: String(t.quantity),
+            unitPrice: String(t.unitCost),
+            totalValue: String(t.quantity * t.unitCost),
+            location: 'counter'
+          }));
+          await tx.insert(schema.stockItems).values(chunk);
+        }
+      }
+```
 
 ---
 
@@ -112,19 +129,14 @@ Open **`src/ai/ai.service.ts`** and update `generateFinancialSummary()` to route
 const isInventory = sheets.some(s => s.inventory !== undefined);
 
 if (isInventory) {
-  return this.generateInventorySummary(params); // <-- Route to inventory prompts and templates!
+  return this.generateInventorySummary(params); // <-- Route to inventory prompts
 }
 ```
 
 ---
 
-### Step 6: Test & Run!
+## 🚀 Step 6: Test & Run!
 
-Run the integration suite using the targeted `--file` parameter. Your folder name resolver will automatically find the mock workbook and output the isolated files:
-```bash
-npm run process-local -- --file "INVENTORY LIST"
-```
-The modular pipeline outputs:
-* 🖥️ `data/output/INVENTORY LIST/summary.html`
-* 📄 `data/output/INVENTORY LIST/summary.md`
-* ⚙️ `data/output/INVENTORY LIST/summary.json`
+1. Start the development server (`npm run dev`).
+2. Open the React command center UI in your browser.
+3. Use the upload modal to drop your new Excel file. The backend will parse it, rule-audit it, run AI summaries, and save the results relationally.

@@ -1,5 +1,7 @@
 import crypto from 'crypto';
-import { getReport, saveReport } from '../../db/db.client.js';
+import { db } from '../../db/db.client.js';
+import * as schema from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
 import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
 import * as argon2 from 'argon2';
@@ -97,9 +99,18 @@ export function verifyToken(token: string): TokenPayload | null {
  */
 export async function getSecurityCredentials(): Promise<{ uploadPassword?: string; appPassword?: string }> {
   try {
-    const dbData = await getReport('security-config');
-    if (dbData) {
-      return dbData;
+    if (db) {
+      const dbData = await db
+        .select()
+        .from(schema.securityConfig)
+        .where(eq(schema.securityConfig.key, 'credentials'))
+        .limit(1);
+      if (dbData.length > 0) {
+        return {
+          uploadPassword: dbData[0].uploadPasswordHash,
+          appPassword: dbData[0].appPasswordHash,
+        };
+      }
     }
     if (config.NODE_ENV === 'production') {
       throw new Error('Database security-config record is missing.');
@@ -116,7 +127,7 @@ export async function getSecurityCredentials(): Promise<{ uploadPassword?: strin
   // Dev-only plain-text fallback — warn loudly so this is never silently used in production
   logger.warn(
     '[DEV MODE] Using plain-text password fallback from env. ' +
-    'This is INSECURE — ensure NODE_ENV=production and security-config is initialised in DB for production use.'
+    'This is INSECURE - ensure NODE_ENV=production and security-config is initialised in DB for production use.'
   );
 
   return {
@@ -246,12 +257,26 @@ export async function changePasswords(
       }
     }
 
-    const updatedCreds = {
-      uploadPassword: newUploadPassword ? await argon2.hash(newUploadPassword.trim()) : creds.uploadPassword,
-      appPassword: newAppPassword ? await argon2.hash(newAppPassword.trim()) : creds.appPassword,
-    };
+    const uploadHash = newUploadPassword ? await argon2.hash(newUploadPassword.trim()) : creds.uploadPassword;
+    const appHash = newAppPassword ? await argon2.hash(newAppPassword.trim()) : creds.appPassword;
 
-    await saveReport('security-config', updatedCreds);
+    if (db) {
+      await db
+        .insert(schema.securityConfig)
+        .values({
+          key: 'credentials',
+          uploadPasswordHash: uploadHash!,
+          appPasswordHash: appHash!,
+        })
+        .onConflictDoUpdate({
+          target: schema.securityConfig.key,
+          set: {
+            uploadPasswordHash: uploadHash!,
+            appPasswordHash: appHash!,
+            updatedAt: new Date(),
+          },
+        });
+    }
     logger.info('Database security credentials config updated successfully.');
 
     reply.code(200).send({ status: 'success', message: 'Credentials updated successfully' });

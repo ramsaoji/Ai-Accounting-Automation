@@ -21,8 +21,8 @@ async function start() {
     await initDb();
     await initSecurityConfig();
   } catch (dbErr) {
-    logger.error({ err: dbErr }, 'Failed to initialize Neon DB. Proceeding without persistent storage.');
-    // Non-fatal — system falls back to local file mode
+    logger.fatal({ err: dbErr }, 'CRITICAL: Failed to initialize PostgreSQL database. The application requires PostgreSQL to be running. Exiting.');
+    process.exit(1);
   }
 
   // 0.5 Validate AI provider credentials at startup (not at first use)
@@ -33,7 +33,7 @@ async function start() {
     config.GOOGLE_CLIENT_EMAIL.includes('your-project-id') ||
     config.GOOGLE_PRIVATE_KEY.includes('MIIEvgIBADANBgkqhkiG9w0');
   if (isMockDrive) {
-    logger.warn('[Google Drive] Integration is in MOCK mode. API syncing is disabled. Reading spreadsheets from local "data/input/" directory.');
+    logger.warn('[Google Drive] Integration is in MOCK mode. API syncing is disabled. Only manual HTTP file uploads will be processed.');
   } else {
     logger.info('[Google Drive] Google Drive integration is ACTIVE (Live Sync Mode enabled).');
   }

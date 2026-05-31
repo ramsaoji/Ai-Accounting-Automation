@@ -31,7 +31,7 @@ export const EmptyWorkspaceState: React.FC<EmptyWorkspaceStateProps> = ({
         </p>
       </div>
       <div className="mt-2">
-        <UploadModal disabled={connectionMode !== 'live'} onSuccess={fetchRealData} />
+        <UploadModal disabled={connectionMode !== 'live' && connectionMode !== 'static'} onSuccess={fetchRealData} />
       </div>
     </div>
   );

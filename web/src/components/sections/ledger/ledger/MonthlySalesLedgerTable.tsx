@@ -82,6 +82,16 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
             <TableHead className="text-right h-10">
               <Tooltip>
                 <TooltipTrigger render={
+                  <span className="cursor-help underline underline-offset-2 decoration-dotted text-success">Credit Recovery</span>
+                } />
+                <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                  Consolidated monthly credit recovered (jama) from outstanding customer accounts.
+                </TooltipContent>
+              </Tooltip>
+            </TableHead>
+            <TableHead className="text-right h-10">
+              <Tooltip>
+                <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Net Cashflow</span>
                 } />
                 <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
@@ -130,6 +140,7 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
               <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(month.food)}</TableCell>
               <TableCell className="text-right font-mono font-semibold text-destructive">{formatINR(month.expenses)}</TableCell>
               <TableCell className="text-right font-mono font-semibold text-warning">{formatINR(month.creditExtended)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold text-success">{formatINR(month.creditRecovery)}</TableCell>
               <TableCell className={`text-right font-mono font-bold ${netColor}`}>{formatINR(month.net)}</TableCell>
               
               <TableCell className="text-center">

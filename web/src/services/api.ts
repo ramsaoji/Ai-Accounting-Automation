@@ -52,6 +52,11 @@ export interface SyncResult {
   sales: MasterSummary | null;
   debitors: MasterSummary | null;
   mode: 'live' | 'static' | 'empty';
+  isDbConnected?: boolean;
+  isLocalDb?: boolean;
+  isDevMode?: boolean;
+  hasSyncedBefore?: boolean;
+  aiProvider?: string;
 }
 
 /**
@@ -59,7 +64,7 @@ export interface SyncResult {
  * Communicates directly with the live database backend.
  */
 export async function fetchAccountingData(): Promise<SyncResult> {
-  // Concurrent API fetch including system health to dynamically check Google Drive status
+  // Concurrent API fetch including system config to dynamically check Google Drive status
   try {
     const [salesRes, debitorsRes, healthRes] = await Promise.all([
       authFetch(`${apiBaseUrl}/api/v1/data/sales?t=${Date.now()}`, {
@@ -70,7 +75,8 @@ export async function fetchAccountingData(): Promise<SyncResult> {
         headers: getAuthHeaders(),
         cache: 'no-store'
       }),
-      fetch(`${apiBaseUrl}/api/v1/health?t=${Date.now()}`, {
+      authFetch(`${apiBaseUrl}/api/v1/system/config?t=${Date.now()}`, {
+        headers: getAuthHeaders(),
         cache: 'no-store'
       })
     ]);
@@ -79,22 +85,41 @@ export async function fetchAccountingData(): Promise<SyncResult> {
     const debitors = debitorsRes.ok ? mapMasterSummary(await debitorsRes.json(), true) : null;
     
     let mode: 'live' | 'static' | 'empty' = 'static';
+    let isDbConnected = false;
+    let isLocalDb = false;
+    let isDevMode = false;
+    let hasSyncedBefore = false;
+    let aiProvider = 'none';
     if (healthRes.ok) {
       const healthData = await healthRes.json();
       mode = healthData.connectionMode || 'static';
+      isDbConnected = !!healthData.isDbConnected;
+      isLocalDb = !!healthData.isLocalDb;
+      isDevMode = !!healthData.isDevMode;
+      hasSyncedBefore = !!healthData.hasSyncedBefore;
+      aiProvider = healthData.provider || 'none';
     }
 
     return {
       sales,
       debitors,
-      mode
+      mode,
+      isDbConnected,
+      isLocalDb,
+      isDevMode,
+      hasSyncedBefore,
+      aiProvider
     };
   } catch (err) {
     console.warn('Backend API connection failed.', err);
     return {
       sales: null,
       debitors: null,
-      mode: 'empty'
+      mode: 'empty',
+      isDbConnected: false,
+      isLocalDb: false,
+      isDevMode: false,
+      hasSyncedBefore: false
     };
   }
 }
@@ -121,7 +146,9 @@ export async function sendAdvisorChatMessage(
   });
 
   if (!res.ok) {
-    throw new Error(`API responded with status ${res.status}`);
+    const errData = await res.json().catch(() => ({}));
+    const errMsg = errData.error || `API responded with status ${res.status}`;
+    throw new Error(errMsg);
   }
 
   const data = await res.json();
@@ -145,7 +172,8 @@ export async function verifyUploadPassword(password: string): Promise<string | n
       },
       body: JSON.stringify({
         password
-      })
+      }),
+      credentials: 'include'
     });
     if (res.ok) {
       const data = await res.json();
@@ -186,12 +214,16 @@ export async function uploadSpreadsheet(file: File, sessionToken?: string): Prom
 }
 
 /**
- * Triggers the backend AI accounting pipeline to sync with Google Drive.
+ * Triggers the backend AI accounting pipeline to sync with Google Drive or load from local files.
  */
-export async function triggerDriveSync(): Promise<{ status: 'up-to-date' | 'processing'; message: string }> {
+export async function triggerDriveSync(forceLocal?: boolean): Promise<{ status: 'up-to-date' | 'processing'; message: string }> {
   const res = await authFetch(`${apiBaseUrl}/api/v1/trigger-pipeline`, {
     method: 'POST',
-    headers: getAuthHeaders()
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify({ forceLocal })
   });
 
   if (!res.ok) {
@@ -205,7 +237,7 @@ export async function triggerDriveSync(): Promise<{ status: 'up-to-date' | 'proc
 /**
  * Fetches the current background sync pipeline execution state and error status.
  */
-export async function fetchSyncStatus(): Promise<{ status: 'idle' | 'running' | 'success' | 'error'; error: string | null; isRunning: boolean }> {
+export async function fetchSyncStatus(): Promise<{ status: 'idle' | 'running' | 'success' | 'error'; error: string | null; isRunning: boolean; progress?: any }> {
   const res = await authFetch(`${apiBaseUrl}/api/v1/sync-status`, {
     method: 'GET',
     headers: getAuthHeaders()
@@ -223,7 +255,8 @@ export async function fetchSyncStatus(): Promise<{ status: 'idle' | 'running' | 
  */
 export async function fetchSystemHealth(): Promise<{ cron: string; status: string } | null> {
   try {
-    const res = await fetch(`${apiBaseUrl}/api/v1/health?t=${Date.now()}`, {
+    const res = await authFetch(`${apiBaseUrl}/api/v1/system/config?t=${Date.now()}`, {
+      headers: getAuthHeaders(),
       cache: 'no-store'
     });
     if (res.ok) {
@@ -298,7 +331,7 @@ export async function changeSecurityPasswords(
  */
 export async function checkSessionStatus(): Promise<boolean> {
   try {
-    const res = await fetch(`${apiBaseUrl}/api/security/status`, {
+    const res = await fetch(`${apiBaseUrl}/api/v1/security/status`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -314,11 +347,11 @@ export async function checkSessionStatus(): Promise<boolean> {
  */
 export async function logoutUser(): Promise<void> {
   try {
-    await fetch(`${apiBaseUrl}/api/security/logout`, {
+    await fetch(`${apiBaseUrl}/api/v1/security/logout`, {
       method: 'POST',
       credentials: 'include',
     });
   } catch (err) {
-    console.error('Failed to logout:', err);
+    console.error('Failed to logout user:', err);
   }
 }

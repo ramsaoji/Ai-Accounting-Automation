@@ -1,12 +1,10 @@
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 import { telegramClient } from './telegram.client.js';
 import { orchestratorService } from '../services/orchestrator.service.js';
 import { AiProviderFactory } from '../ai/ai.factory.js';
-import { getReport } from '../db/db.client.js';
+import { getReconstructedReport } from '../api/controllers/report.controller.js';
 import { formatCronExpression } from '../utils/cron.js';
 
 /**
@@ -394,29 +392,30 @@ export class TelegramBot {
     );
   }
 
-  private async loadReport(reportType: 'sales' | 'debitors' | 'daily-sales', folderName: string, fileName: string): Promise<any | null> {
+  private async loadReport(reportType: 'sales' | 'debitors' | 'daily-sales'): Promise<any | null> {
     try {
-      const dbData = await getReport(reportType);
-      if (dbData) return dbData;
+      if (reportType === 'daily-sales') {
+        const salesReport = await getReconstructedReport('sales');
+        if (salesReport && salesReport.transactions) {
+          const { buildDailySalesArray } = await import('../utils/accounting.js');
+          const rawTxs = salesReport.transactions.map((t: any) => ({
+            ...t,
+            date: new Date(t.date)
+          }));
+          return buildDailySalesArray(rawTxs);
+        }
+        return null;
+      }
+      
+      return await getReconstructedReport(reportType);
     } catch (err: any) {
-      logger.error({ err: err.message, reportType }, 'Failed to fetch report from Neon DB in Telegram Bot');
-    }
-
-    const filePath = path.resolve(process.cwd(), 'data', 'output', folderName, fileName);
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
-    try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(raw);
-    } catch (err) {
-      logger.error({ err, filePath }, 'Failed to read local report file in Telegram Bot');
+      logger.error({ err: err.message, reportType }, 'Failed to fetch report relationally in Telegram Bot');
       return null;
     }
   }
 
   private async sendTodaySales(chatId: string): Promise<void> {
-    const dailyData = await this.loadReport('daily-sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'daily-sales.json');
+    const dailyData = await this.loadReport('daily-sales');
     if (!dailyData || !Array.isArray(dailyData) || dailyData.length === 0) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*\n\nPlease trigger a sync first using /sync to ingest spreadsheets.`,
@@ -469,7 +468,7 @@ export class TelegramBot {
   }
 
   private async sendMonthSelectionMenu(chatId: string): Promise<void> {
-    const data = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
+    const data = await this.loadReport('sales');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*\n\nPlease trigger a sync first using /sync to ingest spreadsheets.`,
@@ -534,7 +533,7 @@ export class TelegramBot {
   }
 
   private async sendSpecificMonthSales(chatId: string, targetMonth: string): Promise<void> {
-    const data = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
+    const data = await this.loadReport('sales');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Ledger Available*`,
@@ -600,7 +599,7 @@ export class TelegramBot {
   }
 
   private async sendSalesSummary(chatId: string): Promise<void> {
-    const data = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
+    const data = await this.loadReport('sales');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Sales Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
@@ -634,7 +633,7 @@ export class TelegramBot {
   }
 
   private async sendDebitorsSummary(chatId: string): Promise<void> {
-    const data = await this.loadReport('debitors', 'DEBITORS LIST', 'summary.json');
+    const data = await this.loadReport('debitors');
     if (!data) {
       await telegramClient.sendMessage(
         `⚠️ *No Debitors Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
@@ -693,7 +692,7 @@ export class TelegramBot {
 
     let combinedContext = '';
 
-    const salesData = await this.loadReport('sales', `${config.BUSINESS_NAME} Daily Sales Register`, 'summary.json');
+    const salesData = await this.loadReport('sales');
     if (salesData) {
       // Prune list items to avoid token overflow while preserving master numbers
       const prunedSales = {
@@ -722,7 +721,7 @@ export class TelegramBot {
         JSON.stringify(prunedSales, null, 2) + '\n';
     }
 
-    const debitorsData = await this.loadReport('debitors', 'DEBITORS LIST', 'summary.json');
+    const debitorsData = await this.loadReport('debitors');
     if (debitorsData) {
       const prunedDebitors = {
         fileName: debitorsData.fileName,

@@ -27,9 +27,12 @@ import { uploadSpreadsheet, verifyUploadPassword } from '@/services/api';
 interface UploadModalProps {
   onSuccess: () => void;
   disabled?: boolean;
+  className?: string;
+  connectionMode?: 'live' | 'static' | 'empty';
+  hasSyncedBefore?: boolean;
 }
 
-export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled }) => {
+export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled, className, connectionMode, hasSyncedBefore }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [status, setStatus] = useState<'idle' | 'reading' | 'uploading' | 'processing' | 'success' | 'error'>('idle');
@@ -167,7 +170,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button disabled={disabled} variant="outline" size="sm" className="gap-2 cursor-pointer border-primary/30 hover:border-primary/60 hover:bg-primary/5 disabled:opacity-50">
+          <Button disabled={disabled} variant="outline" size="sm" className={`gap-2 cursor-pointer border-primary/30 hover:border-primary/60 hover:bg-primary/5 disabled:opacity-50 ${className || ''}`}>
             <UploadCloud className="size-4 text-primary" />
             <span className="hidden sm:inline">Upload Ledger</span>
           </Button>
@@ -263,15 +266,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({ onSuccess, disabled })
             </DialogHeader>
 
             {/* Google Drive Overwrite Info Note */}
-            <div className="p-3 border border-warning/20 bg-warning/5 rounded-lg flex items-start gap-2.5 text-[11.5px] text-warning select-none leading-normal">
-              <AlertCircle className="size-4 text-warning shrink-0 mt-0.5" />
-              <div className="flex flex-col gap-0.5">
-                <span className="font-bold text-foreground text-xs leading-none mb-0.5">Google Drive Synchronization Note</span>
-                <span className="text-muted-foreground text-[11px] leading-relaxed">
-                  If Google Drive sync is active, uploading a sheet manually will <strong className="text-warning font-semibold">override</strong> the synced worksheet in the database.
-                </span>
+            {connectionMode === 'live' && hasSyncedBefore && (
+              <div className="p-3 border border-warning/20 bg-warning/5 rounded-lg flex items-start gap-2.5 text-[11.5px] text-warning select-none leading-normal">
+                <AlertCircle className="size-4 text-warning shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-bold text-foreground text-xs leading-none mb-0.5">Google Drive Synchronization Note</span>
+                  <span className="text-muted-foreground text-[11px] leading-relaxed">
+                    If Google Drive sync is active, uploading a sheet manually will <strong className="text-warning font-semibold">override</strong> the synced worksheet in the database.
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Dynamic State Viewports */}
             <div className="flex flex-col items-center justify-center border-2 border-dashed border-border/80 rounded-xl p-6 bg-muted/10 transition-colors">

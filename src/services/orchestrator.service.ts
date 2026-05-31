@@ -8,7 +8,9 @@ import { aiService } from '../ai/ai.service.js';
 import { telegramService } from '../telegram/telegram.service.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
-import { saveReport, getReport } from '../db/db.client.js';
+import { db } from '../db/db.client.js';
+import * as schema from '../db/schema.js';
+import { eq, and } from 'drizzle-orm';
 import type { Transaction } from '../types/accounting.types.js';
 import { resolveTargetFile } from '../utils/file.js';
 import { buildDailySalesArray } from '../utils/accounting.js';
@@ -33,44 +35,48 @@ export interface PipelineOptions {
   specificFile?: string;
   /** Limit for debitors report (number of top debitors to include). */
   debitorsLimit?: number;
+  /** Force local file mode even if Google Drive is active. */
+  forceLocal?: boolean;
 }
 
 // ─── Sync Metadata Helpers ───────────────────────────────────────────────────
 
-export async function getSyncMetadata(inputDir: string): Promise<SyncMetadata> {
-  if (config.DATABASE_URL) {
-    try {
-      const data = await getReport('sync-metadata');
-      return (data as SyncMetadata) || { files: {} };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ err: message }, 'Failed to read sync-metadata from Neon DB');
-      return { files: {} };
+export async function getSyncMetadata(): Promise<SyncMetadata> {
+  try {
+    const rows = await db.select().from(schema.syncMetadata);
+    const filesObj: Record<string, string> = {};
+    for (const r of rows) {
+      filesObj[r.fileName] = r.modifiedTime;
     }
-  } else {
-    const metaPath = path.resolve(inputDir, '..', 'output', 'sync-metadata.json');
-    try {
-      const raw = await fs.promises.readFile(metaPath, 'utf8');
-      return JSON.parse(raw) as SyncMetadata;
-    } catch {
-      return { files: {} };
-    }
+    return { files: filesObj };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err: message }, 'Failed to read sync-metadata from Drizzle DB');
+    return { files: {} };
   }
 }
 
-export async function saveSyncMetadata(inputDir: string, metadata: SyncMetadata): Promise<void> {
-  if (config.DATABASE_URL) {
-    try {
-      await saveReport('sync-metadata', metadata);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ err: message }, 'Failed to save sync-metadata to Neon DB');
+export async function saveSyncMetadata(metadata: SyncMetadata): Promise<void> {
+  try {
+    for (const [fName, mTime] of Object.entries(metadata.files)) {
+      await db
+        .insert(schema.syncMetadata)
+        .values({
+          fileName: fName,
+          modifiedTime: mTime,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: schema.syncMetadata.fileName,
+          set: {
+            modifiedTime: mTime,
+            updatedAt: new Date(),
+          },
+        });
     }
-  } else {
-    const outputDir = path.resolve(inputDir, '..', 'output');
-    await fs.promises.mkdir(outputDir, { recursive: true });
-    const metaPath = path.resolve(outputDir, 'sync-metadata.json');
-    await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err: message }, 'Failed to save sync-metadata to Drizzle DB');
   }
 }
 
@@ -83,20 +89,29 @@ export class OrchestratorService {
   private isRunning = false;
   private syncStatus: 'idle' | 'running' | 'success' | 'error' = 'idle';
   private syncError: string | null = null;
+  private syncProgress = {
+    totalFiles: 0,
+    processedFiles: 0,
+    currentFile: '',
+    statusText: 'Idle',
+    files: [] as { name: string; status: 'pending' | 'processing' | 'success' | 'error'; error?: string }[]
+  };
+
+  /**
+   * Returns the current sync progress.
+   */
+  get progress() {
+    return this.syncProgress;
+  }
 
   /**
    * Checks if there are any new or modified Excel spreadsheets on Google Drive or local input directory.
    * Accepts an optional `specificFile` override (used by CLI scripts — not via HTTP).
    */
   async checkNewFiles(options?: PipelineOptions): Promise<{ hasNew: boolean; newFilesCount: number }> {
-    const inputDir = path.resolve(process.cwd(), 'data', 'input');
     const isMockDrive =
       config.GOOGLE_CLIENT_EMAIL.includes('your-project-id') ||
       config.GOOGLE_PRIVATE_KEY.includes('MIIEvgIBADANBgkqhkiG9w0');
-
-    // 1. Load sync metadata
-    const metadata = await getSyncMetadata(inputDir);
-    let newFilesCount = 0;
 
     if (options?.specificFile) {
       // In targeted file mode, we always consider it "new" to ensure it runs
@@ -104,38 +119,25 @@ export class OrchestratorService {
     }
 
     if (isMockDrive) {
-      if (!fs.existsSync(inputDir)) {
-        fs.mkdirSync(inputDir, { recursive: true });
-      }
-      const localFiles = fs.readdirSync(inputDir).filter(f => f.endsWith('.xlsx'));
+      throw new Error('Google Drive integration is not configured. Please supply valid credentials in your configuration to enable cloud syncing.');
+    }
 
-      if (localFiles.length === 0) {
-        throw new Error("No Excel spreadsheets found in 'data/input' directory. Please place .xlsx files in 'data/input/' and retry.");
-      }
+    // 1. Load sync metadata
+    const metadata = await getSyncMetadata();
+    let newFilesCount = 0;
 
-      for (const f of localFiles) {
-        const filePath = path.join(inputDir, f);
-        const stat = fs.statSync(filePath);
-        const mtimeStr = new Date(stat.mtimeMs).toISOString();
-        const lastMtime = metadata.files[f];
+    try {
+      const driveFiles = await driveService.getAllExcelFiles();
+      for (const f of driveFiles) {
+        const mtimeStr = f.modifiedTime || f.createdTime || '';
+        const lastMtime = metadata.files[f.name];
         if (!lastMtime || lastMtime !== mtimeStr) {
           newFilesCount++;
         }
       }
-    } else {
-      try {
-        const driveFiles = await driveService.getAllExcelFiles();
-        for (const f of driveFiles) {
-          const mtimeStr = f.modifiedTime || f.createdTime || '';
-          const lastMtime = metadata.files[f.name];
-          if (!lastMtime || lastMtime !== mtimeStr) {
-            newFilesCount++;
-          }
-        }
-      } catch (err) {
-        logger.error({ err }, 'Failed to check new files in Google Drive.');
-        throw new Error('Google Drive API connection failed. Verify your credentials in configuration.');
-      }
+    } catch (err) {
+      logger.error({ err }, 'Failed to check new files in Google Drive.');
+      throw new Error('Google Drive API connection failed. Verify your credentials in configuration.');
     }
 
     return {
@@ -157,6 +159,13 @@ export class OrchestratorService {
     this.isRunning = true;
     this.syncStatus = 'running';
     this.syncError = null;
+    this.syncProgress = {
+      totalFiles: 0,
+      processedFiles: 0,
+      currentFile: '',
+      statusText: 'Idle',
+      files: []
+    };
 
     logger.info('Initiating background worker thread for AI Accounting Ingestion...');
 
@@ -186,7 +195,9 @@ export class OrchestratorService {
       }
 
       worker.on('message', (msg) => {
-        if (msg.status === 'success') {
+        if (msg.type === 'progress') {
+          this.syncProgress = msg.progress;
+        } else if (msg.status === 'success') {
           logger.info('Background worker completed pipeline run successfully');
           this.isRunning = false;
           this.syncStatus = 'success';
@@ -238,7 +249,6 @@ export class OrchestratorService {
    * The actual pipeline run logic executed inside the Worker Thread isolate.
    */
   async runPipelineInternal(options?: PipelineOptions): Promise<void> {
-    // ── Concurrency Guard ──────────────────────────────────────────────────
     if (this.isRunning) {
       logger.warn('Pipeline is already running in worker thread. Ignoring duplicate execution request.');
       return;
@@ -259,53 +269,22 @@ export class OrchestratorService {
       config.TELEGRAM_CHAT_ID.includes('-1001234567890');
 
     try {
-      const inputDir = path.resolve(process.cwd(), 'data', 'input');
-      const outputDir = path.resolve(process.cwd(), 'data', 'output');
-
-      // Ensure local directories exist
-      await fs.promises.mkdir(inputDir, { recursive: true });
-      await fs.promises.mkdir(outputDir, { recursive: true });
-
+      const fallbackDir = process.cwd();
       const filesToProcess: FileToProcess[] = [];
 
       if (options?.specificFile) {
-        const resolvedPath = await resolveTargetFile(options.specificFile, inputDir);
+        const resolvedPath = await resolveTargetFile(options.specificFile, fallbackDir);
         logger.info({ resolvedPath }, 'SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
         filesToProcess.push({
           name: path.basename(resolvedPath),
           path: resolvedPath,
           buffer: await fs.promises.readFile(resolvedPath),
         });
-      } else if (isMockDrive) {
-        logger.info('Google Drive credentials are at mock defaults. Operating in BATCH LOCAL FILE MODE.');
-
-        const dirEntries = await fs.promises.readdir(inputDir);
-        const fileStats = await Promise.all(
-          dirEntries
-            .filter(f => f.endsWith('.xlsx'))
-            .map(async (f) => {
-              const filePath = path.join(inputDir, f);
-              const stat = await fs.promises.stat(filePath);
-              return { name: f, path: filePath, mtime: stat.mtimeMs };
-            })
-        );
-        const files = fileStats.sort((a, b) => a.mtime - b.mtime); // Sort ascending (oldest first)
-
-        if (files.length === 0) {
-          logger.warn(`No Excel spreadsheets found in '${inputDir}'. Skipping local batch execution.`);
-          return;
-        }
-
-        for (const fileInfo of files) {
-          filesToProcess.push({
-            name: fileInfo.name,
-            path: fileInfo.path,
-            buffer: await fs.promises.readFile(fileInfo.path),
-            modifiedTime: new Date(fileInfo.mtime).toISOString(),
-          });
-        }
-        logger.info(`Loaded ${filesToProcess.length} local file(s) for batch processing.`);
       } else {
+        if (isMockDrive) {
+          throw new Error('Google Drive integration is not configured. Please supply valid credentials in your configuration to enable cloud syncing.');
+        }
+
         // Google Drive: Fetch and download all Excel workbooks
         const driveFiles = await driveService.getAllExcelFiles();
         if (driveFiles.length === 0) {
@@ -327,7 +306,7 @@ export class OrchestratorService {
       }
 
       // Load sync metadata and filter to only new/changed files
-      const metadata = await getSyncMetadata(inputDir);
+      const metadata = await getSyncMetadata();
       const filesToIngest = filesToProcess.filter(fileItem => {
         if (!fileItem.modifiedTime) return true; // targeted/CLI mode — always process
         const lastMtime = metadata.files[fileItem.name];
@@ -341,10 +320,37 @@ export class OrchestratorService {
 
       logger.info(`Processing ${filesToIngest.length} of ${filesToProcess.length} file(s) that are new or modified.`);
 
+      // Initialize progress in worker thread
+      const progress = {
+        totalFiles: filesToIngest.length,
+        processedFiles: 0,
+        currentFile: '',
+        statusText: 'Analyzing files...',
+        files: filesToIngest.map(f => ({
+          name: f.name,
+          status: 'pending' as 'pending' | 'processing' | 'success' | 'error',
+          error: undefined as string | undefined
+        }))
+      };
+      if (!isMainThread) {
+        parentPort?.postMessage({ type: 'progress', progress });
+      }
+
       // Process loaded files sequentially
       for (const fileItem of filesToIngest) {
         const { name: fileName, buffer } = fileItem;
         logger.info(`Ingesting file: "${fileName}"`);
+
+        // Update progress status to processing
+        const fileProgress = progress.files.find(f => f.name === fileName);
+        if (fileProgress) {
+          fileProgress.status = 'processing';
+        }
+        progress.currentFile = fileName;
+        progress.statusText = `Ingesting and auditing ${fileName}...`;
+        if (!isMainThread) {
+          parentPort?.postMessage({ type: 'progress', progress });
+        }
 
         try {
           // 1. Excel: Parse sheet rows into typed JSON
@@ -388,38 +394,21 @@ export class OrchestratorService {
             ? buildDailySalesArray(allTransactions)
             : undefined;
 
-          if (config.DATABASE_URL) {
-            // DB mode: persist to Neon DB
-            try {
-              const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
-              const reportType = isDebtors ? 'debitors' : 'sales';
-              const summaryObj = JSON.parse(reports.jsonSummary);
-              await saveReport(reportType, summaryObj);
-              if (reportType === 'sales' && dailySalesArray) {
-                await saveReport('daily-sales', dailySalesArray);
-              }
-              logger.info({ reportType }, 'Persisted ingestion report to Neon DB.');
-            } catch (dbErr: unknown) {
-              const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
-              logger.error({ err: message }, 'Failed to persist parsed output to Neon DB');
-            }
-          } else {
-            // Local mode: write to disk
-            const fileOutputDir = path.resolve(outputDir, cleanFileName);
-            await fs.promises.mkdir(fileOutputDir, { recursive: true });
-
-            await Promise.all([
-              fs.promises.writeFile(path.resolve(fileOutputDir, 'summary.md'), reports.markdownReport),
-              fs.promises.writeFile(path.resolve(fileOutputDir, 'summary.html'), reports.htmlReport),
-              fs.promises.writeFile(path.resolve(fileOutputDir, 'summary.json'), reports.jsonSummary),
-            ]);
-            logger.info({ fileOutputDir }, 'Unified reports package written to local disk.');
-
-            if (dailySalesArray) {
-              const dailySalesPath = path.resolve(fileOutputDir, 'daily-sales.json');
-              await fs.promises.writeFile(dailySalesPath, JSON.stringify(dailySalesArray, null, 2));
-              logger.info({ dailySalesPath }, 'Compiled daily-sales list written locally.');
-            }
+          // 4. DB mode: persist relationally to PostgreSQL DB
+          try {
+            await this.saveToRelationalDb(
+              fileName,
+              parseResult,
+              allTransactions,
+              allErrors,
+              alerts,
+              reports,
+              timestamp
+            );
+            logger.info({ fileName }, 'Persisted ingestion report to relational PostgreSQL DB.');
+          } catch (dbErr: unknown) {
+            const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+            logger.error({ err: message }, 'Failed to persist parsed output to PostgreSQL DB relationally');
           }
 
           // 5. Telegram Notification
@@ -439,7 +428,7 @@ export class OrchestratorService {
                   `• 📖 *Active Credit Accounts*: ${agg.activeDebitorsCount || 0} customers\n` +
                   `• 📉 *Total Credit Extended*: ₹${Math.round(agg.totalDebitSum || 0).toLocaleString()}\n` +
                   `• 📈 *Total Credit Recovered*: ₹${Math.round(agg.totalCreditSum || 0).toLocaleString()}\n` +
-                  `• 💰 *Net Balance Outstanding*: *₹${Math.round(agg.totalPendingSum || 0).toLocaleString()}*\n` +
+                  `• 💰 *Net Balance Outstanding*: *₹${Math.round(agg.totalPendingSum || 0).toLocaleString()}* \n` +
                   `• ✅ *Recovery Success Rate*: ${agg.collectionSuccessRate || 0}%\n\n` +
                   `🔥 *Top Outstanding Debits:*\n`;
 
@@ -488,16 +477,33 @@ export class OrchestratorService {
           // 6. Update sync metadata
           if (fileItem.modifiedTime) {
             metadata.files[fileName] = fileItem.modifiedTime;
-            await saveSyncMetadata(inputDir, metadata);
+            await saveSyncMetadata(metadata);
+          }
+
+          // Update progress status to success
+          if (fileProgress) {
+            fileProgress.status = 'success';
+          }
+          progress.processedFiles++;
+          if (!isMainThread) {
+            parentPort?.postMessage({ type: 'progress', progress });
           }
         } catch (fileError) {
           const fileErrMessage = fileError instanceof Error ? fileError.message : String(fileError);
           logger.error({ fileName, error: fileErrMessage }, '[ERROR] Error processing spreadsheet in batch list');
 
+          // Update progress status to error
+          if (fileProgress) {
+            fileProgress.status = 'error';
+            fileProgress.error = fileErrMessage;
+          }
+          progress.processedFiles++;
+          if (!isMainThread) {
+            parentPort?.postMessage({ type: 'progress', progress });
+          }
+
           if (isMockTelegram) {
-            const crashPath = path.resolve(outputDir, `${fileName}_crash_alert.md`);
-            const crashAlert = `🚨 *FILE PROCESSING CRASH*\n\nSpreadsheet *${fileName}* failed during processing:\n\n\`\`\`\n${fileErrMessage}\n\`\`\``;
-            await fs.promises.writeFile(crashPath, crashAlert);
+            logger.error({ fileName, fileErrMessage }, 'FILE PROCESSING CRASH (Mock Telegram Mode)');
           } else {
             try {
               const crashAlert = `🚨 *FILE PROCESSING CRASH*\n\nSpreadsheet *${fileName}* failed during processing:\n\n\`\`\`\n${fileErrMessage}\n\`\`\``;
@@ -507,14 +513,6 @@ export class OrchestratorService {
             }
           }
         }
-      }
-
-      // 7. Rebuild master portal index (local mode only)
-      try {
-        const { rebuildMasterPortal } = await import('../excel/portal.builder.js');
-        rebuildMasterPortal(outputDir);
-      } catch (portalError) {
-        logger.error({ error: portalError }, 'Failed to rebuild Master Control Center portal');
       }
 
       const durationMs = Date.now() - startTime;
@@ -529,7 +527,6 @@ export class OrchestratorService {
       logger.error({ error }, '[ERROR] Critical failure in orchestrator runPipeline');
       throw error;
     } finally {
-      // Always release the concurrency guard
       this.isRunning = false;
     }
   }
@@ -597,39 +594,162 @@ export class OrchestratorService {
 
     const summaryObj = JSON.parse(reports.jsonSummary);
 
-    // 4. Persist to Neon DB
+    // 4. Persist to Neon DB relationally
+    // 4. Persist to PostgreSQL DB relationally
     try {
-      const isDebtors = parseResult.isDebitorsList || fileName.toUpperCase().includes('DEBITORS');
-      const reportType = isDebtors ? 'debitors' : 'sales';
-      await saveReport(reportType, summaryObj);
-
-      if (reportType === 'sales') {
-        // Use shared helper — no more duplicated daily-sales compilation code
-        const dailySalesArray = buildDailySalesArray(allTransactions);
-        await saveReport('daily-sales', dailySalesArray);
-      }
+      await this.saveToRelationalDb(
+        fileName,
+        parseResult,
+        allTransactions,
+        allErrors,
+        alerts,
+        reports,
+        timestamp
+      );
+      logger.info({ fileName }, 'Persisted uploaded report relationally to PostgreSQL DB.');
     } catch (dbErr: unknown) {
       const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
-      logger.error({ err: message }, 'Failed to persist uploaded report to Neon DB');
-    }
-
-    // 5. Write to local disk if DATABASE_URL is not configured
-    if (!config.DATABASE_URL) {
-      try {
-        const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
-        const outputDir = path.resolve(process.cwd(), 'data', 'output', cleanFileName);
-        await fs.promises.mkdir(outputDir, { recursive: true });
-        await fs.promises.writeFile(path.resolve(outputDir, 'summary.json'), reports.jsonSummary);
-        logger.info({ outputDir }, 'Summary JSON written to local disk (no-DB mode).');
-      } catch (err) {
-        logger.warn({ err }, 'Failed to write local output during upload');
-      }
+      logger.error({ err: message }, 'Failed to persist uploaded report relationally to PostgreSQL DB');
     }
 
     const durationMs = Date.now() - startTime;
     logger.info({ durationSec: (durationMs / 1000).toFixed(2) }, 'Successfully processed uploaded file buffer!');
 
     return summaryObj;
+  }
+
+  /**
+   * Decoupled relational database persistence helper.
+   * Maps dynamic spreadsheet transactions/snapshots directly to strictly-typed normalized SQL tables,
+   * bulk inserting in optimal chunks inside an isolated SQL transaction run.
+   */
+  async saveToRelationalDb(
+    fileName: string,
+    parseResult: any,
+    allTransactions: any[],
+    allErrors: any[],
+    alerts: any[],
+    reports: any,
+    timestamp: string
+  ): Promise<void> {
+    if (!db) return;
+    const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
+    const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
+    const isStock = cleanFileName.toUpperCase().includes('STOCK');
+    const fileType = isDebtors ? 'debitors' : isStock ? 'stock' : 'sales';
+    const summaryObj = JSON.parse(reports.jsonSummary);
+
+    await db.transaction(async (tx) => {
+      // 1. Mark previous active version of this file as not latest
+      await tx
+        .update(schema.files)
+        .set({ isLatest: false })
+        .where(
+          and(
+            eq(schema.files.fileName, fileName),
+            eq(schema.files.isLatest, true)
+          )
+        );
+
+      // 2. Insert new file run
+      const [newFile] = await tx
+        .insert(schema.files)
+        .values({
+          fileName,
+          fileType,
+          runTimestamp: new Date(timestamp),
+          totalRows: allTransactions.length,
+          aiSummary: reports.markdownReport,
+          aiIntelligence: summaryObj.intelligence || [],
+          aiGenerated: !!summaryObj.aiGenerated,
+          isLatest: true,
+          status: 'success',
+        })
+        .returning();
+
+      // 3. Insert transactions (finance ledgers)
+      if (fileType !== 'stock' && allTransactions.length > 0) {
+        const batchSize = 1000;
+        for (let i = 0; i < allTransactions.length; i += batchSize) {
+          const chunk = allTransactions.slice(i, i + batchSize).map(t => ({
+            fileId: newFile.id,
+            sheetName: t.sheetName || 'Counter',
+            date: t.date instanceof Date ? t.date.toISOString().split('T')[0] : String(t.date),
+            invoiceNumber: t.invoiceNumber || null,
+            category: t.category || 'General',
+            amount: String(t.amount || 0),
+            type: t.type || 'credit',
+            vendor: t.vendor || 'Counter',
+            particulars: t.description || null,
+            metadata: {}
+          }));
+          await tx.insert(schema.transactions).values(chunk);
+        }
+      }
+
+      // 4. Insert stock items (inventory)
+      if (fileType === 'stock' && allTransactions.length > 0) {
+        const batchSize = 1000;
+        for (let i = 0; i < allTransactions.length; i += batchSize) {
+          const chunk = allTransactions.slice(i, i + batchSize).map(t => ({
+            fileId: newFile.id,
+            sheetName: t.sheetName || 'Stock',
+            itemName: t.vendor || t.particulars || 'Item',
+            itemCode: t.invoiceNumber || null,
+            category: t.category || 'General',
+            quantity: '1',
+            unitPrice: String(t.amount || 0),
+            totalValue: String(t.amount || 0),
+            location: cleanFileName.toUpperCase().includes('GODWON') ? 'godown' : 'counter',
+            metadata: {}
+          }));
+          await tx.insert(schema.stockItems).values(chunk);
+        }
+      }
+
+      // 5. Insert party balances (debtors list)
+      const debtorsList = parseResult.sheets.find((s: any) => s.debitors !== undefined)?.debitors || [];
+      if (debtorsList.length > 0) {
+        const batchSize = 1000;
+        for (let i = 0; i < debtorsList.length; i += batchSize) {
+          const chunk = debtorsList.slice(i, i + batchSize).map((d: any) => ({
+            fileId: newFile.id,
+            partyName: d.name,
+            partyType: 'debtor',
+            debit: String(d.debit || 0),
+            credit: String(d.credit || 0),
+            pending: String(d.pending || 0),
+            metadata: {}
+          }));
+          await tx.insert(schema.partyBalances).values(chunk);
+        }
+      }
+
+      // 6. Insert audit alerts
+      if (alerts.length > 0) {
+        await tx.insert(schema.auditAlerts).values(
+          alerts.map(a => ({
+            fileId: newFile.id,
+            ruleId: a.ruleId,
+            ruleName: a.ruleName,
+            severity: a.severity,
+            message: a.message,
+          }))
+        );
+      }
+
+      // 7. Insert parsing errors
+      if (allErrors.length > 0) {
+        await tx.insert(schema.parsingErrors).values(
+          allErrors.map(e => ({
+            fileId: newFile.id,
+            rowNumber: e.row,
+            invoiceNumber: e.invoiceNumber || null,
+            errorMessage: e.error,
+          }))
+        );
+      }
+    });
   }
 }
 

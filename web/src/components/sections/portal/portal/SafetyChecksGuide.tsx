@@ -1,5 +1,6 @@
 import React from 'react';
-import { Cpu, Calendar } from 'lucide-react';
+import { Cpu, Calendar, Ban, Banknote, TrendingUp, Clock, AlertTriangle } from 'lucide-react';
+import { BUSINESS_NAME } from '@/utils/business';
 
 interface SafetyChecksGuideProps {
   scanScheduleLabel: string;
@@ -17,7 +18,7 @@ export const SafetyChecksGuide: React.FC<SafetyChecksGuideProps> = ({ scanSchedu
             <h4 className="font-bold text-foreground text-sm">Automated Bookkeeping Safety Checks</h4>
             <p className="text-[0.75rem] text-muted-foreground mt-1 leading-normal max-w-2xl">
               Every spreadsheet ingestion automatically passes through our <strong>Smart Integrity Engine</strong>. 
-              We scan all sales registers and debtor ledgers to safeguard Hotel Gaurav's finances from supplier double-billing, pricing spikes, or manual bookkeeping typos, sending instant alerts to your AI Strategic Advisor.
+              We scan all sales registers and debtor ledgers to safeguard {BUSINESS_NAME}'s finances from supplier double-billing, pricing spikes, or manual bookkeeping typos, sending instant alerts to your AI Strategic Advisor.
             </p>
           </div>
         </div>
@@ -29,36 +30,46 @@ export const SafetyChecksGuide: React.FC<SafetyChecksGuideProps> = ({ scanSchedu
 
       {/* Audit Scope Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-3 border-t border-border/50 select-none">
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
-          <span className="text-base select-none">🚫</span>
+        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-background/40 border">
+          <div className="size-7 rounded bg-destructive/10 text-destructive flex items-center justify-center shrink-0 border border-destructive/20">
+            <Ban className="size-4" />
+          </div>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Duplicate Bills</span>
             <span className="text-[0.58rem] text-muted-foreground">Catches double-entered invoice numbers</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
-          <span className="text-base select-none">💸</span>
+        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-background/40 border">
+          <div className="size-7 rounded bg-success/10 text-success flex items-center justify-center shrink-0 border border-success/20">
+            <Banknote className="size-4" />
+          </div>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Large Expenses</span>
             <span className="text-[0.58rem] text-muted-foreground">Flags bills &amp; payments &ge; ₹50,000</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
-          <span className="text-base select-none">📈</span>
+        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-background/40 border">
+          <div className="size-7 rounded bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+            <TrendingUp className="size-4" />
+          </div>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Cost Spikes</span>
             <span className="text-[0.58rem] text-muted-foreground">Alerts on 3x category average jumps</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
-          <span className="text-base select-none">🕒</span>
+        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-background/40 border">
+          <div className="size-7 rounded bg-warning/10 text-warning flex items-center justify-center shrink-0 border border-warning/20">
+            <Clock className="size-4" />
+          </div>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Late Logging</span>
             <span className="text-[0.58rem] text-muted-foreground">Flags weekend or off-hours posting</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border">
-          <span className="text-base select-none">⚠️</span>
+        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-background/40 border">
+          <div className="size-7 rounded bg-destructive/10 text-destructive flex items-center justify-center shrink-0 border border-destructive/20">
+            <AlertTriangle className="size-4" />
+          </div>
           <div className="flex flex-col">
             <span className="font-bold text-[0.68rem] text-foreground">Value Check</span>
             <span className="text-[0.58rem] text-muted-foreground">Flags zero/negative amounts</span>

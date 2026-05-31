@@ -1,6 +1,6 @@
 # AI Accounting Automation — Financial Command Center Dashboard
 
-A high-fidelity, production-grade executive dashboard for real-time accounting verification, anomaly auditing, and business intelligence insights from financial registers. Connects live to the Node.js backend API which reads from a PostgreSQL (Neon) database or local disk files.
+A high-fidelity, production-grade executive dashboard for real-time accounting verification, anomaly auditing, and business intelligence insights from financial registers. Connects live to the Node.js backend API which reads directly from a PostgreSQL (Neon) database.
 
 ---
 
@@ -8,35 +8,32 @@ A high-fidelity, production-grade executive dashboard for real-time accounting v
 
 This application operates on a modern, secure client-server architecture:
 - **Frontend**: Built using React, TypeScript, Vite, and Tailwind CSS v4 with shadcn/ui components.
-- **Backend Node.js Service**: Serves as the ingestion and orchestration engine, parsing actual Excel registers, executing anomaly-detection rules, and persisting data dynamically to PostgreSQL (Neon DB).
+- **Backend Node.js Service**: Serves as the ingestion and orchestration engine, parsing Excel registers, executing anomaly-detection rules, and persisting data dynamically to PostgreSQL (Neon DB).
 
 ```mermaid
 graph TD
     UserUpload[Spreadsheets Uploaded via Web UI] -->|POST In-Memory Buffer| Node[Node.js Backend Service]
-    DriveSync[Google Drive Sync Button] -->|POST /api/trigger-pipeline| Node
+    DriveSync[Google Drive Sync Button] -->|POST /api/v1/trigger-pipeline| Node
     Node -->|Persist Ingested Reports| NeonDB[(PostgreSQL Neon DB)]
-    Node -->|Local Offline Output| Disk[Local disk summary.json]
-    ReactApp[React Command Center Dashboard] -->|GET /api/data/sales & /api/data/debitors| Node
-    Node -..->|If DATABASE_URL set| NeonDB
-    Node -..->|If DATABASE_URL empty| Disk
+    ReactApp[React Command Center Dashboard] -->|GET /api/v1/data/sales & /api/v1/data/debitors| Node
+    Node --> NeonDB
 ```
 
 ---
 
 ## 📊 Data Integration & Sync Flow
 
-### 1. Dual-Mode Data Architecture
-The React application syncs data with the Node.js backend using a clean dual-storage configuration:
-- **Live Database Mode** (Active if `DATABASE_URL` is set in the backend `.env`): The frontend queries `GET /api/data/sales` and `GET /api/data/debitors` which pull directly from the Neon PostgreSQL database. If the database has no data yet, the API returns a 404 and the frontend displays the onboarding dashboard with upload controls active. **No mock fallbacks or simulated stats are shown in production when the database is empty.**
-- **Offline Local File Mode** (Active if `DATABASE_URL` is omitted in backend): The backend reads reports directly from local disk (`data/output/.../summary.json`), supporting offline-first local audits without any cloud dependency.
+### 1. Relational Database Architecture
+The React application syncs data with the Node.js backend using a clean database-first configuration:
+- **Live Database Mode**: The frontend queries `/api/v1/data/sales` and `/api/v1/data/debitors` which pull directly from the PostgreSQL database. If the database has no data yet, the API returns a 404 and the frontend displays the onboarding dashboard with upload controls active. **No mock fallbacks or simulated stats are shown in production when the database is empty.**
 
 When the backend API is connected and reachable, the frontend initializes in `live` mode and fetches data registers concurrently. If the backend is completely unreachable, the console enters an offline `empty` state, launching a setup onboarding overlay. Under this offline mode, the advisor chat operates via a local simulated heuristic reasoning engine for demonstration purposes, and the AI Recommendations card displays a "Simulated Demo" badge.
 
 ### 2. Google Drive Sync
-The **Sync Drive** button in the header triggers `POST /api/trigger-pipeline`, which instructs the backend to:
+The **Sync Drive** button in the header triggers `POST /api/v1/trigger-pipeline`, which instructs the backend to:
 1. Download all Excel ledgers from the configured Google Drive folder.
 2. Parse, audit, and run AI analysis on each workbook.
-3. Persist the results to Neon DB (if `DATABASE_URL` is set).
+3. Persist the results to the PostgreSQL DB.
 4. Send a Telegram executive brief to the configured chat ID.
 5. Return updated data — the frontend auto-reloads on success.
 
@@ -68,7 +65,7 @@ web/
 │   ├── hooks/                    # Custom React hooks
 │   │   ├── use-mobile.ts         # Viewport size detector hook
 │   │   ├── useAccountingData.ts  # Cascading backend fetching hook
-│   │   └── useDriveSync.ts       # Drive sync and local directory load hook
+│   │   └── useDriveSync.ts       # Drive sync status tracking hook
 │   ├── lib/
 │   │   └── utils.ts              # Tailwind CSS merging utility
 │   ├── services/

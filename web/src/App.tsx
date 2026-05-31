@@ -88,7 +88,7 @@ export function App() {
   }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
-  const { salesData, debitorsData, connectionMode, cronSchedule, isLoading, sync: fetchRealData } = useAccountingData();
+  const { salesData, debitorsData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, aiProvider, sync: fetchRealData } = useAccountingData();
 
   // Custom Drive Sync hook to isolate background polling/interval logic
   const { isSyncingDrive, handleDriveSync } = useDriveSync({
@@ -157,8 +157,11 @@ export function App() {
       <TooltipProvider>
         <OnboardingWizard
           connectionMode={connectionMode}
+          isDbConnected={isDbConnected}
+          isLocalDb={isLocalDb}
           isSyncingDrive={isSyncingDrive}
           isLoading={isLoading}
+          hasSyncedBefore={hasSyncedBefore}
           onDriveSync={handleDriveSync}
           onSuccess={fetchRealData}
         />
@@ -195,6 +198,7 @@ export function App() {
               connectionMode={connectionMode}
               isSyncingDrive={isSyncingDrive}
               isLoading={isLoading}
+              hasSyncedBefore={hasSyncedBefore}
               handleDriveSync={handleDriveSync}
               fetchRealData={fetchRealData}
             />
@@ -243,7 +247,7 @@ export function App() {
                         />
                       )}
                       {activeView === 'advisor' && (
-                        <AdvisorSection key={activeSummary.fileName} summary={activeSummary} />
+                        <AdvisorSection key={activeSummary.fileName} summary={activeSummary} aiProvider={aiProvider} />
                       )}
                     </>
                   )}

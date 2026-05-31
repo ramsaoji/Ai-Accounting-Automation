@@ -20,9 +20,10 @@ import { ChatInputForm } from './advisor/ChatInputForm';
 
 interface AdvisorSectionProps {
   summary: MasterSummary;
+  aiProvider: string;
 }
 
-export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
+export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvider }) => {
   const isDebitors = summary.isDebitorsList === true;
   
   const businessName = useMemo(() => {
@@ -196,7 +197,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
     setChatHistory(workspaceKey, summary.fileName, [
       {
         sender: 'ai',
-        text: `Namaskar! 🙏 Conversation context re-initialized. How can I help you audit your spreadsheet values today?`,
+        text: `Namaskar! How can I help you audit your spreadsheet values or optimize your business cashflows today?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }
     ]);
@@ -230,25 +231,37 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary }) => {
           {/* Chat card header — compact on mobile */}
           <CardHeader className="px-3 py-2 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between select-none gap-2">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0">
                 <Bot className="size-4" />
               </div>
-              <div className="flex-1 min-w-0 flex flex-col sm:block">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <CardTitle className="text-xs font-bold leading-tight">
+              <div className="flex-1 min-w-0 flex flex-col">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <CardTitle className="text-xs font-bold leading-tight truncate max-w-[120px] xs:max-w-[180px] sm:max-w-[320px] md:max-w-none">
                     {businessName} Advisory Agent
                   </CardTitle>
-                  <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-1.5 py-0.5 rounded-full leading-none shrink-0">
-                    <span className="size-1.5 bg-success rounded-full animate-pulse"></span>
-                    Online
-                  </span>
+                  {aiProvider !== 'none' ? (
+                    <span className="flex items-center gap-1 text-[0.58rem] font-bold text-success bg-success/10 border border-success/20 px-1.5 py-0.5 rounded-full leading-none shrink-0 animate-in fade-in duration-300">
+                      <span className="size-1.5 bg-success rounded-full animate-pulse"></span>
+                      Online
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[0.58rem] font-bold text-muted-foreground bg-muted border border-muted-foreground/20 px-1.5 py-0.5 rounded-full leading-none shrink-0 animate-in fade-in duration-300">
+                      <span className="size-1.5 bg-muted-foreground/60 rounded-full"></span>
+                      Offline
+                    </span>
+                  )}
                 </div>
                 <p className="text-[0.65rem] text-muted-foreground truncate hidden sm:block mt-0.5">Context: {summary.fileName}</p>
               </div>
             </div>
-            <Button variant="outline" size="xs" onClick={clearChat} className="text-[10px] sm:text-xs h-8 sm:h-7 px-2 sm:px-2.5 shrink-0">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={clearChat}
+              className="text-[10px] sm:text-xs h-8 w-8 sm:w-auto px-0 sm:px-3 flex items-center justify-center shrink-0"
+            >
               <RefreshCw className="size-3.5 shrink-0" />
-              <span className="hidden sm:inline ml-1">Clear Chat</span>
+              <span className="hidden sm:inline ml-1.5">Clear Chat</span>
             </Button>
           </CardHeader>
 

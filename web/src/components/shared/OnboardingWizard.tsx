@@ -17,16 +17,22 @@ import {
 
 interface OnboardingWizardProps {
   connectionMode: 'live' | 'static' | 'empty';
+  isDbConnected: boolean;
+  isLocalDb?: boolean;
   isSyncingDrive: boolean;
   isLoading: boolean;
+  hasSyncedBefore?: boolean;
   onDriveSync: () => void;
   onSuccess: () => void;
 }
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   connectionMode,
+  isDbConnected,
+  isLocalDb,
   isSyncingDrive,
   isLoading,
+  hasSyncedBefore,
   onDriveSync,
   onSuccess,
 }) => {
@@ -122,7 +128,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </p>
               </div>
 
-              <div className="p-4 border rounded-xl bg-background/40 flex flex-col gap-3">
+              <div className="p-4 border rounded-xl bg-background/40 flex flex-col gap-3 text-left">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground font-semibold">Active Sync Mode:</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border uppercase select-none ${
@@ -135,7 +141,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     {connectionMode} Connection
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground leading-relaxed">
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground leading-relaxed pb-3 border-b border-border/40">
                   {connectionMode === 'live' ? (
                     <>
                       <ThumbsUp className="size-3.5 text-emerald-500 shrink-0" />
@@ -148,11 +154,35 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     </>
                   )}
                 </div>
+
+                 <div className="flex items-center justify-between text-xs pt-1">
+                  <span className="text-muted-foreground font-semibold">{isLocalDb ? 'Local PostgreSQL DB:' : 'Neon PostgreSQL DB:'}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border uppercase select-none ${
+                    isDbConnected 
+                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                      : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                  }`}>
+                    {isDbConnected ? 'Connected' : 'Offline / Bypassed'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground leading-relaxed">
+                  {isDbConnected ? (
+                    <>
+                      <ShieldCheck className="size-3.5 text-emerald-500 shrink-0" />
+                      <span>Secure connection to {isLocalDb ? 'Local PostgreSQL Database' : 'Neon Database'} established! Ledger transactions, stock items, and AI insights are relationally cached.</span>
+                    </>
+                  ) : (
+                    <>
+                      <Info className="size-3.5 text-amber-500 shrink-0" />
+                      <span>DATABASE_URL not set. Running in local fallback mode. Reports will be read from/written to the local filesystem.</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Step 3: First Spreadsheet Import */}
+          {/* Step 3: First Spreadsheet Ingestion Hub */}
           {step === 3 && (
             <div className="flex flex-col gap-4 animate-in fade-in duration-300 text-center sm:text-left">
               <div className="flex flex-col gap-1">
@@ -164,26 +194,50 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </p>
               </div>
 
-              <div className="border border-dashed border-border/80 rounded-xl p-4 bg-background/25 flex flex-col sm:flex-row items-center justify-center gap-3.5 mt-1 select-none">
-                <div className="flex items-center gap-2 text-left">
-                  <FileSpreadsheet className="size-8 text-primary shrink-0" />
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-foreground">Expected Ingestions</span>
-                    <span className="text-[9px] text-muted-foreground leading-normal max-w-[220px]">
-                      Daily Sales Register (`xlsx`) or Customer Debitors Outstanding Ledger (`xlsx`).
+              <div className="border border-border/80 rounded-2xl p-5 bg-background/30 flex flex-col gap-4 select-none relative overflow-hidden text-left mt-2">
+                {/* Decorative background ambient gradient inside the card */}
+                <div className="absolute top-0 right-0 w-24 h-24 rounded-full bg-primary/5 blur-xl pointer-events-none" />
+                
+                {/* Header Row */}
+                <div className="flex items-start gap-3">
+                  <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                    <FileSpreadsheet className="size-5" />
+                  </div>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-bold text-foreground">Ingestion Control Center</span>
+                    <span className="text-[10px] text-muted-foreground leading-normal">
+                      The engine requires either your Daily Sales Register or Customer Debitors Ledger to compile dashboards.
                     </span>
                   </div>
                 </div>
-                
-                <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
-                  <UploadModal disabled={connectionMode !== 'live' && connectionMode !== 'static'} onSuccess={onSuccess} />
+
+                {/* Separator line */}
+                <div className="h-px bg-border/60 w-full" aria-hidden="true" />
+
+                {/* Expected Specifications Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
+                    <div className="size-1.5 rounded-full bg-primary shrink-0" />
+                    <span className="font-semibold truncate">Daily Sales Register (.xlsx)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
+                    <div className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="font-semibold truncate">Debitors Ledger (.xlsx)</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 mt-1 pt-1">
+                  <div className="w-full sm:flex-1">
+                    <UploadModal hasSyncedBefore={hasSyncedBefore} connectionMode={connectionMode} disabled={isSyncingDrive || connectionMode !== 'live' && connectionMode !== 'static'} onSuccess={onSuccess} className="w-full" />
+                  </div>
+                  
                   {connectionMode === 'live' && (
                     <Button
                       onClick={onDriveSync}
                       disabled={isSyncingDrive || isLoading}
                       variant="outline"
                       size="sm"
-                      className="gap-2 cursor-pointer border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 disabled:opacity-50 h-9"
+                      className="w-full sm:flex-1 gap-2 cursor-pointer border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 disabled:opacity-50 h-9"
                     >
                       {isSyncingDrive ? (
                         <Loader2 className="size-4 animate-spin" />
@@ -191,22 +245,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                         <Cloud className="size-4" />
                       )}
                       <span>Sync Drive</span>
-                    </Button>
-                  )}
-                  {connectionMode === 'static' && (
-                    <Button
-                      onClick={onDriveSync}
-                      disabled={isSyncingDrive || isLoading}
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 cursor-pointer border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 disabled:opacity-50 h-9"
-                    >
-                      {isSyncingDrive ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <FileSpreadsheet className="size-4" />
-                      )}
-                      <span>Load Local Files</span>
                     </Button>
                   )}
                 </div>

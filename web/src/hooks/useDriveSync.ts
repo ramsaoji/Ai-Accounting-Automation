@@ -10,8 +10,9 @@ interface UseDriveSyncProps {
   fetchRealData: (silent?: boolean) => Promise<any>;
 }
 
-export function useDriveSync({ salesData, debitorsData, connectionMode = 'static', fetchRealData }: UseDriveSyncProps) {
-  const [isSyncingDrive, setIsSyncingDrive] = useState(false);
+export function useDriveSync({ salesData, debitorsData, fetchRealData }: UseDriveSyncProps) {
+  const [isSyncingDrive, setIsSyncingDrive] = useState<boolean>(false);
+  const [syncProgress, setSyncProgress] = useState<any>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clean up sync polling interval on unmount
@@ -25,14 +26,15 @@ export function useDriveSync({ salesData, debitorsData, connectionMode = 'static
 
   const handleDriveSync = useCallback(async () => {
     if (isSyncingDrive) return;
+    
     setIsSyncingDrive(true);
+    setSyncProgress(null);
 
-    const isStatic = connectionMode === 'static';
-    const initMsg = isStatic ? 'Scanning local input directory...' : 'Initiating Google Drive sync...';
-    const progressMsg = isStatic ? 'Ingesting spreadsheets from local input directory...' : 'Ingesting new spreadsheets from Google Drive...';
-    const upToDateMsg = isStatic ? 'Local files are up-to-date. No new spreadsheets detected.' : 'Drive is up-to-date. No changes detected since last sync.';
-    const successMsg = isStatic ? 'Local files load completed! Dashboard updated.' : 'Google Drive sync completed! Dashboard updated.';
-    const failMsg = isStatic ? 'Local files load failed' : 'Drive sync failed';
+    const initMsg = 'Initiating Google Drive sync...';
+    const progressMsg = 'Ingesting new spreadsheets from Google Drive...';
+    const upToDateMsg = 'Drive is up-to-date. No changes detected since last sync.';
+    const successMsg = 'Google Drive sync completed! Dashboard updated.';
+    const failMsg = 'Drive sync failed';
 
     const toastId = toast.loading(initMsg);
 
@@ -41,11 +43,12 @@ export function useDriveSync({ salesData, debitorsData, connectionMode = 'static
     const initialDebitorsTime = debitorsData?.runTimestamp;
 
     try {
-      const result = await triggerDriveSync();
+      const result = await triggerDriveSync(false);
 
       // Edge case 1: Drive is already up-to-date — no new files, no need to refresh data
       if (result.status === 'up-to-date') {
         setIsSyncingDrive(false);
+        setSyncProgress(null);
         toast.success(upToDateMsg, { id: toastId });
         return;
       }
@@ -66,14 +69,21 @@ export function useDriveSync({ salesData, debitorsData, connectionMode = 'static
           // 1. Check job execution status on the backend
           const statusResult = await fetchSyncStatus();
 
+          if (statusResult.progress) {
+            setSyncProgress(statusResult.progress);
+          }
+
           if (statusResult.status === 'success') {
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            setIsSyncingDrive(false);
             await fetchRealData(true); // silent refresh
             toast.success(successMsg, { id: toastId });
+            setTimeout(() => {
+              setIsSyncingDrive(false);
+              setSyncProgress(null);
+            }, 1200);
             return;
           }
 
@@ -82,8 +92,15 @@ export function useDriveSync({ salesData, debitorsData, connectionMode = 'static
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            setIsSyncingDrive(false);
             toast.error(`${failMsg}: ${statusResult.error || 'Server error.'}`, { id: toastId });
+            setTimeout(() => {
+              setIsSyncingDrive(false);
+              setSyncProgress(null);
+            }, 3000);
+            return;
+          }
+
+          if (statusResult.status === 'running') {
             return;
           }
 
@@ -101,18 +118,24 @@ export function useDriveSync({ salesData, debitorsData, connectionMode = 'static
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            setIsSyncingDrive(false);
             await fetchRealData(true);
             toast.success(successMsg, { id: toastId });
+            setTimeout(() => {
+              setIsSyncingDrive(false);
+              setSyncProgress(null);
+            }, 1200);
 
           } else if (attempts >= maxAttempts) {
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            setIsSyncingDrive(false);
             await fetchRealData(true);
             toast.info('Sync is still processing. Dashboard refreshed with latest available data.', { id: toastId });
+            setTimeout(() => {
+              setIsSyncingDrive(false);
+              setSyncProgress(null);
+            }, 1200);
           }
 
         } catch {
@@ -121,21 +144,27 @@ export function useDriveSync({ salesData, debitorsData, connectionMode = 'static
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            setIsSyncingDrive(false);
             toast.error('Sync polling timed out due to a network error. Please retry.', { id: toastId });
+            setTimeout(() => {
+              setIsSyncingDrive(false);
+              setSyncProgress(null);
+            }, 1200);
           }
         }
       }, 2500);
 
     } catch (err: unknown) {
       setIsSyncingDrive(false);
+      setSyncProgress(null);
       const errMsg = err instanceof Error ? err.message : String(err);
       toast.error(`${failMsg}: ${errMsg}`, { id: toastId });
     }
-  }, [isSyncingDrive, salesData, debitorsData, fetchRealData, connectionMode]);
+  }, [isSyncingDrive, salesData, debitorsData, fetchRealData]);
 
   return {
     isSyncingDrive,
+    syncProgress,
+    setSyncProgress,
     handleDriveSync
   };
 }

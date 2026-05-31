@@ -69,14 +69,38 @@ export const useAccountingStore = create<AccountingState>((set, get) => {
         // ignore
       }
 
+      // Automatically migrate historical session greetings to avoid showing developer jargon
+      let needsSave = false;
+      history = history.map((msg) => {
+        if (msg.sender === 'ai' && (msg.text.includes('re-initialized') || msg.text.includes('re-initialised') || msg.text.includes('context re-initialized'))) {
+          needsSave = true;
+          return {
+            ...msg,
+            text: `Namaskar! How can I help you audit your spreadsheet values or optimize your business cashflows today?`,
+          };
+        }
+        if (msg.sender === 'ai' && msg.text.includes('parsed spreadsheet')) {
+          needsSave = true;
+          return {
+            ...msg,
+            text: msg.text.replace('parsed spreadsheet', 'spreadsheet'),
+          };
+        }
+        return msg;
+      });
+
       if (history.length === 0) {
         history = [
           {
             sender: 'ai',
-            text: `Namaskar! 🙏 I am your ${businessName} Financial Advisor. I have analyzed your parsed spreadsheet "${fileName}". How can I help you optimize your business cashflows or recover customer dues today?`,
+            text: `Namaskar! I am your ${businessName} Financial Advisor. I have analyzed your spreadsheet "${fileName}". How can I help you optimize your business cashflows or recover customer dues today?`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           }
         ];
+        needsSave = true;
+      }
+
+      if (needsSave) {
         try {
           localStorage.setItem(keyStorage, JSON.stringify(history));
         } catch {

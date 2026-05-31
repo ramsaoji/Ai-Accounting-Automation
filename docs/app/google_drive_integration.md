@@ -1,12 +1,12 @@
 # Google Drive Integration Guide
 
-Connect the accounting automation service to **Google Drive** so it can automatically download your Excel ledger files, run the full AI auditing pipeline, and push results to Neon DB on every scheduled cron tick — or whenever you trigger it manually.
+Connect the accounting automation service to **Google Drive** so it can automatically download your Excel ledger files, run the full AI auditing pipeline, and push results to PostgreSQL on every scheduled cron tick — or whenever you trigger it manually.
 
 ---
 
 ## 💸 Is it free?
 
-Yes. The **Google Drive API** is completely free for this use case. The service account approach does not require billing to be enabled. You only get charged if you exceed 1 billion API calls/day (not possible here).
+Yes. The **Google Drive API** is completely free for this use case. The service account approach does not require billing to be enabled.
 
 ---
 
@@ -15,9 +15,6 @@ Yes. The **Google Drive API** is completely free for this use case. The service 
 ### Step 1: Open Google Cloud Console
 
 Go to **[console.cloud.google.com](https://console.cloud.google.com)** and sign in with your Google account.
-
-> [!NOTE]
-> Make sure you're on the **Console** page (dark sidebar with project selector), not the marketing homepage at `cloud.google.com`.
 
 ---
 
@@ -37,20 +34,16 @@ Go to **[console.cloud.google.com](https://console.cloud.google.com)** and sign 
 3. Click the **Google Drive API** card.
 4. Click **Enable**.
 
-> [!IMPORTANT]
-> Do **not** search for "credentials" in the API Library — that shows unrelated IAM APIs. You must enable **Google Drive API** specifically.
-
 ---
 
 ### Step 4: Create a Service Account
 
-A Service Account is a non-human Google identity that your backend server uses to authenticate with Drive.
+A Service Account is a identity that your backend server uses to authenticate with Drive.
 
 1. In the left sidebar: **IAM & Admin → Service Accounts**.
-   Or go directly to: `console.cloud.google.com/iam-admin/serviceaccounts`
 2. Click **"+ Create Service Account"**.
 3. Fill in:
-   - **Service account name**: `ai-accounting-worker` (or any name)
+   - **Service account name**: `ai-accounting-worker`
    - **Service account ID**: auto-filled
 4. Click **"Create and Continue"**.
 5. On the **Grant access** step: skip it (click **Continue**).
@@ -81,7 +74,7 @@ The JSON file looks like this:
 
 ### Step 6: Add Credentials to `.env`
 
-Open your project's `.env` file at the root (`/ai-accounting-automation/.env`) and fill in:
+Open your project's `.env` file at the root and fill in:
 
 ```env
 # ====================================================================
@@ -98,24 +91,18 @@ GOOGLE_DRIVE_FOLDER_ID=1abc123XYZdef456GHI
 ```
 
 > [!WARNING]
-> The `GOOGLE_PRIVATE_KEY` must preserve the `\n` escape sequences exactly as they appear in the JSON file. If you paste the key with real line breaks instead of `\n`, authentication will fail.
-
-> [!CAUTION]
-> Never commit your `.env` file or the downloaded JSON key to GitHub. The `.gitignore` is already configured to exclude `.env` files.
+> The `GOOGLE_PRIVATE_KEY` must preserve the `\n` escape sequences exactly as they appear in the JSON file.
 
 ---
 
 ### Step 7: Share Your Drive Folder with the Service Account
 
-The service account cannot access your Drive files by default — you must explicitly share the folder with it, just like sharing with a person.
+The service account cannot access your Drive files by default — you must explicitly share the folder with it.
 
 1. Open **[drive.google.com](https://drive.google.com)** in your browser.
 2. Navigate to the folder containing your Excel ledger files.
 3. Right-click the folder → **Share**.
-4. In the **"Add people and groups"** field, paste your `client_email` value:
-   ```
-   ai-accounting-worker@ai-accounting-automation.iam.gserviceaccount.com
-   ```
+4. In the **"Add people and groups"** field, paste your `client_email` value.
 5. Set the role to **Viewer** (read-only is enough).
 6. Click **Send** (ignore the warning about sharing with a non-Google account).
 
@@ -147,7 +134,7 @@ You will see in the logs:
 [drive.service] Found Excel file(s) in Google Drive
 [orchestrator] Downloading target Excel sheet from Google Drive
 [drive.service] Downloading file buffer from Google Drive
-[orchestrator] Persisted ingestion report to Neon DB
+[orchestrator] Ingested file buffer and persisted relationally to database
 ```
 
 ---
@@ -157,11 +144,11 @@ You will see in the logs:
 ```mermaid
 sequenceDiagram
     participant Cron as Scheduler (CRON_SCHEDULE)
-    participant API as POST /api/trigger-pipeline
+    participant API as POST /api/v1/trigger-pipeline
     participant Orch as Orchestrator Service
     participant Drive as Google Drive API
     participant AI as AI Service (Groq/Gemini)
-    participant DB as Neon DB
+    participant DB as PostgreSQL DB
     participant TG as Telegram Bot
 
     Cron->>Orch: Cron tick fires
@@ -172,25 +159,12 @@ sequenceDiagram
         Orch->>Drive: downloadFile(fileId)
         Drive-->>Orch: Excel Buffer
         Orch->>AI: generateFinancialSummary(transactions)
-        AI-->>Orch: Markdown + HTML + JSON reports
-        Orch->>DB: saveReport('sales' | 'debitors')
+        AI-->>Orch: Markdown + JSON reports
+        Orch->>DB: saveToRelationalDb(fileName, transactions, alerts, summaries)
         Orch->>TG: sendReport(executiveSummary)
         TG-->>TG: Deliver to authorized Chat ID
     end
 ```
-
----
-
-## ⚙️ How the Orchestrator Decides: Drive vs. Local
-
-The orchestrator automatically detects which mode to run based on your credentials:
-
-| Condition | Mode | Source |
-| :--- | :--- | :--- |
-| `GOOGLE_CLIENT_EMAIL` contains `your-project-id` or `GOOGLE_PRIVATE_KEY` contains `MIIEvgIBADANBgkqhkiG9w0` | **Local mode** | Reads `.xlsx` files from `data/input/` |
-| Neither contains placeholder text | **Drive mode** | Downloads from Google Drive folder |
-
-No code changes are needed — just update the `.env` and restart.
 
 ---
 
@@ -219,21 +193,21 @@ To trigger an immediate Drive sync without waiting for the next scheduled tick:
 
 **Linux / macOS / Git Bash:**
 ```bash
-curl -X POST http://localhost:8080/api/trigger-pipeline
+curl -X POST http://localhost:8080/api/v1/trigger-pipeline
 ```
 
 **Windows PowerShell** (`curl` is an alias — use one of these instead):
 ```powershell
 # Option A: force real curl binary
-curl.exe -X POST http://localhost:8080/api/trigger-pipeline
+curl.exe -X POST http://localhost:8080/api/v1/trigger-pipeline
 
 # Option B: native PowerShell
-Invoke-WebRequest -Uri http://localhost:8080/api/trigger-pipeline -Method POST
+Invoke-WebRequest -Uri http://localhost:8080/api/v1/trigger-pipeline -Method POST
 ```
 
 Response:
 ```json
-{ "message": "Accounting pipeline triggered successfully in background" }
+{ "status": "processing", "message": "Sync started. Ingesting spreadsheet(s)..." }
 ```
 
 The pipeline runs asynchronously in the background — the API responds immediately with `202 Accepted` while processing continues in the server logs.
@@ -257,5 +231,5 @@ The pipeline runs asynchronously in the background — the API responds immediat
 
 ### ❌ Drive runs but DB is not updated
 - Verify `DATABASE_URL` is set correctly in `.env`.
-- Check the Neon DB dashboard to confirm the `financial_reports` table exists.
-- Look at `data/output/system.log` for `Failed to persist` errors.
+- Check the PostgreSQL database to confirm the `files` and `transactions` tables exist.
+- Look at `logs/system.log` for any database connection errors.

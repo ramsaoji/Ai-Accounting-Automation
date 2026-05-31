@@ -11,11 +11,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "process-local": "tsx src/scripts/process-local.ts",
-    "process-sales": "tsx src/scripts/process-local.ts --file \"data/input/Hotel Gaurav Daily Sales Register.xlsx\"",
-    "process-debitors": "tsx src/scripts/process-local.ts --file \"data/input/DEBITORS LIST.xlsx\" --limit 15",
-    "chat": "tsx src/scripts/chat-ledger.ts",
-    "generate-sample": "tsx src/scripts/generate-sample.ts"
+    "reset-drizzle": "tsx src/scripts/reset-drizzle.ts",
+    "db-studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -24,6 +21,7 @@
     "argon2": "^0.44.0",
     "axios": "^1.6.8",
     "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "fastify": "^5.8.5",
     "googleapis": "^137.0.0",
@@ -36,6 +34,7 @@
     "@types/node": "^20.12.12",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.20.0",
+    "drizzle-kit": "^0.31.10",
     "pino-pretty": "^11.1.0",
     "tsx": "^4.10.5",
     "typescript": "^5.4.5"

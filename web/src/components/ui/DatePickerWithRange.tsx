@@ -209,63 +209,56 @@ export function DatePickerWithRange({
             {hasMonths ? (
               <>
                 {/* Year selector row */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <Select
-                      value={activeYear !== null ? String(activeYear) : ""}
-                      onValueChange={(v) => setSelectedYear(Number(v))}
-                    >
-                      <SelectTrigger
-                        className={cn(
-                          "w-full border-input bg-transparent dark:bg-input/30 focus-visible:border-ring",
-                          CTRL_H, CTRL_R, CTRL_TXT
-                        )}
-                      >
-                        <SelectValue placeholder="Select Year" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border shadow-lg rounded-xl z-50 max-h-56 overflow-y-auto">
-                        {availableYears.map((yr) => {
-                          const cnt = groupedMonths[yr].filter(i => selectedMonths.includes(i.original)).length;
-                          return (
-                            <SelectItem key={yr} value={String(yr)}>
-                              <span className="flex items-center gap-2">
-                                <span>{yr}</span>
-                                {cnt > 0 && (
-                                  <span className="rounded-full bg-primary/15 text-primary px-1.5 py-px text-[0.58rem] font-black leading-none">
-                                    {cnt}
-                                  </span>
-                                )}
-                              </span>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {activeYear !== null && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => toggleYear(activeYear)}
+                <div className="w-full">
+                  <Select
+                    value={activeYear !== null ? String(activeYear) : ""}
+                    onValueChange={(v) => setSelectedYear(Number(v))}
+                  >
+                    <SelectTrigger
                       className={cn(
-                        "shrink-0 cursor-pointer border-input bg-transparent dark:bg-input/30 text-muted-foreground hover:text-foreground hover:bg-muted/50 px-3",
+                        "w-full border-input bg-transparent dark:bg-input/30 focus-visible:border-ring",
                         CTRL_H, CTRL_R, CTRL_TXT
                       )}
                     >
-                      {groupedMonths[activeYear].every(i => selectedMonths.includes(i.original))
-                        ? "Deselect All"
-                        : "Select All"}
-                    </Button>
-                  )}
+                      <SelectValue placeholder="Select Year" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border shadow-lg rounded-xl z-50 max-h-56 overflow-y-auto">
+                      {availableYears.map((yr) => {
+                        const cnt = groupedMonths[yr].filter(i => selectedMonths.includes(i.original)).length;
+                        return (
+                          <SelectItem key={yr} value={String(yr)}>
+                            <span className="flex items-center gap-2">
+                              <span>{yr}</span>
+                              {cnt > 0 && (
+                                <span className="rounded-full bg-primary/15 text-primary px-1.5 py-px text-[0.58rem] font-black leading-none">
+                                  {cnt}
+                                </span>
+                              )}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Month grid */}
                 {activeYear !== null && groupedMonths[activeYear] && (
                   <div className="flex flex-col gap-2 border-t border-border/40 pt-3">
-                    <span className="text-[0.58rem] font-black uppercase tracking-widest text-muted-foreground">
-                      Months in {activeYear}
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[0.58rem] font-black uppercase tracking-widest text-muted-foreground">
+                        Months in {activeYear}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleYear(activeYear)}
+                        className="text-[0.58rem] font-bold uppercase tracking-wider text-primary hover:text-primary/80 transition-colors cursor-pointer select-none"
+                      >
+                        {groupedMonths[activeYear].every(i => selectedMonths.includes(i.original))
+                          ? "Deselect All"
+                          : "Select All"}
+                      </button>
+                    </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {groupedMonths[activeYear].map((item) => {
                         const on = selectedMonths.includes(item.original);
