@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { DebitorSummary } from '@/types';
 import {
   Table,
@@ -16,6 +16,10 @@ interface DebitorLedgerTableProps {
   maxOutstandingDuesLimit: number;
   totalPendingSum: number;
   topDebtorValue: number;
+  onRowClick?: (name: string) => void;
+  debtorSortBy: string;
+  debtorSortOrder: 'asc' | 'desc';
+  onDebtorSort: (column: string) => void;
 }
 
 export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
@@ -23,6 +27,10 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
   maxOutstandingDuesLimit,
   totalPendingSum,
   topDebtorValue,
+  onRowClick,
+  debtorSortBy,
+  debtorSortOrder,
+  onDebtorSort,
 }) => {
   const formatINR = (val: number) => {
     return '₹' + Math.round(val).toLocaleString('en-IN');
@@ -36,12 +44,24 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
     return name.slice(0, 2).toUpperCase();
   };
 
+  const renderSortIcon = (column: string) => {
+    if (debtorSortBy !== column) {
+      return <ArrowUpDown className="ml-1 size-3 opacity-50 inline-block align-middle" />;
+    }
+    return debtorSortOrder === 'asc' 
+      ? <ArrowUp className="ml-1 size-3 text-foreground inline-block align-middle" /> 
+      : <ArrowDown className="ml-1 size-3 text-foreground inline-block align-middle" />;
+  };
+
   return (
     <Table className="min-w-[700px] sm:min-w-full">
       <TableHeader className="bg-muted/15 select-none">
         <TooltipProvider>
           <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
-            <TableHead className="pl-6 h-10 w-[240px]">
+            <TableHead 
+              className="pl-6 h-10 w-[240px] cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onDebtorSort('name')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Customer Accounts</span>
@@ -50,8 +70,12 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
                   The name of the customer carrying credit accounts.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('name')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onDebtorSort('debit')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Purchase Volume</span>
@@ -60,8 +84,12 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
                   Total cumulative credit sales volume purchased by this customer.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('debit')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onDebtorSort('credit')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Amount Settled</span>
@@ -70,8 +98,12 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
                   Total payments made by this customer to clear their dues.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('credit')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onDebtorSort('pending')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted text-destructive">Net Balance</span>
@@ -80,6 +112,7 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
                   Net pending outstanding balance due from this customer.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('pending')}
             </TableHead>
             <TableHead className="text-center h-10">
               <Tooltip>
@@ -119,7 +152,11 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
           const statusIcon = isBreach ? <AlertTriangle className="size-3 text-destructive" /> : debtor.pending > 5000 ? <AlertTriangle className="size-3 text-warning" /> : <CheckCircle className="size-3 text-success" />;
 
           return (
-            <TableRow key={debtor.name} className="hover:bg-muted/30 transition-colors h-11 border-b">
+            <TableRow 
+              key={debtor.name} 
+              onClick={() => onRowClick?.(debtor.name)}
+              className="hover:bg-muted/30 transition-colors h-11 border-b cursor-pointer select-none"
+            >
               <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-3">
                 <div className="size-7 rounded-full bg-primary/10 text-primary border flex items-center justify-center font-bold text-[0.68rem] font-mono select-none">
                   {getAvatarInitials(debtor.name)}

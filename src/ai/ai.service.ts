@@ -23,6 +23,69 @@ import {
   computeSalesFallbackInsights,
   computeDebitorsFallbackInsights
 } from './report-helper.js';
+import crypto from 'crypto';
+import { db } from '../db/db.client.js';
+import * as schema from '../db/schema.js';
+import { eq, and } from 'drizzle-orm';
+
+/**
+ * Calculates a SHA-256 hash representing the content of the spreadsheet entries.
+ */
+export function calculateTransactionsHash(transactions: any[], errors: any[], alerts: any[]): string {
+  const dataToHash = JSON.stringify({
+    transactions: transactions.map(t => ({
+      date: t.date instanceof Date ? t.date.toISOString().split('T')[0] : String(t.date),
+      amount: String(t.amount),
+      type: t.type,
+      vendor: t.vendor,
+      category: t.category,
+      invoiceNumber: t.invoiceNumber
+    })),
+    errors: errors.map(e => ({ row: e.row, error: e.error })),
+    alerts: alerts.map(a => ({ ruleId: a.ruleId, message: a.message }))
+  });
+  return crypto.createHash('sha256').update(dataToHash).digest('hex');
+}
+
+/**
+ * Extracts a specific section list of items from the cached markdown report by header synonyms.
+ */
+export function extractSection(markdown: string, headerSynonyms: string[]): string {
+  const lines = markdown.split('\n');
+  const startIdx = lines.findIndex(l => headerSynonyms.some(syn => l.toLowerCase().includes(syn.toLowerCase())));
+  if (startIdx === -1) return '';
+  const result: string[] = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith('#') || (line.startsWith('---') && i > startIdx + 2)) break;
+    if (
+      line.startsWith('*') ||
+      line.startsWith('-') ||
+      line.startsWith('>') ||
+      line.startsWith('1.') ||
+      line.startsWith('2.') ||
+      line.startsWith('3.')
+    ) {
+      const cleanLine = line
+        .replace(/^>\s*\*\s*\[\s*\]\s*\*\*/, '')
+        .replace(/^>\s*\*\s*\*\*/, '')
+        .replace(/^>\s*\*/, '')
+        .replace(/^\*\s*\[\s*\]\s*\*\*/, '')
+        .replace(/^\*\s*\*\*/, '')
+        .replace(/^\*\s*/, '')
+        .replace(/^-\s*/, '')
+        .replace(/^>\s*/, '')
+        .replace(/^\d+\.\s*\*\*/, '')
+        .replace(/^\d+\.\s*/, '')
+        .replace(/\*\*$/, '')
+        .trim();
+      if (cleanLine) {
+        result.push(cleanLine);
+      }
+    }
+  }
+  return result.join('\n');
+}
 
 export interface GeneratedReports {
   markdownReport: string;
@@ -44,6 +107,53 @@ export class AiService {
   async generateFinancialSummary(data: PromptInputData): Promise<GeneratedReports> {
     const { transactions, alerts, parsingErrors, fileName, runTimestamp } = data;
     const businessName = config.BUSINESS_NAME;
+
+    const calculatedHash = calculateTransactionsHash(transactions, parsingErrors, alerts);
+    let cachedWeeklyChecklist = '';
+    let cachedProjections = '';
+    let cachedIntelligence = '';
+    let aiCachedHit = false;
+
+    // Check database cache first
+    try {
+      const cached = await db
+        .select()
+        .from(schema.files)
+        .where(
+          and(
+            eq(schema.files.contentHash, calculatedHash),
+            eq(schema.files.status, 'success'),
+            eq(schema.files.aiGenerated, true)
+          )
+        )
+        .limit(1);
+
+      if (cached.length > 0) {
+        const cachedRecord = cached[0];
+        logger.info({ fileName, contentHash: calculatedHash }, 'LLM Cache hit: Bypassing LLM generation.');
+        
+        const cachedMarkdown = cachedRecord.aiSummary || '';
+        
+        const checklistSynonyms = data.isDebitorsList
+          ? ['Staff Meeting Weekly Recovery Checklist', 'weekly recovery checklist', 'checklist']
+          : ['Weekly Operational Action Checklist', 'action items', 'checklist'];
+          
+        const projectionsSynonyms = data.isDebitorsList
+          ? ['Collections & Accounts Recovery Projections', 'recovery projections', 'projections']
+          : ['Dynamic 3-Month Projections', 'predictive forecasting', 'projections'];
+          
+        const intelligenceSynonyms = data.isDebitorsList
+          ? ['AI Strategic Intelligence & Hidden Dues Risks', 'dues risks', 'intelligence']
+          : ['AI Strategic Intelligence & Hidden Operational Leaks', 'operational leaks', 'intelligence'];
+
+        cachedWeeklyChecklist = extractSection(cachedMarkdown, checklistSynonyms);
+        cachedProjections = extractSection(cachedMarkdown, projectionsSynonyms);
+        cachedIntelligence = extractSection(cachedMarkdown, intelligenceSynonyms);
+        aiCachedHit = true;
+      }
+    } catch (cacheErr) {
+      logger.error({ err: cacheErr }, 'Error querying LLM cache from DB. Proceeding with standard generation.');
+    }
 
     // =========================================================================
     // BRANCH A: Specialized Udhari & Debitors Register Orchestrator
@@ -68,10 +178,10 @@ export class AiService {
       const debitorsLimit = data.debitorsLimit || 10;
 
       // AI calls for weekly checklist, 3-month outlook and strategic intelligence specific to debitors
-      let aiWeeklyChecklist = '';
-      let aiProjections = '';
-      let aiIntelligence = '';
-      let aiGenerated = false;
+      let aiWeeklyChecklist = cachedWeeklyChecklist;
+      let aiProjections = cachedProjections;
+      let aiIntelligence = cachedIntelligence;
+      let aiGenerated = aiCachedHit;
 
       const masterStatsText = `
 Master Debitor Accounts Cumulative Totals:
@@ -87,30 +197,32 @@ Master Debitor Accounts Cumulative Totals:
         return `${i + 1}. ${d.name}: Total Dues: ₹${Math.round(d.pending).toLocaleString()} (Extended: ₹${Math.round(d.debit).toLocaleString()}, Paid: ₹${Math.round(d.credit).toLocaleString()})`;
       }).join('\n');
 
-      try {
-        const unifiedPrompt = buildDebitorsPrompt(businessName, masterStatsText, debtorsSummaryText);
-        const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
-        
-        const parsed = parseAiResponse(responseText);
-        aiWeeklyChecklist = parsed.checklist;
-        aiProjections = parsed.projections;
-        aiIntelligence = parsed.intelligence;
+      if (!aiGenerated) {
+        try {
+          const unifiedPrompt = buildDebitorsPrompt(businessName, masterStatsText, debtorsSummaryText);
+          const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
+          
+          const parsed = parseAiResponse(responseText);
+          aiWeeklyChecklist = parsed.checklist;
+          aiProjections = parsed.projections;
+          aiIntelligence = parsed.intelligence;
 
-        aiGenerated = true;
-      } catch (error) {
-        logger.error({ error }, 'AI debtor collection suggestions generation failed. Using data-driven fallback.');
-        const fallback = computeDebitorsFallbackInsights({
-          topDebitorsLimitList,
-          topDebtorName,
-          topDebtorValue,
-          totalPendingSum,
-          collectionSuccessRate,
-          averageOutstandingDues,
-          activeDebitorsCount
-        });
-        aiWeeklyChecklist = fallback.checklist;
-        aiProjections = fallback.projections;
-        aiIntelligence = fallback.intelligence;
+          aiGenerated = true;
+        } catch (error) {
+          logger.error({ error }, 'AI debtor collection suggestions generation failed. Using data-driven fallback.');
+          const fallback = computeDebitorsFallbackInsights({
+            topDebitorsLimitList,
+            topDebtorName,
+            topDebtorValue,
+            totalPendingSum,
+            collectionSuccessRate,
+            averageOutstandingDues,
+            activeDebitorsCount
+          });
+          aiWeeklyChecklist = fallback.checklist;
+          aiProjections = fallback.projections;
+          aiIntelligence = fallback.intelligence;
+        }
       }
 
       // Delegate all visual rendering calculations to our report-helper library
@@ -351,27 +463,28 @@ Master Debitor Accounts Cumulative Totals:
     }
 
     // AI weekly suggestions, projections and strategic intelligence call
-    let aiWeeklyChecklist = '';
-    let aiProjections = '';
-    let aiIntelligence = '';
-    let aiGenerated = false;
+    let aiWeeklyChecklist = cachedWeeklyChecklist;
+    let aiProjections = cachedProjections;
+    let aiIntelligence = cachedIntelligence;
+    let aiGenerated = aiCachedHit;
 
-    try {
-      logger.info({ sheetCount: sortedSheets.length }, 'Invoking AI to generate Strategic Projections & Action Checklist...');
-      
-      const monthlySummaryText = sortedSheets.map((s: any) => {
-        const liq = s.transactions.filter((t: Transaction) => t.category === 'Liquor Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-        const food = s.transactions.filter((t: Transaction) => t.category === 'Food Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-        const rec = s.transactions.filter((t: Transaction) => t.category === 'Credit Recovery').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-        const exp = s.transactions.filter((t: Transaction) => t.category === 'Operational Expense').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-        const cred = s.transactions.filter((t: Transaction) => t.category === 'Credit Extended').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-        const inc = liq + food + rec;
-        const out = exp + cred;
-        const net = inc - out;
-        return `- ${s.sheetName}: Sales: ₹${Math.round(inc).toLocaleString()} (Liquor: ₹${Math.round(liq).toLocaleString()}, Food: ₹${Math.round(food).toLocaleString()}), Expenses: ₹${Math.round(exp).toLocaleString()}, Credit Extended: ₹${Math.round(cred).toLocaleString()}, Net: ₹${Math.round(net).toLocaleString()}`;
-      }).join('\n');
+    if (!aiGenerated) {
+      try {
+        logger.info({ sheetCount: sortedSheets.length }, 'Invoking AI to generate Strategic Projections & Action Checklist...');
+        
+        const monthlySummaryText = sortedSheets.map((s: any) => {
+          const liq = s.transactions.filter((t: Transaction) => t.category === 'Liquor Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+          const food = s.transactions.filter((t: Transaction) => t.category === 'Food Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+          const rec = s.transactions.filter((t: Transaction) => t.category === 'Credit Recovery').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+          const exp = s.transactions.filter((t: Transaction) => t.category === 'Operational Expense').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+          const cred = s.transactions.filter((t: Transaction) => t.category === 'Credit Extended').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+          const inc = liq + food + rec;
+          const out = exp + cred;
+          const net = inc - out;
+          return `- ${s.sheetName}: Sales: ₹${Math.round(inc).toLocaleString()} (Liquor: ₹${Math.round(liq).toLocaleString()}, Food: ₹${Math.round(food).toLocaleString()}), Expenses: ₹${Math.round(exp).toLocaleString()}, Credit Extended: ₹${Math.round(cred).toLocaleString()}, Net: ₹${Math.round(net).toLocaleString()}`;
+        }).join('\n');
 
-      const masterStatsText = `
+        const masterStatsText = `
 Master Cumulative Totals (All Months):
 - Total Liquor Revenue: ₹${Math.round(masterLiquor).toLocaleString()}
 - Total Food Revenue: ₹${Math.round(masterFood).toLocaleString()}
@@ -380,39 +493,40 @@ Master Cumulative Totals (All Months):
 - Overall Cumulative Net Surplus: ₹${Math.round(masterNet).toLocaleString()}
 - Liquor/Food Sales Ratio: ${liquorPercentage}% Liquor / ${foodPercentage}% Food
 - Outstanding Credit Gap: ₹${Math.round(creditOutstandingGap).toLocaleString()} (Recovery Rate: ${creditRecoveryRate}%)
-      `;
+        `;
 
-      const unifiedPrompt = buildSalesPrompt(businessName, masterStatsText, monthlySummaryText);
-      const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
+        const unifiedPrompt = buildSalesPrompt(businessName, masterStatsText, monthlySummaryText);
+        const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
 
-      const parsed = parseAiResponse(responseText);
-      aiWeeklyChecklist = parsed.checklist;
-      aiProjections = parsed.projections;
-      aiIntelligence = parsed.intelligence;
+        const parsed = parseAiResponse(responseText);
+        aiWeeklyChecklist = parsed.checklist;
+        aiProjections = parsed.projections;
+        aiIntelligence = parsed.intelligence;
 
-      logger.info('AI successfully generated unified projections, checklist and strategic intelligence.');
-      aiGenerated = true;
-    } catch (error) {
-      logger.error({ error }, 'AI strategic trend and projections generation failed. Using data-driven fallback.');
-      const fallback = computeSalesFallbackInsights({
-        sortedSheets,
-        masterLiquor,
-        masterFood,
-        masterExpenses,
-        masterCreditExtended,
-        masterRecovery,
-        creditOutstandingGap,
-        creditRecoveryRate,
-        foodPercentage,
-        liquorPercentage,
-        bestRevenueMonth,
-        bestRevenueValue,
-        peakExpenseMonth,
-        peakExpenseValue
-      });
-      aiWeeklyChecklist = fallback.checklist;
-      aiProjections = fallback.projections;
-      aiIntelligence = fallback.intelligence;
+        logger.info('AI successfully generated unified projections, checklist and strategic intelligence.');
+        aiGenerated = true;
+      } catch (error) {
+        logger.error({ error }, 'AI strategic trend and projections generation failed. Using data-driven fallback.');
+        const fallback = computeSalesFallbackInsights({
+          sortedSheets,
+          masterLiquor,
+          masterFood,
+          masterExpenses,
+          masterCreditExtended,
+          masterRecovery,
+          creditOutstandingGap,
+          creditRecoveryRate,
+          foodPercentage,
+          liquorPercentage,
+          bestRevenueMonth,
+          bestRevenueValue,
+          peakExpenseMonth,
+          peakExpenseValue
+        });
+        aiWeeklyChecklist = fallback.checklist;
+        aiProjections = fallback.projections;
+        aiIntelligence = fallback.intelligence;
+      }
     }
 
     const mdChecklistPoints = aiWeeklyChecklist

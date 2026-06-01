@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import type { Alert } from '@/types';
 import {
@@ -12,21 +12,35 @@ import { ExceptionsFeed } from './auditor/ExceptionsFeed';
 import { AnomalyInspector } from './auditor/AnomalyInspector';
 import { AuthorizeModal } from './auditor/AuthorizeModal';
 
+import type { SystemSettings } from '@/services/api';
+
 interface AuditorSectionProps {
   alerts: Alert[];
   totalTransactions: number;
+  settings: SystemSettings | null;
+  onUpdateSettings: (settings: Partial<SystemSettings>) => Promise<void>;
 }
 
 export const AuditorSection: React.FC<AuditorSectionProps> = ({
   alerts,
   totalTransactions,
+  settings,
+  onUpdateSettings,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<string[]>([]);
   
   // Left sidebar tab: 'feed' | 'policies'
   const [activeLeftTab, setActiveLeftTab] = useState<'feed' | 'policies'>('feed');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Currently selected alert in Sentry split-pane view
   const [selectedAlertIndex, setSelectedAlertIndex] = useState<number | null>(0);
@@ -66,8 +80,8 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
       result = result.filter(a => a.severity === severityFilter);
     }
 
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
+    if (debouncedSearchTerm.trim()) {
+      const q = debouncedSearchTerm.toLowerCase();
       result = result.filter(a => 
         a.ruleName.toLowerCase().includes(q) || 
         a.message.toLowerCase().includes(q)
@@ -75,7 +89,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
     }
 
     return result;
-  }, [alerts, severityFilter, searchTerm]);
+  }, [alerts, severityFilter, debouncedSearchTerm]);
 
   // Performance slice to avoid lagging DOM for 19k alerts
   const displayAlerts = useMemo(() => {
@@ -179,7 +193,7 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
       />
 
       {/* Datadog / Sentry Split-pane Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 mt-1 items-start lg:h-[calc(100dvh-13rem)]">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 mt-1 items-stretch lg:h-[calc(100dvh-13rem)]">
         {/* Left Column Pane Exceptions Feed */}
         <ExceptionsFeed
           activeLeftTab={activeLeftTab}
@@ -195,6 +209,8 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
           acknowledgedAlerts={acknowledgedAlerts}
           severityCounts={severityCounts}
           getSeverityMeta={getSeverityMeta}
+          settings={settings}
+          onUpdateSettings={onUpdateSettings}
         />
 
         {/* Right Column Pane Inspector */}

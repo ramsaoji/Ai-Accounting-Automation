@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { MonthlySummary } from '@/types';
 import {
   Table,
@@ -14,14 +14,31 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 interface MonthlySalesLedgerTableProps {
   paginatedMonths: MonthlySummary[];
   bestProfitValue: number;
+  onRowClick?: (sheetName: string) => void;
+  salesSortBy: string;
+  salesSortOrder: 'asc' | 'desc';
+  onSalesSort: (column: string) => void;
 }
 
 export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = ({
   paginatedMonths,
   bestProfitValue,
+  onRowClick,
+  salesSortBy,
+  salesSortOrder,
+  onSalesSort,
 }) => {
   const formatINR = (val: number) => {
     return '₹' + Math.round(val).toLocaleString('en-IN');
+  };
+
+  const renderSortIcon = (column: string) => {
+    if (salesSortBy !== column) {
+      return <ArrowUpDown className="ml-1 size-3 opacity-50 inline-block align-middle" />;
+    }
+    return salesSortOrder === 'asc' 
+      ? <ArrowUp className="ml-1 size-3 text-foreground inline-block align-middle" /> 
+      : <ArrowDown className="ml-1 size-3 text-foreground inline-block align-middle" />;
   };
 
   return (
@@ -29,7 +46,10 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
       <TableHeader className="bg-muted/15 select-none">
         <TooltipProvider>
           <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
-            <TableHead className="pl-6 h-10">
+            <TableHead 
+              className="pl-6 h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('sheetName')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Register Sheet</span>
@@ -38,8 +58,12 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   The name of the monthly spreadsheet tab parsed.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('sheetName')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('liquor')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Liquor Sales</span>
@@ -48,8 +72,12 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   Consolidated monthly inflows generated from alcohol/liquor purchases.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('liquor')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('food')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Food Sales</span>
@@ -58,8 +86,12 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   Consolidated monthly inflows generated from restaurant food menu sales.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('food')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('expenses')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted text-destructive">Operational Expenses</span>
@@ -68,8 +100,12 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   Total outflows, supplier bills, and operating costs logged during this month.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('expenses')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('creditExtended')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted text-warning">Credit Extended</span>
@@ -78,8 +114,12 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   Total volume of purchases made on credit during this month.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('creditExtended')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('creditRecovery')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted text-success">Credit Recovery</span>
@@ -88,8 +128,12 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   Consolidated monthly credit recovered (jama) from outstanding customer accounts.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('creditRecovery')}
             </TableHead>
-            <TableHead className="text-right h-10">
+            <TableHead 
+              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('net')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted">Net Cashflow</span>
@@ -98,6 +142,7 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   Net cash balance remaining after subtracting operational expenses from total inflows.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('net')}
             </TableHead>
             <TableHead className="text-center h-10">
               <Tooltip>
@@ -109,7 +154,10 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                 </TooltipContent>
               </Tooltip>
             </TableHead>
-            <TableHead className="text-center pr-6 h-10">
+            <TableHead 
+              className="text-center pr-6 h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              onClick={() => onSalesSort('status')}
+            >
               <Tooltip>
                 <TooltipTrigger render={
                   <span className="cursor-help underline underline-offset-2 decoration-dotted justify-center inline-flex">Operating Verdict</span>
@@ -118,6 +166,7 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                   The validation status of this month's sheet, checking for discrepancies or anomalies.
                 </TooltipContent>
               </Tooltip>
+              {renderSortIcon('status')}
             </TableHead>
           </TableRow>
         </TooltipProvider>
@@ -131,7 +180,11 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
             : 'bg-destructive/10 text-destructive border-destructive/20';
 
           return (
-            <TableRow key={month.sheetName} className="hover:bg-muted/30 transition-colors h-11 border-b">
+            <TableRow 
+              key={month.sheetName} 
+              onClick={() => onRowClick?.(month.sheetName)}
+              className="hover:bg-muted/30 transition-colors h-11 border-b cursor-pointer select-none"
+            >
               <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-2">
                 <FolderOpen className="size-4 text-muted-foreground shrink-0" />
                 {month.sheetName}

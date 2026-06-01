@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { Info, AlertTriangle, CheckCircle2, AlertOctagon } from 'lucide-react';
 
 interface MessageTextProps {
   text: string;
@@ -33,7 +34,7 @@ function parseInlineStyles(text: string): React.ReactNode[] {
 }
 
 export interface MarkdownBlock {
-  type: 'paragraph' | 'heading1' | 'heading2' | 'heading3' | 'list-unordered' | 'list-ordered' | 'code-block' | 'table' | 'spacer';
+  type: 'paragraph' | 'heading1' | 'heading2' | 'heading3' | 'list-unordered' | 'list-ordered' | 'code-block' | 'table' | 'spacer' | 'quote';
   lines: string[];
   lang?: string;
 }
@@ -153,7 +154,24 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
       continue;
     }
     
-    // 7. Paragraph
+    // 7. Blockquote / Callout
+    if (trimmed.startsWith('>')) {
+      if (currentBlock && currentBlock.type !== 'quote') {
+        blocks.push(currentBlock);
+        currentBlock = null;
+      }
+      if (!currentBlock) {
+        currentBlock = { type: 'quote', lines: [] };
+      }
+      const quoteLine = line.slice(line.indexOf('>') + 1).startsWith(' ') 
+        ? line.slice(line.indexOf('>') + 2) 
+        : line.slice(line.indexOf('>') + 1);
+      currentBlock.lines.push(quoteLine);
+      i++;
+      continue;
+    }
+
+    // 8. Paragraph
     if (currentBlock && currentBlock.type !== 'paragraph') {
       blocks.push(currentBlock);
       currentBlock = null;
@@ -245,6 +263,57 @@ export const SafeMarkdown: React.FC<{ text: string }> = ({ text }) => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            );
+          }
+          case 'quote': {
+            const firstLine = block.lines[0]?.trim() || '';
+            const isNote = firstLine.startsWith('[!NOTE]');
+            const isWarning = firstLine.startsWith('[!WARNING]');
+            const isTip = firstLine.startsWith('[!TIP]');
+            const isImportant = firstLine.startsWith('[!IMPORTANT]');
+            const isCaution = firstLine.startsWith('[!CAUTION]');
+            const isCallout = isNote || isWarning || isTip || isImportant || isCaution;
+
+            let title = 'Note';
+            let bgStyles = 'bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-300';
+            let icon = <Info className="size-4 text-blue-500 mr-2 shrink-0" />;
+
+            if (isWarning) {
+              title = 'Warning';
+              bgStyles = 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300';
+              icon = <AlertTriangle className="size-4 text-amber-500 mr-2 shrink-0" />;
+            } else if (isTip) {
+              title = 'Tip';
+              bgStyles = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300';
+              icon = <CheckCircle2 className="size-4 text-emerald-500 mr-2 shrink-0" />;
+            } else if (isImportant) {
+              title = 'Important';
+              bgStyles = 'bg-violet-500/10 border-violet-500/30 text-violet-800 dark:text-violet-300';
+              icon = <Info className="size-4 text-violet-500 mr-2 shrink-0" />;
+            } else if (isCaution) {
+              title = 'Caution';
+              bgStyles = 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300';
+              icon = <AlertOctagon className="size-4 text-rose-500 mr-2 shrink-0" />;
+            }
+
+            const linesToRender = isCallout ? block.lines.slice(1) : block.lines;
+
+            return (
+              <div key={bIdx} className={`p-4 border-l-4 rounded-r-lg my-3 flex flex-col gap-1.5 ${
+                isCallout ? bgStyles : 'bg-muted/30 border-muted-foreground/30 text-muted-foreground'
+              }`}>
+                {isCallout && (
+                  <div className="flex items-center text-xs font-bold uppercase tracking-wider mb-0.5 select-none">
+                    {icon}
+                    {title}
+                  </div>
+                )}
+                <div className="text-[0.72rem] sm:text-xs leading-relaxed space-y-1">
+                  {linesToRender.map((l, lIdx) => (
+                    <p key={lIdx}>{parseInlineStyles(l)}</p>
+                  ))}
+                </div>
               </div>
             );
           }

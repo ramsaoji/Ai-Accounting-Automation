@@ -1,4 +1,4 @@
-import type { MasterSummary } from '../types';
+import type { MasterSummary, Transaction } from '../types';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -366,10 +366,18 @@ export interface SystemSettings {
   aiProvider: string;
   aiModel: string;
   availableProviders?: string[];
+  ruleHighExpenseCeiling: number;
+  ruleSuspiciousSpikeMultiplier: number;
+  ruleOutstandingCreditCap: number;
 }
 
-export async function fetchSystemSettings(): Promise<SystemSettings> {
-  const res = await authFetch(`${apiBaseUrl}/api/v1/system/settings`, {
+export async function fetchSystemSettings(fileType?: string, fileName?: string): Promise<SystemSettings> {
+  const params = new URLSearchParams();
+  if (fileType) params.append('fileType', fileType);
+  if (fileName) params.append('fileName', fileName);
+  
+  const queryStr = params.toString() ? `?${params.toString()}` : '';
+  const res = await authFetch(`${apiBaseUrl}/api/v1/system/settings${queryStr}`, {
     headers: getAuthHeaders(),
     cache: 'no-store'
   });
@@ -379,8 +387,17 @@ export async function fetchSystemSettings(): Promise<SystemSettings> {
   return res.json();
 }
 
-export async function updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
-  const res = await authFetch(`${apiBaseUrl}/api/v1/system/settings`, {
+export async function updateSystemSettings(
+  settings: Partial<SystemSettings>,
+  fileType?: string,
+  fileName?: string
+): Promise<SystemSettings> {
+  const params = new URLSearchParams();
+  if (fileType) params.append('fileType', fileType);
+  if (fileName) params.append('fileName', fileName);
+  
+  const queryStr = params.toString() ? `?${params.toString()}` : '';
+  const res = await authFetch(`${apiBaseUrl}/api/v1/system/settings${queryStr}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -393,3 +410,52 @@ export async function updateSystemSettings(settings: Partial<SystemSettings>): P
   }
   return res.json();
 }
+
+export interface FetchTransactionsParams {
+  fileType: 'sales' | 'debitors';
+  page?: number;
+  limit?: number;
+  search?: string;
+  category?: string;
+  vendor?: string;
+  month?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  type?: 'credit' | 'debit';
+}
+
+export interface PaginatedTransactions {
+  transactions: Transaction[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export async function fetchTransactions(params: FetchTransactionsParams): Promise<PaginatedTransactions> {
+  const urlParams = new URLSearchParams();
+  urlParams.append('fileType', params.fileType);
+  if (params.page !== undefined) urlParams.append('page', String(params.page));
+  if (params.limit !== undefined) urlParams.append('limit', String(params.limit));
+  if (params.search !== undefined) urlParams.append('search', params.search);
+  if (params.category !== undefined) urlParams.append('category', params.category);
+  if (params.vendor !== undefined) urlParams.append('vendor', params.vendor);
+  if (params.month !== undefined) urlParams.append('month', params.month);
+  if (params.sortBy !== undefined) urlParams.append('sortBy', params.sortBy);
+  if (params.sortOrder !== undefined) urlParams.append('sortOrder', params.sortOrder);
+  if (params.type !== undefined) urlParams.append('type', params.type);
+
+  const res = await authFetch(`${apiBaseUrl}/api/v1/transactions?${urlParams.toString()}`, {
+    headers: getAuthHeaders(),
+    cache: 'no-store'
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch transactions');
+  }
+
+  return res.json();
+}
+

@@ -332,7 +332,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0 gap-4 mt-2 overflow-hidden">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0 gap-4 mt-2 overflow-visible">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <TooltipProvider>
               <TabsList className="w-full flex h-12 sm:h-11 p-1 bg-muted rounded-xl">

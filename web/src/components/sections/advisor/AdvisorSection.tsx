@@ -207,6 +207,25 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
     }
   }, [isDebitors, activePlaybook]);
 
+  const activePlaybookInfo = useMemo(() => {
+    const playbook = playbooks.find((p) => p.id === activePlaybook);
+    if (!playbook) return { name: '', desc: '' };
+
+    let detailedDesc = playbook.desc;
+    if (activePlaybook === 'revenue') {
+      detailedDesc = "Instructs the AI to analyze category sales splits, identify high-margin periods, trace monthly net surplus patterns, and forecast sales optimizations.";
+    } else if (activePlaybook === 'recovery') {
+      detailedDesc = "Instructs the AI to analyze customer outstanding balances, credit terms, collection success rates, collection timelines, and accounts receivable exposure risk.";
+    } else if (activePlaybook === 'auditing') {
+      detailedDesc = "Instructs the AI to verify transaction timing anomalies (late night logs), audit supplier invoice spikes, flag out-of-bounds metrics, and check compliance thresholds.";
+    }
+
+    return {
+      name: playbook.name,
+      desc: detailedDesc,
+    };
+  }, [activePlaybook]);
+
   const handleSend = async (textToSend: string) => {
     if (!textToSend.trim() || !webChatEnabled) return;
 
@@ -254,31 +273,32 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
   };
 
   return (
-    <div className="flex flex-col gap-3 w-full animate-in fade-in duration-300">
+    <div className="flex flex-col gap-2.5 w-full flex-1 min-h-0 h-full animate-in fade-in duration-300">
       {/* Title */}
-      <div className="border-b pb-2.5 md:pb-4">
-        <h1 className="font-heading font-semibold text-lg sm:text-xl tracking-tight text-foreground">
+      <div className="border-b pb-1.5 md:pb-2 shrink-0">
+        <h1 className="font-heading font-semibold text-sm sm:text-base tracking-tight text-foreground">
           AI Strategic Advisor
         </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <p className="text-[10px] text-muted-foreground mt-0.5 hidden sm:block">
           Ask questions, compare margins, or generate objectives using context-aware ledger modeling.
         </p>
       </div>
 
       {/* Production-grade Split Chat Layout */}
-      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-3 md:gap-4">
+      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-2.5 md:gap-3 flex-1 min-h-0 h-full">
         
         {/* Playbooks Sidebar */}
         <PlaybookSidebar
           playbooks={playbooks}
           activePlaybook={activePlaybook}
           setActivePlaybook={setActivePlaybook}
+          disabled={!webChatEnabled || activeAiProvider === 'none' || activeAiModel === 'none' || !activeAiModel.trim() || isLoadingSettings}
         />
 
         {/* Chat Feed Pane (3/4 size) */}
-        <Card className="lg:col-span-3 border bg-card/45 h-[650px] sm:h-[720px] flex flex-col overflow-hidden min-w-0">
+        <Card className="lg:col-span-3 border bg-card/45 flex flex-col overflow-hidden min-h-0 h-full">
           {/* Chat card header — compact on mobile */}
-          <CardHeader className="px-3 py-2 sm:px-6 sm:py-4 border-b bg-muted/20 flex flex-row items-center justify-between select-none gap-2">
+          <CardHeader className="px-3 py-2 sm:px-5 sm:py-2.5 border-b bg-muted/20 flex flex-row items-center justify-between select-none gap-2 shrink-0">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border shrink-0">
                 <Bot className="size-4" />
@@ -325,6 +345,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
             isTyping={isTyping}
             scrollContainerRef={scrollContainerRef}
             messagesEndRef={messagesEndRef}
+            activePlaybook={activePlaybook}
           />
  
           {/* Form / Actions */}
@@ -338,6 +359,9 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
             disabled={!webChatEnabled || activeAiProvider === 'none' || activeAiModel === 'none' || !activeAiModel.trim() || isLoadingSettings}
             aiProvider={activeAiProvider}
             aiModel={activeAiModel}
+            activePlaybookName={activePlaybookInfo.name}
+            activePlaybookDesc={activePlaybookInfo.desc}
+            activePlaybook={activePlaybook}
           />
         </Card>
 

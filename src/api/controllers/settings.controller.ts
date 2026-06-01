@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { getSystemSetting, setSystemSetting } from '../../db/db.client.js';
+import { getSystemSetting, setSystemSetting, getAuditPolicySetting, setAuditPolicySetting } from '../../db/db.client.js';
 import { config } from '../../config/config.js';
 import { z } from 'zod';
 
@@ -8,6 +8,9 @@ export const updateSettingsSchema = z.object({
   telegramChatEnabled: z.boolean().optional(),
   aiProvider: z.string().optional(),
   aiModel: z.string().optional(),
+  ruleHighExpenseCeiling: z.number().optional(),
+  ruleSuspiciousSpikeMultiplier: z.number().optional(),
+  ruleOutstandingCreditCap: z.number().optional(),
 });
 
 function getAvailableProviders(): string[] {
@@ -44,12 +47,25 @@ function getAvailableProviders(): string[] {
   return available;
 }
 
-export async function getSettings(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
+interface SettingsQuery {
+  fileType?: string;
+  fileName?: string;
+}
+
+export async function getSettings(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
+    const query = request.query as SettingsQuery;
+    const fileType = query.fileType || 'sales';
+    const fileName = query.fileName || undefined;
+
     const webEnabledStr = await getSystemSetting('web_chat_enabled', 'true');
     const telegramEnabledStr = await getSystemSetting('telegram_chat_enabled', 'true');
     const aiProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
     const aiModel = await getSystemSetting('ai_model', config.AI_MODEL);
+
+    const ruleHighExpenseCeilingStr = await getAuditPolicySetting(fileType, fileName, 'ruleHighExpenseCeiling', '50000');
+    const ruleSuspiciousSpikeMultiplierStr = await getAuditPolicySetting(fileType, fileName, 'ruleSuspiciousSpikeMultiplier', '3');
+    const ruleOutstandingCreditCapStr = await getAuditPolicySetting(fileType, fileName, 'ruleOutstandingCreditCap', '100000');
 
     reply.code(200).send({
       webChatEnabled: webEnabledStr === 'true',
@@ -57,6 +73,9 @@ export async function getSettings(_request: FastifyRequest, reply: FastifyReply)
       aiProvider,
       aiModel,
       availableProviders: getAvailableProviders(),
+      ruleHighExpenseCeiling: Number(ruleHighExpenseCeilingStr) || 50000,
+      ruleSuspiciousSpikeMultiplier: Number(ruleSuspiciousSpikeMultiplierStr) || 3,
+      ruleOutstandingCreditCap: Number(ruleOutstandingCreditCapStr) || 100000,
     });
   } catch (error: any) {
     reply.code(500).send({ error: 'Failed to retrieve system settings' });
@@ -64,17 +83,47 @@ export async function getSettings(_request: FastifyRequest, reply: FastifyReply)
 }
 
 export async function updateSettings(
-  request: FastifyRequest<{ Body: { webChatEnabled?: boolean; telegramChatEnabled?: boolean; aiProvider?: string; aiModel?: string } }>,
+  request: FastifyRequest<{ Body: { 
+    webChatEnabled?: boolean; 
+    telegramChatEnabled?: boolean; 
+    aiProvider?: string; 
+    aiModel?: string;
+    ruleHighExpenseCeiling?: number;
+    ruleSuspiciousSpikeMultiplier?: number;
+    ruleOutstandingCreditCap?: number;
+  } }>,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const { webChatEnabled, telegramChatEnabled, aiProvider, aiModel } = request.body;
+    const { 
+      webChatEnabled, 
+      telegramChatEnabled, 
+      aiProvider, 
+      aiModel,
+      ruleHighExpenseCeiling,
+      ruleSuspiciousSpikeMultiplier,
+      ruleOutstandingCreditCap
+    } = request.body;
+
+    const query = request.query as SettingsQuery;
+    const fileType = query.fileType || 'sales';
+    const fileName = query.fileName || undefined;
     
     if (aiProvider !== undefined) {
       await setSystemSetting('ai_provider', aiProvider);
     }
     if (aiModel !== undefined) {
       await setSystemSetting('ai_model', aiModel);
+    }
+
+    if (ruleHighExpenseCeiling !== undefined) {
+      await setAuditPolicySetting(fileType, fileName, 'RULE_002', 'ruleHighExpenseCeiling', String(ruleHighExpenseCeiling));
+    }
+    if (ruleSuspiciousSpikeMultiplier !== undefined) {
+      await setAuditPolicySetting(fileType, fileName, 'RULE_003', 'ruleSuspiciousSpikeMultiplier', String(ruleSuspiciousSpikeMultiplier));
+    }
+    if (ruleOutstandingCreditCap !== undefined) {
+      await setAuditPolicySetting(fileType, fileName, 'RULE_008', 'ruleOutstandingCreditCap', String(ruleOutstandingCreditCap));
     }
 
     const activeProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
@@ -104,6 +153,9 @@ export async function updateSettings(
 
     const webEnabledStr = await getSystemSetting('web_chat_enabled', 'true');
     const telegramEnabledStr = await getSystemSetting('telegram_chat_enabled', 'true');
+    const ruleHighExpenseCeilingStr = await getAuditPolicySetting(fileType, fileName, 'ruleHighExpenseCeiling', '50000');
+    const ruleSuspiciousSpikeMultiplierStr = await getAuditPolicySetting(fileType, fileName, 'ruleSuspiciousSpikeMultiplier', '3');
+    const ruleOutstandingCreditCapStr = await getAuditPolicySetting(fileType, fileName, 'ruleOutstandingCreditCap', '100000');
 
     reply.code(200).send({
       success: true,
@@ -112,6 +164,9 @@ export async function updateSettings(
       aiProvider: activeProvider,
       aiModel: activeModel,
       availableProviders: getAvailableProviders(),
+      ruleHighExpenseCeiling: Number(ruleHighExpenseCeilingStr) || 50000,
+      ruleSuspiciousSpikeMultiplier: Number(ruleSuspiciousSpikeMultiplierStr) || 3,
+      ruleOutstandingCreditCap: Number(ruleOutstandingCreditCapStr) || 100000,
     });
   } catch (error: any) {
     reply.code(500).send({ error: 'Failed to update system settings' });

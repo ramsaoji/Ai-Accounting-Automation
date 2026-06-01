@@ -2,6 +2,8 @@ import fastify from 'fastify';
 import FastifyCors from '@fastify/cors';
 import FastifyMultipart from '@fastify/multipart';
 import FastifyCookie from '@fastify/cookie';
+import FastifyRateLimit from '@fastify/rate-limit';
+import FastifyJwt from '@fastify/jwt';
 import { config } from '../config/config.js';
 import { getHealth, getSystemConfig } from './controllers/health.controller.js';
 import {
@@ -14,7 +16,7 @@ import {
   checkSessionStatus,
   logoutUser
 } from './controllers/security.controller.js';
-import { getSalesReport, getDebitorsReport, triggerPipeline, handleFileUpload, getSyncStatus } from './controllers/report.controller.js';
+import { getSalesReport, getDebitorsReport, triggerPipeline, handleFileUpload, getSyncStatus, getTransactionsList } from './controllers/report.controller.js';
 import { handleAdvisorChat, chatSchema } from './controllers/chat.controller.js';
 import { getSettings, updateSettings, updateSettingsSchema } from './controllers/settings.controller.js';
 import { checkFastifyAuth } from './fastify.auth.js';
@@ -35,6 +37,18 @@ export function createFastifyApp() {
     limits: {
       fileSize: 10485760, // 10MB limit
     },
+  });
+
+  // Register JWT support
+  app.register(FastifyJwt, {
+    secret: config.JWT_SECRET,
+  });
+
+  // Register global rate limiter with permissive default limits
+  app.register(FastifyRateLimit, {
+    global: true,
+    max: 1000,
+    timeWindow: '1 minute',
   });
 
   // Global hook to disable caching on all API responses
@@ -70,7 +84,15 @@ export function createFastifyApp() {
 
   // Public health-check route
   app.get('/health', getHealth);
-  app.post('/api/v1/security/verify-app', { preHandler: validateBody(verifyAppSchema) }, verifyAppPassword);
+  app.post('/api/v1/security/verify-app', {
+    preHandler: validateBody(verifyAppSchema),
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: '1 minute'
+      }
+    }
+  }, verifyAppPassword);
 
   // Cookie-session helper routes
   app.get('/api/v1/security/status', checkSessionStatus);
@@ -82,10 +104,19 @@ export function createFastifyApp() {
 
     v1Routes.get('/api/v1/data/sales', getSalesReport);
     v1Routes.get('/api/v1/data/debitors', getDebitorsReport);
+    v1Routes.get('/api/v1/transactions', getTransactionsList);
     v1Routes.post('/api/v1/trigger-pipeline', triggerPipeline);
     v1Routes.get('/api/v1/sync-status', getSyncStatus);
     v1Routes.post('/api/v1/chat', { preHandler: validateBody(chatSchema) }, handleAdvisorChat);
-    v1Routes.post('/api/v1/security/verify-upload', { preHandler: validateBody(verifyUploadSchema) }, verifyUploadPasscode);
+    v1Routes.post('/api/v1/security/verify-upload', {
+      preHandler: validateBody(verifyUploadSchema),
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute'
+        }
+      }
+    }, verifyUploadPasscode);
     v1Routes.post('/api/v1/ledger/upload', handleFileUpload);
     v1Routes.post('/api/v1/security/change', { preHandler: validateBody(changePasswordsSchema) }, changePasswords);
     v1Routes.get('/api/v1/system/settings', getSettings);

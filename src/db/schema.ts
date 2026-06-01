@@ -14,6 +14,7 @@ export const files = pgTable('files', {
   isLatest: boolean('is_latest').default(true).notNull(),
   status: varchar('status', { length: 30 }).default('processing').notNull(), // 'processing' | 'success' | 'failed'
   errorMessage: text('error_message'),
+  contentHash: varchar('content_hash', { length: 64 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -114,6 +115,20 @@ export const systemSettings = pgTable('system_settings', {
   value: text('value').notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+// 10. Audit Policies (Workspace/File-specific rules thresholds)
+export const auditPolicies = pgTable('audit_policies', {
+  id: serial('id').primaryKey(),
+  fileType: varchar('file_type', { length: 50 }).notNull(), // 'sales' | 'debitors' | 'stock'
+  fileName: varchar('file_name', { length: 255 }), // Nullable override
+  ruleId: varchar('rule_id', { length: 50 }).notNull(), // 'RULE_002', 'RULE_008'
+  parameterKey: varchar('parameter_key', { length: 100 }).notNull(), // 'ruleHighExpenseCeiling', etc.
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('audit_policies_file_type_idx').on(table.fileType),
+  index('audit_policies_file_name_idx').on(table.fileName),
+]);
 
 // ─── Schema Relations ────────────────────────────────────────────────────────
 export const filesRelations = relations(files, ({ many }) => ({

@@ -13,7 +13,7 @@ import { useDriveSync } from '@/hooks/useDriveSync';
 import { useManualUpload } from '@/hooks/useManualUpload';
 import { IngestionProgressModal } from '@/components/shared/IngestionProgressModal';
 import { LockScreen } from '@/components/security/LockScreen';
-import { checkSessionStatus, logoutUser } from '@/services/api';
+import { checkSessionStatus, logoutUser, fetchSystemSettings, updateSystemSettings, type SystemSettings } from '@/services/api';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { OnboardingWizard } from '@/components/shared/OnboardingWizard';
 import { DriveSyncProgressCard } from '@/components/shared/DriveSyncProgressCard';
@@ -34,11 +34,6 @@ const SecuritySettingsModal = lazy(() => import('@/components/security/SecurityS
 export function App() {
   const { theme, setTheme } = useTheme();
 
-  // Dynamically update document title from environment variable
-  useEffect(() => {
-    document.title = `${deriveBusinessName()} | Financial Command Center`;
-  }, []);
-
   // Zustand Store selectors
   const appSessionToken = useAccountingStore((state) => state.appSessionToken);
   const activeWorkspace = useAccountingStore((state) => state.activeWorkspace);
@@ -47,6 +42,13 @@ export function App() {
   const clearToken = useAccountingStore((state) => state.clearToken);
   const setActiveWorkspace = useAccountingStore((state) => state.setActiveWorkspace);
   const setActiveView = useAccountingStore((state) => state.setActiveView);
+
+  // Dynamically update document title from environment variable
+  useEffect(() => {
+    document.title = `${deriveBusinessName()} | Financial Command Center`;
+  }, []);
+
+
 
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
@@ -122,12 +124,43 @@ export function App() {
     }
   }, [appSessionToken, fetchRealData]);
 
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+
+  const fetchSettings = async () => {
+    try {
+      const fileType = activeWorkspace;
+      const fileName = activeWorkspace === 'sales' ? salesData?.fileName : debitorsData?.fileName;
+      const data = await fetchSystemSettings(fileType, fileName);
+      setSettings(data);
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (appSessionToken) {
+      fetchSettings();
+    }
+  }, [appSessionToken, activeWorkspace, salesData?.fileName, debitorsData?.fileName]);
+
+  const handleUpdateSettings = async (newSettings: Partial<SystemSettings>) => {
+    try {
+      const fileType = activeWorkspace;
+      const fileName = activeWorkspace === 'sales' ? salesData?.fileName : debitorsData?.fileName;
+      const updated = await updateSystemSettings(newSettings, fileType, fileName);
+      setSettings(updated);
+      toast.success("System configurations updated successfully.");
+      fetchRealData(true);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save settings.");
+    }
+  };
+
   const businessName = useMemo(() => {
     return deriveBusinessName(salesData?.fileName ?? debitorsData?.fileName);
   }, [salesData?.fileName, debitorsData?.fileName]);
 
-  // Dynamic Rule Threshold Constants aligned with backend auditing policies
-  const maxOutstandingDuesLimit = 15000;
+
 
   // activeSummary points to the currently active dataset
   const activeSummary = activeWorkspace === 'sales' ? salesData : debitorsData;
@@ -226,8 +259,11 @@ export function App() {
             />
 
             {/* Main Content Area — sections with fixed-height panels manage scroll internally */}
-            <main ref={mainRef} className="flex-1 overflow-y-auto bg-background">
-              <div className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8 flex flex-col">
+            <main 
+              ref={mainRef} 
+              className={`flex-1 bg-background ${activeView === 'advisor' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}
+            >
+              <div className={`max-w-6xl mx-auto w-full flex flex-col ${activeView === 'advisor' ? 'p-2.5 sm:p-4 flex-1 min-h-0 h-full' : 'p-4 sm:p-6 md:p-8'}`}>
                 <Suspense fallback={
                   <div className="flex h-[calc(100svh-4rem)] w-full flex-col items-center justify-center gap-4 select-none">
                     <Loader2 className="size-9 text-primary animate-spin" />
@@ -259,13 +295,15 @@ export function App() {
                         <LedgerSection
                           summary={activeSummary}
                           activeTab={activeWorkspace}
-                          maxOutstandingDuesLimit={maxOutstandingDuesLimit}
+                          maxOutstandingDuesLimit={settings?.ruleOutstandingCreditCap ?? 15000}
                         />
                       )}
                       {activeView === 'auditor' && (
                         <AuditorSection
                           alerts={activeAlerts}
                           totalTransactions={activeSummary.totalTransactions || 0}
+                          settings={settings}
+                          onUpdateSettings={handleUpdateSettings}
                         />
                       )}
                       {activeView === 'advisor' && (

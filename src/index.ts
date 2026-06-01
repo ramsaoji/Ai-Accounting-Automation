@@ -2,7 +2,7 @@ import { schedulerJob } from './scheduler/scheduler.job.js';
 import { config } from './config/config.js';
 import { logger } from './logger/logger.js';
 import { telegramBot } from './telegram/telegram.bot.js';
-import { initDb, initSecurityConfig, initSystemSettings } from './db/db.client.js';
+import { initDb, initSecurityConfig, initSystemSettings, closeDb } from './db/db.client.js';
 import { createFastifyApp } from './api/fastify.app.js';
 import { AiProviderFactory } from './ai/ai.factory.js';
 import type { FastifyInstance } from 'fastify';
@@ -89,6 +89,13 @@ const shutdown = async (signal: string) => {
     telegramBot.stop();
   } catch (err) {
     logger.error({ err }, 'Error stopping Telegram Bot during shutdown');
+  }
+
+  // Close database pool connection
+  try {
+    await closeDb();
+  } catch (err) {
+    logger.error({ err }, 'Error closing database pool during shutdown');
   }
 
   // Close Fastify server

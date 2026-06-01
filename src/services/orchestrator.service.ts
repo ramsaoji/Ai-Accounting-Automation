@@ -10,10 +10,11 @@ import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 import { db } from '../db/db.client.js';
 import * as schema from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import type { Transaction } from '../types/accounting.types.js';
 import { resolveTargetFile } from '../utils/file.js';
 import { buildDailySalesArray } from '../utils/accounting.js';
+import { calculateTransactionsHash } from '../ai/ai.service.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -255,6 +256,16 @@ export class OrchestratorService {
     }
     this.isRunning = true;
 
+    let hasLock = false;
+    const lockResult = await db.execute(sql`SELECT pg_try_advisory_lock(468792)`);
+    hasLock = !!lockResult.rows[0]?.pg_try_advisory_lock;
+    if (!hasLock) {
+      logger.warn('Could not acquire Postgres advisory lock (468792). Another sync/ingestion process is currently running.');
+      this.isRunning = false;
+      return 0;
+    }
+    logger.info('Postgres advisory lock (468792) acquired successfully.');
+
     const startTime = Date.now();
     logger.info('Initiating AI Accounting Automation Pipeline...');
 
@@ -371,7 +382,10 @@ export class OrchestratorService {
           );
 
           // 2. Rules Engine: Run modular business validations
-          const alerts = await rulesEngine.evaluate(allTransactions);
+          const alerts = await rulesEngine.evaluate(allTransactions, {
+            fileType: parseResult.isDebitorsList ? 'debitors' : 'sales',
+            fileName
+          });
 
           const debitorsLimit = options?.debitorsLimit ?? 10;
 
@@ -398,6 +412,7 @@ export class OrchestratorService {
 
           // 4. DB mode: persist relationally to PostgreSQL DB
           try {
+            const contentHash = calculateTransactionsHash(allTransactions, allErrors, alerts);
             await this.saveToRelationalDb(
               fileName,
               parseResult,
@@ -405,7 +420,8 @@ export class OrchestratorService {
               allErrors,
               alerts,
               reports,
-              timestamp
+              timestamp,
+              contentHash
             );
             logger.info({ fileName }, 'Persisted ingestion report to relational PostgreSQL DB.');
           } catch (dbErr: unknown) {
@@ -532,6 +548,14 @@ export class OrchestratorService {
       throw error;
     } finally {
       this.isRunning = false;
+      if (hasLock) {
+        try {
+          await db.execute(sql`SELECT pg_advisory_unlock(468792)`);
+          logger.info('Postgres advisory lock (468792) released successfully.');
+        } catch (unlockErr) {
+          logger.error({ err: unlockErr }, 'Failed to release Postgres advisory lock');
+        }
+      }
     }
   }
 
@@ -580,7 +604,10 @@ export class OrchestratorService {
     );
 
     // 2. Rules Engine
-    const alerts = await rulesEngine.evaluate(allTransactions);
+    const alerts = await rulesEngine.evaluate(allTransactions, {
+      fileType: parseResult.isDebitorsList ? 'debitors' : 'sales',
+      fileName
+    });
 
     // 3. AI Service
     const timestamp = new Date().toISOString();
@@ -601,6 +628,7 @@ export class OrchestratorService {
     // 4. Persist to Neon DB relationally
     // 4. Persist to PostgreSQL DB relationally
     try {
+      const contentHash = calculateTransactionsHash(allTransactions, allErrors, alerts);
       await this.saveToRelationalDb(
         fileName,
         parseResult,
@@ -608,7 +636,8 @@ export class OrchestratorService {
         allErrors,
         alerts,
         reports,
-        timestamp
+        timestamp,
+        contentHash
       );
       logger.info({ fileName }, 'Persisted uploaded report relationally to PostgreSQL DB.');
     } catch (dbErr: unknown) {
@@ -634,7 +663,8 @@ export class OrchestratorService {
     allErrors: any[],
     alerts: any[],
     reports: any,
-    timestamp: string
+    timestamp: string,
+    contentHash?: string
   ): Promise<void> {
     if (!db) return;
     const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
@@ -668,6 +698,7 @@ export class OrchestratorService {
           aiGenerated: !!summaryObj.aiGenerated,
           isLatest: true,
           status: 'success',
+          contentHash: contentHash || null,
         })
         .returning();
 

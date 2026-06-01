@@ -34,63 +34,7 @@ export interface TokenPayload {
   uploadAuthorized?: boolean;
 }
 
-// ─── Lightweight Stateless Token Utilities ───────────────────────────────────
-
-/**
- * Signs a payload as a lightweight stateless token (HMAC-SHA256, JWT-compatible format).
- */
-export function signToken(payload: Record<string, unknown>, durationSeconds: number): string {
-  const exp = Math.floor(Date.now() / 1000) + durationSeconds;
-  const tokenPayload = { ...payload, exp };
-  const header = { alg: 'HS256', typ: 'JWT' };
-
-  const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
-  const payloadB64 = Buffer.from(JSON.stringify(tokenPayload)).toString('base64url');
-
-  const signature = crypto
-    .createHmac('sha256', config.JWT_SECRET)
-    .update(`${headerB64}.${payloadB64}`)
-    .digest('base64url');
-
-  return `${headerB64}.${payloadB64}.${signature}`;
-}
-
-/**
- * Verifies and decodes a token. Returns the payload or null if invalid/expired.
- * Uses timing-safe comparison to prevent timing-based side-channel attacks.
- */
-export function verifyToken(token: string): TokenPayload | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-
-    const [headerB64, payloadB64, signature] = parts;
-    const expectedSignature = crypto
-      .createHmac('sha256', config.JWT_SECRET)
-      .update(`${headerB64}.${payloadB64}`)
-      .digest('base64url');
-
-    // Timing-safe comparison to prevent timing-based side-channel attacks
-    const sigBuf = Buffer.from(signature);
-    const expectedBuf = Buffer.from(expectedSignature);
-    if (
-      sigBuf.length !== expectedBuf.length ||
-      !crypto.timingSafeEqual(sigBuf, expectedBuf)
-    ) {
-      return null;
-    }
-
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as TokenPayload;
-
-    if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
-      return null; // expired token
-    }
-
-    return payload;
-  } catch {
-    return null;
-  }
-}
+// JWT token utilities are now handled natively by Fastify's @fastify/jwt plugin.
 
 // ─── Security Credentials ────────────────────────────────────────────────────
 
@@ -182,7 +126,7 @@ export async function verifyUploadPasscode(
 
     const isMatch = await verifyPasscode(targetUploadPassword, password);
     if (isMatch) {
-      const token = signToken({ uploadAuthorized: true }, 3600); // 1 hour validity
+      const token = request.server.jwt.sign({ uploadAuthorized: true }, { expiresIn: '1h' });
       reply.code(200).send({ status: 'authorized', sessionToken: token });
       return;
     }
@@ -218,7 +162,7 @@ export async function verifyAppPassword(
     const isMatch = await verifyPasscode(targetAppPassword, password);
     if (isMatch) {
       const durationSeconds = remember ? 604800 : 86400; // 7 days or 24 hours
-      const token = signToken({ appLockAuthorized: true }, durationSeconds);
+      const token = request.server.jwt.sign({ appLockAuthorized: true }, { expiresIn: durationSeconds });
       const isProd = config.NODE_ENV === 'production';
 
       reply.setCookie('app_session_token', token, {
@@ -309,8 +253,13 @@ export async function checkSessionStatus(
     return;
   }
 
-  const payload = verifyToken(token);
-  if (!payload || !payload.appLockAuthorized) {
+  try {
+    const payload = request.server.jwt.verify<TokenPayload>(token);
+    if (!payload || !payload.appLockAuthorized) {
+      reply.code(401).send({ error: 'Session cookie is invalid or expired' });
+      return;
+    }
+  } catch (err) {
     reply.code(401).send({ error: 'Session cookie is invalid or expired' });
     return;
   }

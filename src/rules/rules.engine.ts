@@ -1,5 +1,5 @@
 import { Transaction } from '../types/accounting.types.js';
-import { Rule, RuleAlert } from './rules.types.js';
+import { Rule, RuleAlert, RuleContext } from './rules.types.js';
 import { logger } from '../logger/logger.js';
 
 // Import modular rules
@@ -10,6 +10,7 @@ import { OffHoursTransactionRule } from './definitions/off-hours-transaction.rul
 import { NegativeOrZeroTransactionRule } from './definitions/negative-or-zero.rule.js';
 import { DuplicateDateRule } from './definitions/duplicate-date.rule.js';
 import { CrossWorkbookReconciliationRule } from './definitions/cross-workbook.rule.js';
+import { OutstandingCreditCapRule } from './definitions/outstanding-credit-cap.rule.js';
 
 /**
  * Central Rules Engine Orchestrator
@@ -20,12 +21,13 @@ export class RulesEngine {
   constructor() {
     // Register default rules
     this.registerRule(new DuplicateInvoiceRule());
-    this.registerRule(new HighExpenseRule(50000)); // Default threshold of ₹50,000
-    this.registerRule(new SuspiciousSpikeRule());
+    this.registerRule(new HighExpenseRule()); // Queries DB dynamically
+    this.registerRule(new SuspiciousSpikeRule()); // Queries DB dynamically
     this.registerRule(new OffHoursTransactionRule());
     this.registerRule(new NegativeOrZeroTransactionRule());
     this.registerRule(new DuplicateDateRule());
     this.registerRule(new CrossWorkbookReconciliationRule());
+    this.registerRule(new OutstandingCreditCapRule()); // Queries DB dynamically
   }
 
   /**
@@ -39,14 +41,14 @@ export class RulesEngine {
   /**
     * Evaluates all registered rules against a set of transactions.
     */
-  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
-    logger.info({ ruleCount: this.rules.length, transactionCount: transactions.length }, 'Evaluating accounting rules');
+  async evaluate(transactions: Transaction[], context?: RuleContext): Promise<RuleAlert[]> {
+    logger.info({ ruleCount: this.rules.length, transactionCount: transactions.length, context }, 'Evaluating accounting rules');
     
     const allAlerts: RuleAlert[] = [];
 
     for (const rule of this.rules) {
       try {
-        const ruleAlerts = await rule.evaluate(transactions);
+        const ruleAlerts = await rule.evaluate(transactions, context);
         if (ruleAlerts.length > 0) {
           logger.info({ ruleId: rule.id, alertCount: ruleAlerts.length }, 'Rule generated alerts');
           allAlerts.push(...ruleAlerts);

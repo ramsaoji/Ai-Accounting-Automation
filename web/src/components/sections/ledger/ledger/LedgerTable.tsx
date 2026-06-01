@@ -13,6 +13,13 @@ interface LedgerTableProps {
   topDebtorValue: number;
   bestProfitValue: number;
   totalItems: number;
+  onRowClick?: (name: string) => void;
+  salesSortBy: string;
+  salesSortOrder: 'asc' | 'desc';
+  onSalesSort: (column: string) => void;
+  debtorSortBy: string;
+  debtorSortOrder: 'asc' | 'desc';
+  onDebtorSort: (column: string) => void;
 }
 
 export const LedgerTable: React.FC<LedgerTableProps> = ({
@@ -23,7 +30,14 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
   totalPendingSum,
   topDebtorValue,
   bestProfitValue,
-  totalItems
+  totalItems,
+  onRowClick,
+  salesSortBy,
+  salesSortOrder,
+  onSalesSort,
+  debtorSortBy,
+  debtorSortOrder,
+  onDebtorSort,
 }) => {
   if (totalItems === 0) {
     return (
@@ -46,6 +60,10 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
         maxOutstandingDuesLimit={maxOutstandingDuesLimit}
         totalPendingSum={totalPendingSum}
         topDebtorValue={topDebtorValue}
+        onRowClick={onRowClick}
+        debtorSortBy={debtorSortBy}
+        debtorSortOrder={debtorSortOrder}
+        onDebtorSort={onDebtorSort}
       />
     );
   }
@@ -54,6 +72,10 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
     <MonthlySalesLedgerTable
       paginatedMonths={paginatedMonths}
       bestProfitValue={bestProfitValue}
+      onRowClick={onRowClick}
+      salesSortBy={salesSortBy}
+      salesSortOrder={salesSortOrder}
+      onSalesSort={onSalesSort}
     />
   );
 };

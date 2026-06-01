@@ -149,11 +149,37 @@ export class TelegramBot {
       const data = callbackQuery.data;
       const queryId = callbackQuery.id;
 
-      // Acknowledge the callback query so the loading clock stops spinning in Telegram
+      // Acknowledge the callback query and display a toast overlay message so the user knows it's loading
       try {
         const answerUrl = `${this.baseUrl}/answerCallbackQuery`;
+        let toastText = "Fetching report...";
+        if (data.startsWith('month_')) {
+          const monthClean = data.replace('month_', '').replace(/_/g, ' ');
+          toastText = `Loading ${monthClean} report...`;
+        } else if (data.startsWith('year_')) {
+          const yearClean = data.replace('year_', '');
+          toastText = yearClean === '0' ? "Loading other sheets..." : `Loading Year ${yearClean} sheets...`;
+        } else if (data === 'sales_today') {
+          toastText = "Loading today's sales summary...";
+        } else if (data === 'sales_master') {
+          toastText = "Loading master cumulative sales...";
+        } else if (data === 'sales_month_menu') {
+          toastText = "Loading month selector...";
+        } else if (data === 'sales_back') {
+          toastText = "Returning to sales portal...";
+        } else if (data === 'debitors_menu') {
+          toastText = "Loading debitors portal...";
+        } else if (data === 'debitors_summary_metrics') {
+          toastText = "Loading credit & collection metrics...";
+        } else if (data === 'debitors_top_5') {
+          toastText = "Loading top outstanding debits...";
+        } else if (data === 'debitors_high_risk') {
+          toastText = "Loading high risk accounts...";
+        }
+        
         await axios.post(answerUrl, {
-          callback_query_id: queryId
+          callback_query_id: queryId,
+          text: toastText
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

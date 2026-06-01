@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 import * as argon2 from 'argon2';
@@ -37,15 +37,25 @@ let isInitialized = false;
 export async function initDb(): Promise<void> {
   if (isInitialized) return;
 
-  try {
-    logger.info('Executing relational database schema migrations...');
-    const migrationsPath = path.resolve(process.cwd(), 'drizzle');
-    await migrate(db, { migrationsFolder: migrationsPath });
-    isInitialized = true;
-    logger.info('Relational schema migrations applied successfully. Database is fully up-to-date.');
-  } catch (err) {
-    logger.error({ err }, 'Failed to apply Drizzle schema migrations during database initialization');
-    throw err;
+  const maxRetries = 5;
+  let delay = 2000;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info(`Attempt ${attempt} of ${maxRetries}: Executing relational database schema migrations...`);
+      const migrationsPath = path.resolve(process.cwd(), 'drizzle');
+      await migrate(db, { migrationsFolder: migrationsPath });
+      isInitialized = true;
+      logger.info('Relational schema migrations applied successfully. Database is fully up-to-date.');
+      return;
+    } catch (err) {
+      logger.error({ err, attempt }, `Relational database migrations attempt ${attempt} failed.`);
+      if (attempt === maxRetries) {
+        throw err;
+      }
+      logger.info(`Retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
+    }
   }
 }
 
@@ -73,10 +83,43 @@ export async function initSecurityConfig(): Promise<void> {
       });
       logger.info('Database security credentials seeded successfully.');
     } else {
-      logger.info('Security configuration credentials verified successfully in relational DB.');
+      const creds = existing[0];
+      const appPasswordNeedsSync = !(await argon2.verify(creds.appPasswordHash, config.APP_PASSWORD).catch(() => false));
+      const uploadPasswordNeedsSync = !(await argon2.verify(creds.uploadPasswordHash, config.UPLOAD_PASSWORD).catch(() => false));
+
+      if (appPasswordNeedsSync || uploadPasswordNeedsSync) {
+        logger.info('Detected updated fallback passwords in environment. Syncing hashes to DB...');
+        const appHash = appPasswordNeedsSync ? await argon2.hash(config.APP_PASSWORD) : creds.appPasswordHash;
+        const uploadHash = uploadPasswordNeedsSync ? await argon2.hash(config.UPLOAD_PASSWORD) : creds.uploadPasswordHash;
+
+        await db
+          .update(schema.securityConfig)
+          .set({
+            appPasswordHash: appHash,
+            uploadPasswordHash: uploadHash,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.securityConfig.key, 'credentials'));
+        logger.info('Database security credentials config updated successfully.');
+      } else {
+        logger.info('Security configuration credentials verified successfully in relational DB.');
+      }
     }
   } catch (err) {
     logger.error({ err }, 'Failed to initialize or seed relational security configuration');
+  }
+}
+
+/**
+ * Gracefully ends the PostgreSQL database connection pool.
+ */
+export async function closeDb(): Promise<void> {
+  logger.info('Closing PostgreSQL database connection pool...');
+  try {
+    await pool.end();
+    logger.info('PostgreSQL connection pool closed successfully.');
+  } catch (err) {
+    logger.error({ err }, 'Error closing PostgreSQL connection pool');
   }
 }
 
@@ -117,6 +160,109 @@ export async function setSystemSetting(key: string, value: string): Promise<void
     logger.info({ key, value }, 'System configuration setting saved successfully');
   } catch (err) {
     logger.error({ err, key, value }, 'Failed to save system setting to database');
+    throw err;
+  }
+}
+
+/**
+ * Fetches an audit policy setting value.
+ * First checks for a specific file override, then a fileType default, and finally returns defaultValue.
+ */
+export async function getAuditPolicySetting(
+  fileType: string,
+  fileName: string | undefined | null,
+  parameterKey: string,
+  defaultValue: string
+): Promise<string> {
+  try {
+    // 1. If fileName is provided, check for specific override first
+    if (fileName) {
+      const override = await db
+        .select()
+        .from(schema.auditPolicies)
+        .where(
+          and(
+            eq(schema.auditPolicies.fileType, fileType),
+            eq(schema.auditPolicies.fileName, fileName),
+            eq(schema.auditPolicies.parameterKey, parameterKey)
+          )
+        )
+        .limit(1);
+      if (override.length > 0) {
+        return override[0].value;
+      }
+    }
+
+    // 2. Check for fileType default setting (where fileName is null or empty)
+    const typeDefault = await db
+      .select()
+      .from(schema.auditPolicies)
+      .where(
+        and(
+          eq(schema.auditPolicies.fileType, fileType),
+          eq(schema.auditPolicies.parameterKey, parameterKey),
+          isNull(schema.auditPolicies.fileName)
+        )
+      )
+      .limit(1);
+    if (typeDefault.length > 0) {
+      return typeDefault[0].value;
+    }
+
+    return defaultValue;
+  } catch (err) {
+    logger.error({ err, fileType, fileName, parameterKey }, 'Failed to fetch audit policy setting');
+    return defaultValue;
+  }
+}
+
+/**
+ * Saves or updates an audit policy setting value.
+ */
+export async function setAuditPolicySetting(
+  fileType: string,
+  fileName: string | undefined | null,
+  ruleId: string,
+  parameterKey: string,
+  value: string
+): Promise<void> {
+  try {
+    const cleanFileName = fileName || null;
+
+    const existing = await db
+      .select()
+      .from(schema.auditPolicies)
+      .where(
+        and(
+          eq(schema.auditPolicies.fileType, fileType),
+          cleanFileName 
+            ? eq(schema.auditPolicies.fileName, cleanFileName) 
+            : isNull(schema.auditPolicies.fileName),
+          eq(schema.auditPolicies.parameterKey, parameterKey)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(schema.auditPolicies)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(schema.auditPolicies.id, existing[0].id));
+    } else {
+      await db
+        .insert(schema.auditPolicies)
+        .values({
+          fileType,
+          fileName: cleanFileName,
+          ruleId,
+          parameterKey,
+          value,
+          updatedAt: new Date()
+        });
+    }
+    logger.info({ fileType, fileName: cleanFileName, parameterKey, value }, 'Audit policy setting saved successfully');
+  } catch (err) {
+    logger.error({ err, fileType, fileName, parameterKey, value }, 'Failed to save audit policy setting');
     throw err;
   }
 }
@@ -184,6 +330,76 @@ export async function initSystemSettings(): Promise<void> {
       await db
         .delete(schema.systemSettings)
         .where(eq(schema.systemSettings.key, 'ai_chat_enabled'));
+    }
+
+    // 3. Migrate historical audit policy settings from system_settings to audit_policies
+    const policyMigrations = [
+      {
+        oldKey: 'rule_high_expense_ceiling',
+        fileType: 'sales',
+        ruleId: 'RULE_002',
+        parameterKey: 'ruleHighExpenseCeiling',
+        defaultValue: '50000'
+      },
+      {
+        oldKey: 'rule_suspicious_spike_multiplier',
+        fileType: 'sales',
+        ruleId: 'RULE_003',
+        parameterKey: 'ruleSuspiciousSpikeMultiplier',
+        defaultValue: '3'
+      },
+      {
+        oldKey: 'rule_outstanding_credit_cap',
+        fileType: 'debitors',
+        ruleId: 'RULE_008',
+        parameterKey: 'ruleOutstandingCreditCap',
+        defaultValue: '100000'
+      }
+    ];
+
+    for (const pm of policyMigrations) {
+      const oldKeySetting = await db
+        .select()
+        .from(schema.systemSettings)
+        .where(eq(schema.systemSettings.key, pm.oldKey))
+        .limit(1);
+
+      let policyValue = pm.defaultValue;
+      if (oldKeySetting.length > 0) {
+        policyValue = oldKeySetting[0].value;
+        logger.info({ oldKey: pm.oldKey, value: policyValue }, 'Found historical audit setting in system_settings. Migrating to audit_policies...');
+      }
+
+      const existingPolicy = await db
+        .select()
+        .from(schema.auditPolicies)
+        .where(
+          and(
+            eq(schema.auditPolicies.fileType, pm.fileType),
+            isNull(schema.auditPolicies.fileName),
+            eq(schema.auditPolicies.parameterKey, pm.parameterKey)
+          )
+        )
+        .limit(1);
+
+      if (existingPolicy.length === 0) {
+        logger.info({ fileType: pm.fileType, parameterKey: pm.parameterKey, value: policyValue }, 'Seeding default audit policy setting...');
+        await db.insert(schema.auditPolicies).values({
+          fileType: pm.fileType,
+          fileName: null,
+          ruleId: pm.ruleId,
+          parameterKey: pm.parameterKey,
+          value: policyValue,
+          updatedAt: new Date()
+        });
+      }
+
+      if (oldKeySetting.length > 0) {
+        logger.info({ oldKey: pm.oldKey }, 'Deleting migrated audit key from system_settings...');
+        await db
+          .delete(schema.systemSettings)
+          .where(eq(schema.systemSettings.key, pm.oldKey));
+      }
     }
 
     logger.info('Database system settings initialization completed.');

@@ -2,13 +2,28 @@ import fs from 'fs';
 import path from 'path';
 import { db } from '../../db/db.client.js';
 import * as schema from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, ilike, asc, desc, sql, inArray } from 'drizzle-orm';
 import { orchestratorService } from '../../services/orchestrator.service.js';
+import { rulesEngine } from '../../rules/rules.engine.js';
 import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
-import { verifyToken } from './security.controller.js';
+import { TokenPayload } from './security.controller.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { Errors } from '../errors.js';
+
+async function evaluateDbTransactions(dbTxs: any[], fileType: 'sales' | 'debitors' | 'stock', fileName: string): Promise<any[]> {
+  const transactionsForAudit = dbTxs.map(t => ({
+    date: new Date(t.date),
+    invoiceNumber: t.invoiceNumber || '',
+    category: t.category,
+    description: t.particulars || '',
+    amount: Number(t.amount),
+    type: t.type as 'credit' | 'debit',
+    vendor: t.vendor,
+    sheetName: t.sheetName
+  }));
+  return await rulesEngine.evaluate(transactionsForAudit, { fileType, fileName });
+}
 
 function getMonthYearLabel(dateVal: any, sheetName: string): string {
   const cleanSheet = sheetName.trim();
@@ -56,12 +71,13 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
       return;
     }
 
-    // 2. Query transactions, alerts, and errors concurrently
-    const [dbTxs, dbAlerts, dbErrors] = await Promise.all([
+    // 2. Query transactions and errors concurrently
+    const [dbTxs, dbErrors] = await Promise.all([
       db.select().from(schema.transactions).where(eq(schema.transactions.fileId, activeFile.id)),
-      db.select().from(schema.auditAlerts).where(eq(schema.auditAlerts.fileId, activeFile.id)),
       db.select().from(schema.parsingErrors).where(eq(schema.parsingErrors.fileId, activeFile.id)),
     ]);
+
+    const evaluatedAlerts = await evaluateDbTransactions(dbTxs, 'sales', activeFile.fileName);
 
     // 3. Map transactions for standard frontend interface
     const txs = dbTxs.map(t => ({
@@ -187,11 +203,11 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
       masterTotals,
       benchmarks,
       months,
-      transactions: txs,
-      alerts: dbAlerts.map(a => ({
+      transactions: [],
+      alerts: evaluatedAlerts.map(a => ({
         ruleId: a.ruleId,
         ruleName: a.ruleName,
-        severity: a.severity as 'info' | 'low' | 'medium' | 'high' | 'critical',
+        severity: a.severity,
         message: a.message,
       })),
       errors: dbErrors.map(e => ({
@@ -235,13 +251,14 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
       return;
     }
 
-    // 2. Query debtor snapshots, alerts, transactions and errors
-    const [dbParty, dbAlerts, dbErrors, dbTxs] = await Promise.all([
+    // 2. Query debtor snapshots, transactions and errors concurrently
+    const [dbParty, dbErrors, dbTxs] = await Promise.all([
       db.select().from(schema.partyBalances).where(eq(schema.partyBalances.fileId, activeFile.id)),
-      db.select().from(schema.auditAlerts).where(eq(schema.auditAlerts.fileId, activeFile.id)),
       db.select().from(schema.parsingErrors).where(eq(schema.parsingErrors.fileId, activeFile.id)),
       db.select().from(schema.transactions).where(eq(schema.transactions.fileId, activeFile.id)),
     ]);
+
+    const evaluatedAlerts = await evaluateDbTransactions(dbTxs, 'debitors', activeFile.fileName);
 
     // 3. Map debtor list
     const topDebitors = dbParty
@@ -290,11 +307,11 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
       totalTransactions: activeFile.totalRows,
       aggregates,
       topDebitors,
-      transactions: txs,
-      alerts: dbAlerts.map(a => ({
+      transactions: [],
+      alerts: evaluatedAlerts.map(a => ({
         ruleId: a.ruleId,
         ruleName: a.ruleName,
-        severity: a.severity as 'info' | 'low' | 'medium' | 'high' | 'critical',
+        severity: a.severity,
         message: a.message,
       })),
       errors: dbErrors.map(e => ({
@@ -397,7 +414,14 @@ export async function handleFileUpload(request: FastifyRequest, reply: FastifyRe
     }
 
     if (targetUploadPassword) {
-      const payload = sessionToken ? verifyToken(sessionToken) : null;
+      let payload: TokenPayload | null = null;
+      if (sessionToken) {
+        try {
+          payload = request.server.jwt.verify<TokenPayload>(sessionToken);
+        } catch {
+          payload = null;
+        }
+      }
       if (!payload || !payload.uploadAuthorized) {
         logger.warn({ fileName: fileName || 'unknown' }, 'Unauthorized upload attempt: invalid or expired session token');
         reply.code(401).send(Errors.unauthorized('Invalid or expired upload session'));
@@ -452,11 +476,12 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors'): 
 
     if (!activeFile) return null;
 
-    const [dbTxs, dbAlerts, dbErrors] = await Promise.all([
+    const [dbTxs, dbErrors] = await Promise.all([
       db.select().from(schema.transactions).where(eq(schema.transactions.fileId, activeFile.id)),
-      db.select().from(schema.auditAlerts).where(eq(schema.auditAlerts.fileId, activeFile.id)),
       db.select().from(schema.parsingErrors).where(eq(schema.parsingErrors.fileId, activeFile.id)),
     ]);
+
+    const evaluatedAlerts = await evaluateDbTransactions(dbTxs, reportType, activeFile.fileName);
 
     const txs = dbTxs.map(t => ({
       date: t.date,
@@ -504,10 +529,10 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors'): 
         },
         topDebitors,
         transactions: txs,
-        alerts: dbAlerts.map(a => ({
+        alerts: evaluatedAlerts.map(a => ({
           ruleId: a.ruleId,
           ruleName: a.ruleName,
-          severity: a.severity as 'info' | 'low' | 'medium' | 'high' | 'critical',
+          severity: a.severity,
           message: a.message,
         })),
         errors: dbErrors.map(e => ({
@@ -625,10 +650,10 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors'): 
         },
         months,
         transactions: txs,
-        alerts: dbAlerts.map(a => ({
+        alerts: evaluatedAlerts.map(a => ({
           ruleId: a.ruleId,
           ruleName: a.ruleName,
-          severity: a.severity as 'info' | 'low' | 'medium' | 'high' | 'critical',
+          severity: a.severity,
           message: a.message,
         })),
         errors: dbErrors.map(e => ({
@@ -645,3 +670,212 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors'): 
     return null;
   }
 }
+
+/**
+ * GET /api/v1/transactions
+ * Serves paginated, sorted, searched, and filtered transaction entries.
+ */
+export async function getTransactionsList(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  try {
+    const query = request.query as {
+      fileType?: string;
+      page?: string;
+      limit?: string;
+      search?: string;
+      category?: string;
+      vendor?: string;
+      month?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      type?: 'credit' | 'debit';
+    };
+
+    const fileType = query.fileType;
+    if (!fileType || (fileType !== 'sales' && fileType !== 'debitors')) {
+      reply.code(400).send(Errors.badRequest('fileType must be "sales" or "debitors"'));
+      return;
+    }
+
+    const page = Math.max(1, parseInt(query.page || '1', 10));
+    const limit = Math.max(1, parseInt(query.limit || '10', 10));
+    const search = query.search || '';
+    const category = query.category || '';
+    const vendor = query.vendor || '';
+    const month = query.month || '';
+    const sortBy = query.sortBy || 'date';
+    const sortOrder = query.sortOrder || 'desc';
+    const txType = query.type || '';
+
+    // 1. Fetch the active run record for the fileType
+    const [activeFile] = await db
+      .select()
+      .from(schema.files)
+      .where(
+        and(
+          eq(schema.files.fileType, fileType),
+          eq(schema.files.isLatest, true)
+        )
+      )
+      .limit(1);
+
+    if (!activeFile) {
+      reply.code(200).send({
+        transactions: [],
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          totalPages: 0
+        }
+      });
+      return;
+    }
+
+    // 2. Build Drizzle conditions array
+    const conditions: any[] = [eq(schema.transactions.fileId, activeFile.id)];
+
+    // Apply search filter
+    if (search.trim()) {
+      const searchPattern = `%${search.trim()}%`;
+      conditions.push(
+        or(
+          ilike(schema.transactions.vendor, searchPattern),
+          ilike(schema.transactions.category, searchPattern),
+          ilike(schema.transactions.particulars, searchPattern),
+          ilike(schema.transactions.invoiceNumber, searchPattern)
+        )
+      );
+    }
+
+    // Apply category filter
+    if (category.trim()) {
+      conditions.push(eq(schema.transactions.category, category.trim()));
+    }
+
+    // Apply vendor filter
+    if (vendor.trim()) {
+      conditions.push(eq(schema.transactions.vendor, vendor.trim()));
+    }
+
+    // Apply txType filter ('credit' | 'debit')
+    if (txType.trim()) {
+      conditions.push(eq(schema.transactions.type, txType.trim()));
+    }
+
+    // Apply month filter (e.g. "January 2026, February 2026")
+    if (month.trim()) {
+      const monthsMap: Record<string, number> = {
+        january: 1, jan: 1,
+        february: 2, feb: 2,
+        march: 3, mar: 3,
+        april: 4, apr: 4,
+        may: 5,
+        june: 6, jun: 6,
+        july: 7, jul: 7,
+        august: 8, aug: 8,
+        september: 9, sept: 9, sep: 9,
+        october: 10, oct: 10,
+        november: 11, nov: 11,
+        december: 12, dec: 12
+      };
+      
+      const monthStrings = month.split(',').map(m => m.trim()).filter(Boolean);
+      const monthConditions: any[] = [];
+
+      for (const mStr of monthStrings) {
+        const parts = mStr.toLowerCase().split(/\s+/);
+        if (parts.length === 2 && monthsMap[parts[0]]) {
+          const monthNum = monthsMap[parts[0]];
+          const yearNum = parseInt(parts[1], 10);
+          if (!isNaN(yearNum)) {
+            monthConditions.push(
+              or(
+                eq(schema.transactions.sheetName, mStr),
+                and(
+                  inArray(sql<string>`lower(${schema.transactions.sheetName})`, ['counter', 'sheet1', 'sales', 'daily sales']),
+                  sql`EXTRACT(MONTH FROM ${schema.transactions.date}) = ${monthNum}`,
+                  sql`EXTRACT(YEAR FROM ${schema.transactions.date}) = ${yearNum}`
+                )
+              )
+            );
+          } else {
+            monthConditions.push(eq(schema.transactions.sheetName, mStr));
+          }
+        } else {
+          monthConditions.push(eq(schema.transactions.sheetName, mStr));
+        }
+      }
+
+      if (monthConditions.length > 0) {
+        conditions.push(or(...monthConditions));
+      }
+    }
+
+    // 3. Resolve sorting
+    let orderClause: any;
+    const isAsc = sortOrder === 'asc';
+
+    switch (sortBy) {
+      case 'amount':
+        orderClause = isAsc ? asc(schema.transactions.amount) : desc(schema.transactions.amount);
+        break;
+      case 'category':
+        orderClause = isAsc ? asc(schema.transactions.category) : desc(schema.transactions.category);
+        break;
+      case 'vendor':
+        orderClause = isAsc ? asc(schema.transactions.vendor) : desc(schema.transactions.vendor);
+        break;
+      case 'invoice':
+      case 'invoiceNumber':
+        orderClause = isAsc ? asc(schema.transactions.invoiceNumber) : desc(schema.transactions.invoiceNumber);
+        break;
+      case 'date':
+      default:
+        orderClause = isAsc ? asc(schema.transactions.date) : desc(schema.transactions.date);
+        break;
+    }
+
+    // 4. Run total count and page retrieval concurrently in Promise.all
+    const offset = (page - 1) * limit;
+    const [countResult, dbTxs] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.transactions)
+        .where(and(...conditions)),
+      db
+        .select()
+        .from(schema.transactions)
+        .where(and(...conditions))
+        .orderBy(orderClause)
+        .limit(limit)
+        .offset(offset)
+    ]);
+    const total = countResult[0]?.count ?? 0;
+
+    // 6. Map and return response
+    const transactions = dbTxs.map(t => ({
+      date: t.date,
+      invoice: t.invoiceNumber || '',
+      category: t.category,
+      particulars: t.particulars || '',
+      amount: Number(t.amount),
+      type: t.type as 'credit' | 'debit',
+      vendor: t.vendor
+    }));
+
+    reply.code(200).send({
+      transactions,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err: message }, 'Failed to fetch transactions list');
+    reply.code(500).send(Errors.internalError('Failed to fetch transactions list'));
+  }
+}
+

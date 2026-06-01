@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { verifyToken, getSecurityCredentials } from './controllers/security.controller.js';
+import { getSecurityCredentials, TokenPayload } from './controllers/security.controller.js';
 import { logger } from '../logger/logger.js';
 
 /**
@@ -30,9 +30,15 @@ export async function checkFastifyAuth(request: FastifyRequest, reply: FastifyRe
     return;
   }
 
-  const payload = verifyToken(token);
-  if (!payload || !payload.appLockAuthorized) {
-    logger.warn(`Unauthorized API access blocked: invalid token/cookie for route ${request.url}`);
+  try {
+    const payload = request.server.jwt.verify<TokenPayload>(token);
+    if (!payload || !payload.appLockAuthorized) {
+      logger.warn(`Unauthorized API access blocked: invalid token/cookie for route ${request.url}`);
+      reply.code(401).send({ error: 'Unauthorized: Invalid or expired session' });
+      return;
+    }
+  } catch (err) {
+    logger.warn({ err }, `Unauthorized API access blocked: invalid token/cookie for route ${request.url}`);
     reply.code(401).send({ error: 'Unauthorized: Invalid or expired session' });
     return;
   }
