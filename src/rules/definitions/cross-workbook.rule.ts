@@ -4,7 +4,7 @@ import { Transaction } from '../../types/accounting.types.js';
 import { Rule, RuleAlert } from '../rules.types.js';
 import { db } from '../../db/db.client.js';
 import * as schema from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { config } from '../../config/config.js';
 
 interface ReconciliationSummary {
@@ -52,13 +52,18 @@ export class CrossWorkbookReconciliationRule implements Rule {
           .limit(1);
 
         if (activeFile) {
-          const dbParty = await db.select().from(schema.partyBalances).where(eq(schema.partyBalances.fileId, activeFile.id));
-          const totalDebitSum = dbParty.reduce((sum, d) => sum + Number(d.debit), 0);
-          const totalCreditSum = dbParty.reduce((sum, d) => sum + Number(d.credit), 0);
+          const [result] = await db
+            .select({
+              totalDebitSum: sql<number>`COALESCE(SUM(${schema.partyBalances.debit}), 0)`,
+              totalCreditSum: sql<number>`COALESCE(SUM(${schema.partyBalances.credit}), 0)`
+            })
+            .from(schema.partyBalances)
+            .where(eq(schema.partyBalances.fileId, activeFile.id));
+
           summary = {
             aggregates: {
-              totalDebitSum,
-              totalCreditSum
+              totalDebitSum: Number(result?.totalDebitSum) || 0,
+              totalCreditSum: Number(result?.totalCreditSum) || 0
             }
           };
         }
@@ -112,13 +117,18 @@ export class CrossWorkbookReconciliationRule implements Rule {
           .limit(1);
 
         if (activeFile) {
-          const dbTxs = await db.select().from(schema.transactions).where(eq(schema.transactions.fileId, activeFile.id));
-          const creditExtended = dbTxs.filter(t => t.type === 'debit' && t.category.toLowerCase().includes('extended')).reduce((sum, t) => sum + Number(t.amount), 0);
-          const creditRecovery = dbTxs.filter(t => t.category.toLowerCase().includes('recovery') || t.category.toLowerCase().includes('jama')).reduce((sum, t) => sum + Number(t.amount), 0);
+          const [result] = await db
+            .select({
+              creditExtended: sql<number>`COALESCE(SUM(CASE WHEN ${schema.transactions.type} = 'debit' AND lower(${schema.transactions.category}) LIKE '%extended%' THEN ${schema.transactions.amount} ELSE 0 END), 0)`,
+              creditRecovery: sql<number>`COALESCE(SUM(CASE WHEN lower(${schema.transactions.category}) LIKE '%recovery%' OR lower(${schema.transactions.category}) LIKE '%jama%' THEN ${schema.transactions.amount} ELSE 0 END), 0)`
+            })
+            .from(schema.transactions)
+            .where(eq(schema.transactions.fileId, activeFile.id));
+
           summary = {
             masterTotals: {
-              creditExtended,
-              creditRecovery
+              creditExtended: Number(result?.creditExtended) || 0,
+              creditRecovery: Number(result?.creditRecovery) || 0
             }
           };
         }
