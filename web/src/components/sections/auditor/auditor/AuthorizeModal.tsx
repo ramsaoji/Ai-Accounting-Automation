@@ -75,7 +75,7 @@ export const AuthorizeModal: React.FC<AuthorizeModalProps> = ({
                 type="text"
                 value={primarySigner}
                 aria-label="Primary Signer (Senior Accountant)"
-                className="h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-muted/40 cursor-not-allowed select-none text-foreground"
+                className="h-10 sm:h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-muted/40 cursor-not-allowed select-none text-foreground"
                 disabled
               />
               <span className="text-[0.55rem] text-muted-foreground mt-0.5">Senior Accountant</span>
@@ -93,7 +93,7 @@ export const AuthorizeModal: React.FC<AuthorizeModalProps> = ({
                   }
                 }}
                 aria-label="Secondary Signer (Authorizing Manager)"
-                className={`h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-background text-foreground transition-all focus:outline-none focus:ring-1 ${
+                className={`h-10 sm:h-8 border rounded-lg px-2 text-[0.68rem] font-medium bg-background text-foreground transition-all focus:outline-none focus:ring-1 ${
                   authErrors.secondarySigner
                     ? 'border-destructive focus:ring-destructive focus:border-destructive'
                     : 'border-border focus:ring-primary focus:border-primary'
@@ -124,7 +124,7 @@ export const AuthorizeModal: React.FC<AuthorizeModalProps> = ({
                 }
               }}
               aria-label="Manager Authorization PIN"
-              className={`h-9.5 border rounded-lg px-3 text-xs bg-background text-foreground transition-all focus:outline-none focus:ring-1 ${
+              className={`h-10 sm:h-9.5 border rounded-lg px-3 text-xs bg-background text-foreground transition-all focus:outline-none focus:ring-1 ${
                 authErrors.passcode
                   ? 'border-destructive focus:ring-destructive focus:border-destructive'
                   : 'border-border focus:ring-primary focus:border-primary'

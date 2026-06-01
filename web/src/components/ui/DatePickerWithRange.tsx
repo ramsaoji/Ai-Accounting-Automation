@@ -167,7 +167,7 @@ export function DatePickerWithRange({
               style={{ touchAction: "manipulation" }}
               className={cn(
                 "justify-start text-left gap-2 cursor-pointer select-none border transition-colors duration-150",
-                "h-9 sm:h-9 flex-1 sm:flex-initial w-full sm:w-[220px] md:w-[240px] px-3 rounded-lg text-xs sm:text-xs",
+                "h-10 sm:h-9 flex-1 sm:flex-initial w-full sm:w-[220px] md:w-[240px] px-3 rounded-lg text-xs sm:text-xs",
                 isFiltered
                   ? "border-primary/40 bg-primary/5 text-foreground dark:bg-primary/10"
                   : "border-input bg-transparent dark:bg-input/30 text-muted-foreground hover:bg-muted/50"
@@ -340,7 +340,7 @@ export function DatePickerWithRange({
           variant="outline"
           onClick={() => preset("all")}
           title="Clear date filter"
-          className="cursor-pointer shrink-0 gap-1.5 text-muted-foreground hover:text-foreground border-input bg-transparent dark:bg-input/30 hover:bg-muted/50 transition-all duration-200 h-9 sm:h-9 px-2.5 rounded-lg text-xs sm:text-xs font-semibold"
+          className="cursor-pointer shrink-0 gap-1.5 text-muted-foreground hover:text-foreground border-input bg-transparent dark:bg-input/30 hover:bg-muted/50 transition-all duration-200 h-10 sm:h-9 px-2.5 rounded-lg text-xs sm:text-xs font-semibold"
         >
           <X className="size-3.5" />
           <span className="hidden sm:inline">Reset</span>

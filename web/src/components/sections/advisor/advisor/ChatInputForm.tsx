@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, ArrowUpRight, MessageSquareOff, Info, TrendingUp, Zap, ShieldCheck } from 'lucide-react';
+import { Send, ArrowUpRight, MessageSquareOff, Info, TrendingUp, Zap, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
@@ -145,6 +145,24 @@ export const ChatInputForm: React.FC<ChatInputFormProps> = ({
           className={`flex-1 bg-background dark:bg-muted/40 border border-border rounded-md px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 ${getFocusRingColor()} transition-all duration-200 resize-none min-h-[36px] scroll-smooth disabled:opacity-60 disabled:bg-muted/10 disabled:cursor-not-allowed`}
           style={{ height: '36px', overflowY: 'hidden' }}
         />
+        {input.trim() && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setInput('');
+              if (textareaRef.current) {
+                textareaRef.current.style.height = '36px';
+                textareaRef.current.focus();
+              }
+            }}
+            className="h-10 sm:h-9 px-3 cursor-pointer shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted border-border/80"
+            aria-label="Clear chat input"
+          >
+            <X className="size-4" />
+          </Button>
+        )}
         <Button
           type="submit"
           size="sm"

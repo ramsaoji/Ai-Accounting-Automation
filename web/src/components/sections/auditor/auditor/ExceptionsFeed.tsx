@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Sliders, Sparkles, Ban, Info, CheckCircle } from 'lucide-react';
+import { Search, Sliders, Sparkles, Ban, Info, CheckCircle, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import type { Alert } from '@/types';
 import { Slider } from '@/components/ui/slider';
@@ -115,14 +115,24 @@ export const ExceptionsFeed: React.FC<ExceptionsFeedProps> = ({
             {/* Search / Filters toolbar */}
             <div className="flex flex-col gap-2.5 pr-4">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
                 <Input
                   type="text"
                   placeholder="Search exception trace..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 h-9 text-xs"
+                  className="pl-9 pr-8 h-10 sm:h-9 text-xs w-full"
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-0.5 rounded-full hover:bg-muted"
+                    aria-label="Clear exception search"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
               </div>
               {/* Severity Pill Buttons */}
               <div className="flex flex-wrap gap-1.5 select-none">

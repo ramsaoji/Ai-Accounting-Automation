@@ -36,7 +36,7 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
   debitorsAgeingData,
 }) => {
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
       {activeChartTab === 'primary' ? (
         // Primary Tab: Top Debitors (Bar) or Sales Timeline (Area)
         isDebitors && summary.topDebitors ? (

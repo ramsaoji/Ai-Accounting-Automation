@@ -401,7 +401,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     }}
                     placeholder="Enter current app passcode to authorize…"
                     aria-label="Current app passcode"
-                    className={`w-full bg-background border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
+                    className={`w-full h-10 sm:h-9 bg-background border rounded-md pl-3.5 pr-10 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
                       errors.currentPassword
                         ? 'border-destructive focus:ring-destructive focus:border-destructive'
                         : 'border-border focus:ring-primary focus:border-primary'
@@ -412,7 +412,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     type="button"
                     onClick={() => setShowCurrent(!showCurrent)}
                     aria-label={showCurrent ? 'Hide current password' : 'Show current password'}
-                    className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                     tabIndex={-1}
                   >
                     {showCurrent ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -449,7 +449,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     }}
                     placeholder="Enter new app lock passcode…"
                     aria-label="New app lock passcode"
-                    className={`w-full bg-background border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
+                    className={`w-full h-10 sm:h-9 bg-background border rounded-md pl-3.5 pr-10 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
                       errors.newPassword
                         ? 'border-destructive focus:ring-destructive focus:border-destructive'
                         : 'border-border focus:ring-primary focus:border-primary'
@@ -460,7 +460,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     type="button"
                     onClick={() => setShowNew(!showNew)}
                     aria-label={showNew ? 'Hide new password' : 'Show new password'}
-                    className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                     tabIndex={-1}
                   >
                     {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -491,7 +491,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     }}
                     placeholder="Re-type new app lock passcode…"
                     aria-label="Confirm new app lock passcode"
-                    className={`w-full bg-background border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
+                    className={`w-full h-10 sm:h-9 bg-background border rounded-md pl-3.5 pr-10 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
                       errors.confirmPassword
                         ? 'border-destructive focus:ring-destructive focus:border-destructive'
                         : 'border-border focus:ring-primary focus:border-primary'
@@ -502,7 +502,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     type="button"
                     onClick={() => setShowConfirm(!showConfirm)}
                     aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
-                    className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                     tabIndex={-1}
                   >
                     {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -537,7 +537,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     }}
                     placeholder="Enter new upload passcode…"
                     aria-label="New upload passcode"
-                    className={`w-full bg-background border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
+                    className={`w-full h-10 sm:h-9 bg-background border rounded-md pl-3.5 pr-10 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
                       errors.newPassword
                         ? 'border-destructive focus:ring-destructive focus:border-destructive'
                         : 'border-border focus:ring-primary focus:border-primary'
@@ -548,7 +548,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     type="button"
                     onClick={() => setShowNew(!showNew)}
                     aria-label={showNew ? 'Hide new password' : 'Show new password'}
-                    className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                     tabIndex={-1}
                   >
                     {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -579,7 +579,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     }}
                     placeholder="Re-type new upload passcode…"
                     aria-label="Confirm new upload passcode"
-                    className={`w-full bg-background border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
+                    className={`w-full h-10 sm:h-9 bg-background border rounded-md pl-3.5 pr-10 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 transition-all duration-200 ${
                       errors.confirmPassword
                         ? 'border-destructive focus:ring-destructive focus:border-destructive'
                         : 'border-border focus:ring-primary focus:border-primary'
@@ -590,7 +590,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     type="button"
                     onClick={() => setShowConfirm(!showConfirm)}
                     aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
-                    className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                     tabIndex={-1}
                   >
                     {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -629,7 +629,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                         onValueChange={handleProviderChange}
                         disabled={isLoadingSettings || isUpdating}
                       >
-                        <SelectTrigger id="ai-provider-select" className="w-full sm:w-[180px] bg-background border border-border rounded-md px-3 py-2 text-xs text-foreground cursor-pointer justify-between focus:ring-1 focus:ring-primary focus:border-primary transition-all">
+                        <SelectTrigger id="ai-provider-select" className="w-full sm:w-[180px] h-10 sm:h-9 flex items-center bg-background border border-border rounded-md px-3 text-xs text-foreground cursor-pointer justify-between focus:ring-1 focus:ring-primary focus:border-primary transition-all">
                           <SelectValue placeholder="Select active AI engine..." />
                         </SelectTrigger>
                         <SelectContent className="bg-popover border border-border/80 shadow-lg rounded-lg text-xs z-50">
@@ -661,7 +661,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                           onBlur={(e) => handleModelBlur(e.target.value)}
                           disabled={isLoadingSettings || isUpdating}
                           placeholder="e.g. gemini-2.5-flash"
-                          className="w-full sm:w-[180px] bg-background border border-border rounded-md px-3.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/45 text-left focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
+                          className="w-full sm:w-[180px] h-10 sm:h-9 bg-background border border-border rounded-md px-3 text-xs text-foreground placeholder:text-muted-foreground/45 text-left focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                         />
                       </div>
                     </div>

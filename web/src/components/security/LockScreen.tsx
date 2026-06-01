@@ -73,7 +73,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
             </label>
             <div className="relative w-full">
               <input
-                id="terminal-passcode"
+                id="lock-screen-passcode"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => {
@@ -82,14 +82,14 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                 }}
                 placeholder="Enter password…"
                 aria-label="Terminal passcode"
-                className="w-full bg-background border border-border rounded-md pl-3.5 pr-10 py-2 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
+                className="w-full h-10 sm:h-9 bg-background border border-border rounded-md pl-3.5 pr-10 text-xs text-foreground placeholder:text-muted-foreground/45 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200"
                 disabled={isVerifying}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-3 top-2.5 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors"
                 tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

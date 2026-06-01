@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { MasterSummary, MonthlySummary, DebitorSummary } from '@/types';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { formatINRValue, formatTimestamp, formatCronExpression } from '@/utils/format';
 import { PortalCard } from './portal/PortalCard';
 import { SafetyChecksGuide } from './portal/SafetyChecksGuide';
@@ -144,16 +144,25 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
 
       {/* Toolbar / Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-        {/* Search */}
         <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
             placeholder="Search database consoles..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 text-xs"
+            className="pl-9 pr-8 h-10 sm:h-9 text-xs w-full"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-0.5 rounded-full hover:bg-muted"
+              aria-label="Clear console search"
+            >
+              <X className="size-3" />
+            </button>
+          )}
         </div>
 
         {/* Console Filters */}

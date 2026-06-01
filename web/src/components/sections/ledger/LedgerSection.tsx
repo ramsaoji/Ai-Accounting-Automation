@@ -8,7 +8,8 @@ import {
   Filter,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  X
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -222,7 +223,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       });
     }
 
-    return list.toSorted((a: DebitorSummary, b: DebitorSummary) => {
+    return [...list].sort((a: DebitorSummary, b: DebitorSummary) => {
       const valA = a[debtorSortBy as keyof DebitorSummary];
       const valB = b[debtorSortBy as keyof DebitorSummary];
 
@@ -256,7 +257,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       );
     }
 
-    return list.toSorted((a: MonthlySummary, b: MonthlySummary) => {
+    return [...list].sort((a: MonthlySummary, b: MonthlySummary) => {
       let valA: any = a[salesSortBy as keyof MonthlySummary];
       let valB: any = b[salesSortBy as keyof MonthlySummary];
 
@@ -532,60 +533,95 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       <Card className="border shadow-xs bg-card/45 overflow-hidden flex flex-col justify-between">
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Custom Database Toolbar */}
-          <div className="p-4 border-b border-border/80 bg-muted/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shrink-0 select-none">
-            <div className="w-full flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-3">
+          <div className="p-3.5 border-b border-border/80 bg-muted/10 flex flex-col gap-3 shrink-0 select-none">
+            <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="w-full md:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
                 {/* Search Field */}
-                <div className="relative w-full sm:w-60">
-                  <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+                <div className="relative w-full md:w-60">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
                   {activeSubTab === 'transactions' ? (
-                    <Input
-                      type="text"
-                      placeholder="Search transactions..."
-                      value={txSearch}
-                      onChange={(e) => {
-                        setTxSearch(e.target.value);
-                        setTxPage(1);
-                      }}
-                      className="pl-9 h-9 text-xs"
-                    />
+                    <>
+                      <Input
+                        type="text"
+                        placeholder="Search transactions..."
+                        value={txSearch}
+                        onChange={(e) => {
+                          setTxSearch(e.target.value);
+                          setTxPage(1);
+                        }}
+                        className="pl-9 pr-8 h-10 sm:h-9 text-xs w-full"
+                      />
+                      {txSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTxSearch('');
+                            setTxPage(1);
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-0.5 rounded-full hover:bg-muted"
+                          aria-label="Clear transaction search"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      )}
+                    </>
                   ) : (
-                    <Input
-                      type="text"
-                      placeholder="Filter records..."
-                      value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className="pl-9 h-9 text-xs"
-                    />
+                    <>
+                      <Input
+                        type="text"
+                        placeholder="Filter records..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="pl-9 pr-8 h-10 sm:h-9 text-xs w-full"
+                      />
+                      {searchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchTerm('');
+                            setCurrentPage(1);
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-0.5 rounded-full hover:bg-muted"
+                          aria-label="Clear ledger search"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
 
                 {/* Date Filter Widget — only for sales (has month sheets) in ledger view and transactions view */}
                 {!isDebitors && (activeSubTab === 'ledger' || activeSubTab === 'transactions') && (
-                  <DatePickerWithRange 
-                    selectedMonths={activeSubTab === 'transactions' ? txSelectedMonths : selectedMonths} 
-                    setSelectedMonths={(m: string[]) => { 
-                      if (activeSubTab === 'transactions') {
-                        setTxSelectedMonths(m);
-                        setTxPage(1);
-                      } else {
-                        setSelectedMonths(m);
-                        setCurrentPage(1); 
-                      }
-                    }} 
-                    availableMonths={availableMonths}
-                  />
+                  <div className="w-full sm:w-auto">
+                    <DatePickerWithRange 
+                      selectedMonths={activeSubTab === 'transactions' ? txSelectedMonths : selectedMonths} 
+                      setSelectedMonths={(m: string[]) => { 
+                        if (activeSubTab === 'transactions') {
+                          setTxSelectedMonths(m);
+                          setTxPage(1);
+                        } else {
+                          setSelectedMonths(m);
+                          setCurrentPage(1); 
+                        }
+                      }} 
+                      availableMonths={availableMonths}
+                    />
+                  </div>
                 )}
               </div>
 
               {/* Status filter dropdown for Debitors in ledger view */}
               {isDebitors && activeSubTab === 'ledger' && (
-                <div className="flex items-center gap-1.5">
-                  <Filter className="size-3.5 text-muted-foreground" />
-                  <div className="flex gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                    <Filter className="size-3 text-muted-foreground" />
+                    Filters:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
                     {(['all', 'breached', 'watch', 'clear'] as const).map((filter) => (
                       <button
                         type="button"
@@ -594,13 +630,13 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                           setStatusFilter(filter);
                           setCurrentPage(1);
                         }}
-                        className={`text-xs px-3 h-9 sm:h-9 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
+                        className={`text-xs px-3 h-8 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
                           statusFilter === filter
                             ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
                             : 'bg-background hover:bg-muted text-muted-foreground border-input dark:bg-input/30'
                         }`}
                       >
-                        {filter}
+                        {filter === 'clear' ? 'cleared' : filter}
                       </button>
                     ))}
                   </div>
@@ -609,9 +645,12 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
 
               {/* Flow filter dropdown for Transactions tab */}
               {activeSubTab === 'transactions' && (
-                <div className="flex items-center gap-1.5">
-                  <Filter className="size-3.5 text-muted-foreground" />
-                  <div className="flex gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                    <Filter className="size-3 text-muted-foreground" />
+                    Filters:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
                     {(['all', 'credit', 'debit'] as const).map((filter) => (
                       <button
                         type="button"
@@ -620,7 +659,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                           setTxTypeFilter(filter);
                           setTxPage(1);
                         }}
-                        className={`text-xs px-3 h-9 sm:h-9 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
+                        className={`text-xs px-3 h-8 rounded-lg border font-semibold capitalize transition-all duration-200 cursor-pointer select-none ${
                           txTypeFilter === filter
                             ? 'bg-foreground text-background border-foreground hover:bg-foreground/90'
                             : 'bg-background hover:bg-muted text-muted-foreground border-input dark:bg-input/30'
