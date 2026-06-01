@@ -20,8 +20,8 @@ export class OffHoursTransactionRule implements Rule {
       }
 
       const date = new Date(tx.date);
-      // Skip if the record does not contain specific time info (i.e., defaults to local midnight 00:00:00)
-      const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0;
+      // Skip if the record does not contain specific time info (i.e., defaults to UTC midnight 00:00:00)
+      const hasTime = date.getUTCHours() !== 0 || date.getUTCMinutes() !== 0 || date.getUTCSeconds() !== 0;
       if (!hasTime) {
         continue;
       }
