@@ -126,11 +126,14 @@ export function App() {
 
   const [settings, setSettings] = useState<SystemSettings | null>(null);
 
+  const relevantFileName = useMemo(() => {
+    return activeWorkspace === 'sales' ? salesData?.fileName : debitorsData?.fileName;
+  }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName]);
+
   const fetchSettings = async () => {
     try {
       const fileType = activeWorkspace;
-      const fileName = activeWorkspace === 'sales' ? salesData?.fileName : debitorsData?.fileName;
-      const data = await fetchSystemSettings(fileType, fileName);
+      const data = await fetchSystemSettings(fileType, relevantFileName);
       setSettings(data);
     } catch (err) {
       console.error('Failed to load settings:', err);
@@ -141,13 +144,12 @@ export function App() {
     if (appSessionToken) {
       fetchSettings();
     }
-  }, [appSessionToken, activeWorkspace, salesData?.fileName, debitorsData?.fileName]);
+  }, [appSessionToken, activeWorkspace, relevantFileName]);
 
   const handleUpdateSettings = async (newSettings: Partial<SystemSettings>) => {
     try {
       const fileType = activeWorkspace;
-      const fileName = activeWorkspace === 'sales' ? salesData?.fileName : debitorsData?.fileName;
-      const updated = await updateSystemSettings(newSettings, fileType, fileName);
+      const updated = await updateSystemSettings(newSettings, fileType, relevantFileName);
       setSettings(updated);
       toast.success("System configurations updated successfully.");
       fetchRealData(true);

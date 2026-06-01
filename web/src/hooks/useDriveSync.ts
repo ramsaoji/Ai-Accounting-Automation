@@ -127,26 +127,30 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData, isUploadi
             return;
           }
 
-          // 2. Fallback check: query data timestamp changes
-          const syncResult = await fetchAccountingData();
-          const newSalesTime = syncResult.sales?.runTimestamp;
-          const newDebitorsTime = syncResult.debitors?.runTimestamp;
+          // 2. Fallback check: query data timestamp changes (only every 6th tick / 15s, or at the maximum attempt limit)
+          if (attempts % 6 === 0 || attempts >= maxAttempts) {
+            const syncResult = await fetchAccountingData();
+            const newSalesTime = syncResult.sales?.runTimestamp;
+            const newDebitorsTime = syncResult.debitors?.runTimestamp;
 
-          const salesUpdated = !!(newSalesTime && newSalesTime !== initialSalesTime);
-          const debitorsUpdated = !!(newDebitorsTime && newDebitorsTime !== initialDebitorsTime);
-          const emptyGotData = !(salesData || debitorsData) && !!(syncResult.sales || syncResult.debitors);
+            const salesUpdated = !!(newSalesTime && newSalesTime !== initialSalesTime);
+            const debitorsUpdated = !!(newDebitorsTime && newDebitorsTime !== initialDebitorsTime);
+            const emptyGotData = !(salesData || debitorsData) && !!(syncResult.sales || syncResult.debitors);
 
-          if (salesUpdated || debitorsUpdated || emptyGotData) {
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
+            if (salesUpdated || debitorsUpdated || emptyGotData) {
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+              await fetchRealData(true);
+              toast.success(successMsg);
+              isSyncingRef.current = false;
+              setIsSyncingDrive(false);
+              return;
             }
-            await fetchRealData(true);
-            toast.success(successMsg);
-            isSyncingRef.current = false;
-            setIsSyncingDrive(false);
+          }
 
-          } else if (attempts >= maxAttempts) {
+          if (attempts >= maxAttempts) {
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
