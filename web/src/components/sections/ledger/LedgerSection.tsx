@@ -15,7 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { fetchTransactions } from '@/services/api';
+import { fetchTransactions, fetchSystemSettings } from '@/services/api';
 import {
   Pagination,
   PaginationContent,
@@ -30,14 +30,30 @@ import { toast } from 'sonner';
 interface LedgerSectionProps {
   summary: MasterSummary;
   activeTab: 'sales' | 'debitors';
-  maxOutstandingDuesLimit: number;
+  relevantFileName: string | undefined;
 }
 
 export const LedgerSection: React.FC<LedgerSectionProps> = ({
   summary,
   activeTab,
-  maxOutstandingDuesLimit,
+  relevantFileName,
 }) => {
+  const [maxOutstandingDuesLimit, setMaxOutstandingDuesLimit] = useState(15000);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const data = await fetchSystemSettings(activeTab, relevantFileName);
+        if (data?.ruleOutstandingCreditCap !== undefined) {
+          setMaxOutstandingDuesLimit(data.ruleOutstandingCreditCap);
+        }
+      } catch (err) {
+        console.error('Failed to load credit limit settings in ledger view:', err);
+      }
+    };
+    loadSettings();
+  }, [activeTab, relevantFileName]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'breached' | 'watch' | 'clear'>('all');

@@ -16,7 +16,7 @@ import {
   checkSessionStatus,
   logoutUser
 } from './controllers/security.controller.js';
-import { getSalesReport, getDebitorsReport, triggerPipeline, handleFileUpload, getSyncStatus, getTransactionsList } from './controllers/report.controller.js';
+import { getSalesReport, getDebitorsReport, getPortalSummary, triggerPipeline, handleFileUpload, getSyncStatus, getTransactionsList } from './controllers/report.controller.js';
 import { handleAdvisorChat, chatSchema } from './controllers/chat.controller.js';
 import { getSettings, updateSettings, updateSettingsSchema } from './controllers/settings.controller.js';
 import { checkFastifyAuth } from './fastify.auth.js';
@@ -51,11 +51,13 @@ export function createFastifyApp() {
     timeWindow: '1 minute',
   });
 
-  // Global hook to disable caching on all API responses
+  // Global hook to disable caching on all API responses unless explicitly set by the controller
   app.addHook('onSend', async (request, reply, payload) => {
-    reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    reply.header('Pragma', 'no-cache');
-    reply.header('Expires', '0');
+    if (!reply.hasHeader('Cache-Control')) {
+      reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
+    }
     return payload;
   });
 
@@ -102,6 +104,7 @@ export function createFastifyApp() {
   app.register(async (v1Routes) => {
     v1Routes.addHook('preHandler', checkFastifyAuth);
 
+    v1Routes.get('/api/v1/portal-summary', getPortalSummary);
     v1Routes.get('/api/v1/data/sales', getSalesReport);
     v1Routes.get('/api/v1/data/debitors', getDebitorsReport);
     v1Routes.get('/api/v1/transactions', getTransactionsList);

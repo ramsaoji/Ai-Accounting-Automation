@@ -785,6 +785,14 @@ export class OrchestratorService {
         );
       }
     });
+
+    try {
+      const { reportCache } = await import('../api/controllers/report.controller.js');
+      reportCache.clear();
+      logger.info('In-memory reports cache invalidated successfully after spreadsheet ingestion.');
+    } catch (cacheErr) {
+      logger.warn({ err: cacheErr }, 'Could not dynamically clear reports cache');
+    }
   }
 }
 

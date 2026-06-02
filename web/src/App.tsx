@@ -13,7 +13,7 @@ import { useDriveSync } from '@/hooks/useDriveSync';
 import { useManualUpload } from '@/hooks/useManualUpload';
 import { IngestionProgressModal } from '@/components/shared/IngestionProgressModal';
 import { LockScreen } from '@/components/security/LockScreen';
-import { checkSessionStatus, logoutUser, fetchSystemSettings, updateSystemSettings, type SystemSettings } from '@/services/api';
+import { checkSessionStatus, logoutUser } from '@/services/api';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { OnboardingWizard } from '@/components/shared/OnboardingWizard';
 import { DriveSyncProgressCard } from '@/components/shared/DriveSyncProgressCard';
@@ -93,7 +93,7 @@ export function App() {
   }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
-  const { salesData, debitorsData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, aiProvider, sync: fetchRealData } = useAccountingData();
+  const { salesData, debitorsData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, isWorkspaceLoading, aiProvider, sync: fetchRealData, fetchWorkspaceData } = useAccountingData();
 
   const isSyncingDriveRef = useRef(false);
   const isUploadingRef = useRef(false);
@@ -124,39 +124,16 @@ export function App() {
     }
   }, [appSessionToken, fetchRealData]);
 
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
-
   const relevantFileName = useMemo(() => {
     return activeWorkspace === 'sales' ? salesData?.fileName : debitorsData?.fileName;
   }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName]);
 
-  const fetchSettings = async () => {
-    try {
-      const fileType = activeWorkspace;
-      const data = await fetchSystemSettings(fileType, relevantFileName);
-      setSettings(data);
-    } catch (err) {
-      console.error('Failed to load settings:', err);
-    }
-  };
-
+  // Lazy load full reports when user leaves the portal view to enter a specific workspace console
   useEffect(() => {
-    if (appSessionToken) {
-      fetchSettings();
+    if (appSessionToken && activeView !== 'portal') {
+      fetchWorkspaceData(activeWorkspace);
     }
-  }, [appSessionToken, activeWorkspace, relevantFileName]);
-
-  const handleUpdateSettings = async (newSettings: Partial<SystemSettings>) => {
-    try {
-      const fileType = activeWorkspace;
-      const updated = await updateSystemSettings(newSettings, fileType, relevantFileName);
-      setSettings(updated);
-      toast.success("System configurations updated successfully.");
-      fetchRealData(true);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save settings.");
-    }
-  };
+  }, [appSessionToken, activeWorkspace, activeView, fetchWorkspaceData]);
 
   const businessName = useMemo(() => {
     return deriveBusinessName(salesData?.fileName ?? debitorsData?.fileName);
@@ -288,6 +265,11 @@ export function App() {
                       connectionMode={connectionMode}
                       onFilesReady={startUpload}
                     />
+                  ) : isWorkspaceLoading ? (
+                    <div className="flex h-[calc(100svh-10rem)] w-full flex-col items-center justify-center gap-4 select-none animate-in fade-in duration-200">
+                      <Loader2 className="size-8 text-primary animate-spin" />
+                      <p className="text-xs text-muted-foreground font-semibold tracking-wide animate-pulse">Retrieving full ledger database…</p>
+                    </div>
                   ) : (
                     <>
                       {activeView === 'overview' && (
@@ -297,15 +279,15 @@ export function App() {
                         <LedgerSection
                           summary={activeSummary}
                           activeTab={activeWorkspace}
-                          maxOutstandingDuesLimit={settings?.ruleOutstandingCreditCap ?? 15000}
+                          relevantFileName={relevantFileName}
                         />
                       )}
                       {activeView === 'auditor' && (
                         <AuditorSection
                           alerts={activeAlerts}
                           totalTransactions={activeSummary.totalTransactions || 0}
-                          settings={settings}
-                          onUpdateSettings={handleUpdateSettings}
+                          relevantFileName={relevantFileName}
+                          onRefreshData={() => fetchRealData(true)}
                         />
                       )}
                       {activeView === 'advisor' && (

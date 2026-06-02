@@ -123,11 +123,17 @@ export async function closeDb(): Promise<void> {
   }
 }
 
+export const systemSettingsCache = new Map<string, string>();
+export const auditPoliciesCache = new Map<string, string>();
+
 /**
  * Fetches a system configuration setting value from the relational database by its unique key.
  * Returns default value if not present.
  */
 export async function getSystemSetting(key: string, defaultValue: string): Promise<string> {
+  if (systemSettingsCache.has(key)) {
+    return systemSettingsCache.get(key)!;
+  }
   try {
     const existing = await db
       .select()
@@ -136,8 +142,10 @@ export async function getSystemSetting(key: string, defaultValue: string): Promi
       .limit(1);
 
     if (existing.length === 0) {
+      systemSettingsCache.set(key, defaultValue);
       return defaultValue;
     }
+    systemSettingsCache.set(key, existing[0].value);
     return existing[0].value;
   } catch (err) {
     logger.error({ err, key }, 'Failed to fetch system setting from database');
@@ -157,6 +165,7 @@ export async function setSystemSetting(key: string, value: string): Promise<void
         target: schema.systemSettings.key,
         set: { value, updatedAt: new Date() },
       });
+    systemSettingsCache.set(key, value);
     logger.info({ key, value }, 'System configuration setting saved successfully');
   } catch (err) {
     logger.error({ err, key, value }, 'Failed to save system setting to database');
@@ -174,6 +183,10 @@ export async function getAuditPolicySetting(
   parameterKey: string,
   defaultValue: string
 ): Promise<string> {
+  const cacheKey = `policy:${fileType}:${fileName || ''}:${parameterKey}`;
+  if (auditPoliciesCache.has(cacheKey)) {
+    return auditPoliciesCache.get(cacheKey)!;
+  }
   try {
     // 1. If fileName is provided, check for specific override first
     if (fileName) {
@@ -189,6 +202,7 @@ export async function getAuditPolicySetting(
         )
         .limit(1);
       if (override.length > 0) {
+        auditPoliciesCache.set(cacheKey, override[0].value);
         return override[0].value;
       }
     }
@@ -206,9 +220,11 @@ export async function getAuditPolicySetting(
       )
       .limit(1);
     if (typeDefault.length > 0) {
+      auditPoliciesCache.set(cacheKey, typeDefault[0].value);
       return typeDefault[0].value;
     }
 
+    auditPoliciesCache.set(cacheKey, defaultValue);
     return defaultValue;
   } catch (err) {
     logger.error({ err, fileType, fileName, parameterKey }, 'Failed to fetch audit policy setting');
@@ -260,6 +276,8 @@ export async function setAuditPolicySetting(
           updatedAt: new Date()
         });
     }
+    const cacheKey = `policy:${fileType}:${cleanFileName || ''}:${parameterKey}`;
+    auditPoliciesCache.set(cacheKey, value);
     logger.info({ fileType, fileName: cleanFileName, parameterKey, value }, 'Audit policy setting saved successfully');
   } catch (err) {
     logger.error({ err, fileType, fileName, parameterKey, value }, 'Failed to save audit policy setting');

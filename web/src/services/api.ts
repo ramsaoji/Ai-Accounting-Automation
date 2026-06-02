@@ -1,15 +1,15 @@
 import type { MasterSummary, Transaction } from '../types';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 // Helper to inject the app-lock session token into API requests
-function getAuthHeaders(): HeadersInit {
+export function getAuthHeaders(): HeadersInit {
   const token = sessionStorage.getItem('app_session_token') || '';
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
 // Wrapper for fetch requests requiring authorization. Checks for session validity and triggers lock screen if invalid.
-async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const res = await fetch(input, {
     ...init,
     credentials: 'include',
@@ -64,21 +64,108 @@ export interface SyncResult {
  * Optimized concurrent fetch for accounting data registers.
  * Communicates directly with the live database backend.
  */
+export interface PortalSummaryResult {
+  sales?: {
+    fileName: string;
+    runTimestamp: string;
+    totalTransactions: number;
+    totalMonths: number;
+    alertCount: number;
+    totalInflows: number;
+    netCashflow: number;
+    sparkline: number[];
+  };
+  debitors?: {
+    fileName: string;
+    runTimestamp: string;
+    totalTransactions: number;
+    alertCount: number;
+    totalPendingSum: number;
+    collectionSuccessRate: string;
+    activeDebitorsCount: number;
+    sparkline: number[];
+  };
+  mode: 'live' | 'static' | 'empty';
+  isDbConnected?: boolean;
+  isLocalDb?: boolean;
+  isDevMode?: boolean;
+  hasSyncedBefore?: boolean;
+  aiProvider?: string;
+  cronSchedule?: string;
+}
+
+/**
+ * Highly optimized lightweight portal summary endpoint fetch.
+ */
+export async function fetchPortalSummary(): Promise<PortalSummaryResult> {
+  try {
+    const [summaryRes, healthRes] = await Promise.all([
+      authFetch(`${apiBaseUrl}/api/v1/portal-summary`, {
+        headers: getAuthHeaders(),
+      }),
+      authFetch(`${apiBaseUrl}/api/v1/system/config`, {
+        headers: getAuthHeaders(),
+      })
+    ]);
+
+    const summary = summaryRes.ok ? await summaryRes.json() : {};
+    
+    let mode: 'live' | 'static' | 'empty' = 'static';
+    let isDbConnected = false;
+    let isLocalDb = false;
+    let isDevMode = false;
+    let hasSyncedBefore = false;
+    let aiProvider = 'none';
+    let cronSchedule = undefined;
+    if (healthRes.ok) {
+      const healthData = await healthRes.json();
+      mode = healthData.connectionMode || 'static';
+      isDbConnected = !!healthData.isDbConnected;
+      isLocalDb = !!healthData.isLocalDb;
+      isDevMode = !!healthData.isDevMode;
+      hasSyncedBefore = !!healthData.hasSyncedBefore;
+      aiProvider = healthData.aiProvider || 'none';
+      cronSchedule = healthData.cronSchedule;
+    }
+
+    return {
+      ...summary,
+      mode,
+      isDbConnected,
+      isLocalDb,
+      isDevMode,
+      hasSyncedBefore,
+      aiProvider,
+      cronSchedule
+    };
+  } catch (error) {
+    console.warn('Failed to fetch portal summary from backend.', error);
+    return {
+      mode: 'empty',
+      isDbConnected: false,
+      isLocalDb: false,
+      isDevMode: false,
+      hasSyncedBefore: false
+    };
+  }
+}
+
+/**
+ * Optimized concurrent fetch for accounting data registers.
+ * Communicates directly with the live database backend.
+ */
 export async function fetchAccountingData(): Promise<SyncResult> {
   // Concurrent API fetch including system config to dynamically check Google Drive status
   try {
     const [salesRes, debitorsRes, healthRes] = await Promise.all([
-      authFetch(`${apiBaseUrl}/api/v1/data/sales?t=${Date.now()}`, {
-        headers: getAuthHeaders(),
-        cache: 'no-store'
+      authFetch(`${apiBaseUrl}/api/v1/data/sales`, {
+        headers: getAuthHeaders()
       }),
-      authFetch(`${apiBaseUrl}/api/v1/data/debitors?t=${Date.now()}`, {
-        headers: getAuthHeaders(),
-        cache: 'no-store'
+      authFetch(`${apiBaseUrl}/api/v1/data/debitors`, {
+        headers: getAuthHeaders()
       }),
-      authFetch(`${apiBaseUrl}/api/v1/system/config?t=${Date.now()}`, {
-        headers: getAuthHeaders(),
-        cache: 'no-store'
+      authFetch(`${apiBaseUrl}/api/v1/system/config`, {
+        headers: getAuthHeaders()
       })
     ]);
 
@@ -99,8 +186,8 @@ export async function fetchAccountingData(): Promise<SyncResult> {
       isLocalDb = !!healthData.isLocalDb;
       isDevMode = !!healthData.isDevMode;
       hasSyncedBefore = !!healthData.hasSyncedBefore;
-      aiProvider = healthData.provider || 'none';
-      cronSchedule = healthData.cron;
+      aiProvider = healthData.aiProvider || 'none';
+      cronSchedule = healthData.cronSchedule;
     }
 
     return {

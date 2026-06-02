@@ -1,5 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { getSystemSetting, setSystemSetting, getAuditPolicySetting, setAuditPolicySetting } from '../../db/db.client.js';
+import { getSystemSetting, setSystemSetting, getAuditPolicySetting, setAuditPolicySetting, db } from '../../db/db.client.js';
+import * as schema from '../../db/schema.js';
+import { eq, and } from 'drizzle-orm';
 import { config } from '../../config/config.js';
 import { z } from 'zod';
 
@@ -116,14 +118,37 @@ export async function updateSettings(
       await setSystemSetting('ai_model', aiModel);
     }
 
+    let thresholdsChanged = false;
+
     if (ruleHighExpenseCeiling !== undefined) {
       await setAuditPolicySetting(fileType, fileName, 'RULE_002', 'ruleHighExpenseCeiling', String(ruleHighExpenseCeiling));
+      thresholdsChanged = true;
     }
     if (ruleSuspiciousSpikeMultiplier !== undefined) {
       await setAuditPolicySetting(fileType, fileName, 'RULE_003', 'ruleSuspiciousSpikeMultiplier', String(ruleSuspiciousSpikeMultiplier));
+      thresholdsChanged = true;
     }
     if (ruleOutstandingCreditCap !== undefined) {
       await setAuditPolicySetting(fileType, fileName, 'RULE_008', 'ruleOutstandingCreditCap', String(ruleOutstandingCreditCap));
+      thresholdsChanged = true;
+    }
+
+    if (thresholdsChanged) {
+      const [activeFile] = await db
+        .select()
+        .from(schema.files)
+        .where(
+          and(
+            eq(schema.files.fileType, fileType),
+            eq(schema.files.isLatest, true)
+          )
+        )
+        .limit(1);
+
+      if (activeFile) {
+        const { reEvaluateAlertsForFile } = await import('./report.controller.js');
+        await reEvaluateAlertsForFile(activeFile.id, fileType as 'sales' | 'debitors' | 'stock', activeFile.fileName);
+      }
     }
 
     const activeProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);

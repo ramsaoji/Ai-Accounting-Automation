@@ -12,21 +12,51 @@ import { ExceptionsFeed } from './auditor/ExceptionsFeed';
 import { AnomalyInspector } from './auditor/AnomalyInspector';
 import { AuthorizeModal } from './auditor/AuthorizeModal';
 
-import type { SystemSettings } from '@/services/api';
+import { fetchSystemSettings, updateSystemSettings, type SystemSettings } from '@/services/api';
+import { useAccountingStore } from '@/store/useAccountingStore';
 
 interface AuditorSectionProps {
   alerts: Alert[];
   totalTransactions: number;
-  settings: SystemSettings | null;
-  onUpdateSettings: (settings: Partial<SystemSettings>) => Promise<void>;
+  relevantFileName: string | undefined;
+  onRefreshData?: () => void;
 }
 
 export const AuditorSection: React.FC<AuditorSectionProps> = ({
   alerts,
   totalTransactions,
-  settings,
-  onUpdateSettings,
+  relevantFileName,
+  onRefreshData,
 }) => {
+  const activeWorkspace = useAccountingStore((state) => state.activeWorkspace);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+
+  const fetchSettings = async () => {
+    try {
+      const data = await fetchSystemSettings(activeWorkspace, relevantFileName);
+      setSettings(data);
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSettings();
+  }, [activeWorkspace, relevantFileName]);
+
+  const handleUpdateSettings = async (newSettings: Partial<SystemSettings>) => {
+    try {
+      const updated = await updateSystemSettings(newSettings, activeWorkspace, relevantFileName);
+      setSettings(updated);
+      toast.success("System configurations updated successfully.");
+      if (onRefreshData) {
+        onRefreshData();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save settings.");
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
@@ -34,6 +64,9 @@ export const AuditorSection: React.FC<AuditorSectionProps> = ({
   
   // Left sidebar tab: 'feed' | 'policies'
   const [activeLeftTab, setActiveLeftTab] = useState<'feed' | 'policies'>('feed');
+
+  // Propagate settings to exceptions feed
+  const onUpdateSettings = handleUpdateSettings;
 
   useEffect(() => {
     const timer = setTimeout(() => {
