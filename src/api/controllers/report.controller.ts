@@ -186,7 +186,7 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
     masterTotals,
     benchmarks,
     months,
-    transactions: [],
+    transactions: txs,
     alerts: dbAlerts.map(a => ({
       ruleId: a.ruleId,
       ruleName: a.ruleName,
@@ -267,7 +267,7 @@ export async function buildDebitorsReport(activeFile: any): Promise<any> {
     totalTransactions: activeFile.totalRows,
     aggregates,
     topDebitors,
-    transactions: [],
+    transactions: txs,
     alerts: dbAlerts.map(a => ({
       ruleId: a.ruleId,
       ruleName: a.ruleName,
@@ -412,7 +412,7 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
     }
 
     const report = await buildSalesReport(activeFile);
-    reply.code(200).send(report);
+    reply.code(200).send({ ...report, transactions: [] });
   } catch (dbErr: unknown) {
     const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
     logger.error({ err: message }, 'Failed to fetch sales report from relational DB');
@@ -454,7 +454,7 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
     }
 
     const report = await buildDebitorsReport(activeFile);
-    reply.code(200).send(report);
+    reply.code(200).send({ ...report, transactions: [] });
   } catch (dbErr: unknown) {
     const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
     logger.error({ err: message }, 'Failed to fetch debtors report from relational PostgreSQL DB');
@@ -607,194 +607,10 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors'): 
 
     if (!activeFile) return null;
 
-    const [dbTxs, dbErrors] = await Promise.all([
-      db.select().from(schema.transactions).where(eq(schema.transactions.fileId, activeFile.id)),
-      db.select().from(schema.parsingErrors).where(eq(schema.parsingErrors.fileId, activeFile.id)),
-    ]);
-
-    const evaluatedAlerts = await evaluateDbTransactions(dbTxs, reportType, activeFile.fileName);
-
-    const txs = dbTxs.map(t => ({
-      date: t.date,
-      invoice: t.invoiceNumber || '',
-      category: t.category,
-      particulars: t.particulars || '',
-      amount: Number(t.amount),
-      type: t.type as 'credit' | 'debit',
-      vendor: t.vendor
-    }));
-
-    if (reportType === 'debitors') {
-      const dbParty = await db.select().from(schema.partyBalances).where(eq(schema.partyBalances.fileId, activeFile.id));
-      const topDebitors = dbParty
-        .map(d => ({
-          name: d.partyName,
-          debit: Number(d.debit),
-          credit: Number(d.credit),
-          pending: Number(d.pending)
-        }))
-        .sort((a, b) => b.pending - a.pending);
-
-      const totalDebitSum = topDebitors.reduce((sum, d) => sum + d.debit, 0);
-      const totalCreditSum = topDebitors.reduce((sum, d) => sum + d.credit, 0);
-      const totalPendingSum = topDebitors.reduce((sum, d) => sum + d.pending, 0);
-      const collectionSuccessRate = totalDebitSum > 0 ? ((totalCreditSum / totalDebitSum) * 100).toFixed(1) : '100.0';
-      const activeDebitorsCount = topDebitors.length;
-      const averageOutstandingDues = activeDebitorsCount > 0 ? (totalPendingSum / activeDebitorsCount) : 0;
-
-      return {
-        fileName: activeFile.fileName,
-        timestamp: activeFile.runTimestamp.toISOString(),
-        runTimestamp: activeFile.runTimestamp.toISOString(),
-        isDebitorsList: true,
-        totalTransactions: activeFile.totalRows,
-        aggregates: {
-          totalDebitSum,
-          totalCreditSum,
-          totalPendingSum,
-          collectionSuccessRate,
-          averageOutstandingDues,
-          activeDebitorsCount,
-          topDebtorName: topDebitors[0]?.name || 'N/A',
-          topDebtorValue: topDebitors[0]?.pending || 0
-        },
-        topDebitors,
-        transactions: txs,
-        alerts: evaluatedAlerts.map(a => ({
-          ruleId: a.ruleId,
-          ruleName: a.ruleName,
-          severity: a.severity,
-          message: a.message,
-        })),
-        errors: dbErrors.map(e => ({
-          row: e.rowNumber,
-          invoiceNumber: e.invoiceNumber || undefined,
-          error: e.errorMessage,
-        })),
-        intelligence: (activeFile.aiIntelligence as string[]) || [],
-        aiGenerated: true
-      };
+    if (reportType === 'sales') {
+      return await buildSalesReport(activeFile);
     } else {
-      const monthlyMap = new Map<string, any>();
-      for (const t of dbTxs) {
-        const sheet = getMonthYearLabel(t.date, t.sheetName);
-        if (!monthlyMap.has(sheet)) {
-          monthlyMap.set(sheet, {
-            sheetName: sheet,
-            liquor: 0,
-            food: 0,
-            creditRecovery: 0,
-            expenses: 0,
-            creditExtended: 0,
-            inflows: 0,
-            outflows: 0,
-            net: 0,
-            status: 'Surplus',
-          });
-        }
-        const m = monthlyMap.get(sheet)!;
-        const amt = Number(t.amount);
-        if (t.category.toLowerCase().includes('liquor') || t.category.toLowerCase().includes('wine')) {
-          m.liquor += amt;
-        } else if (t.category.toLowerCase().includes('food')) {
-          m.food += amt;
-        } else if (t.category.toLowerCase().includes('recovery') || t.category.toLowerCase().includes('jama')) {
-          m.creditRecovery += amt;
-        } else if (t.type === 'debit' && t.category.toLowerCase().includes('expense')) {
-          m.expenses += amt;
-        } else if (t.type === 'debit' && t.category.toLowerCase().includes('extended')) {
-          m.creditExtended += amt;
-        }
-      }
-
-      const months = Array.from(monthlyMap.values()).map(m => {
-        m.inflows = m.liquor + m.food + m.creditRecovery;
-        m.outflows = m.expenses + m.creditExtended;
-        m.net = m.inflows - m.outflows;
-        m.status = m.net >= 0 ? 'Surplus' : 'Deficit';
-        return m;
-      });
-
-      let liquorSales = 0, foodSales = 0, creditRecovery = 0, expenses = 0, creditExtended = 0;
-      for (const m of months) {
-        liquorSales += m.liquor;
-        foodSales += m.food;
-        creditRecovery += m.creditRecovery;
-        expenses += m.expenses;
-        creditExtended += m.creditExtended;
-      }
-      const totalInflows = liquorSales + foodSales + creditRecovery;
-      const totalOutflows = expenses + creditExtended;
-      const netCashflow = totalInflows - totalOutflows;
-
-      const liquorPercentage = liquorSales + foodSales > 0 ? ((liquorSales / (liquorSales + foodSales)) * 100).toFixed(1) : '0.0';
-      const foodPercentage = liquorSales + foodSales > 0 ? ((foodSales / (liquorSales + foodSales)) * 100).toFixed(1) : '0.0';
-      const creditRecoveryRate = creditExtended > 0 ? ((creditRecovery / creditExtended) * 100).toFixed(1) : '100.0';
-      const creditOutstandingGap = creditExtended - creditRecovery;
-
-      let bestRevenueMonth = 'N/A', bestRevenueValue = 0;
-      let bestProfitMonth = 'N/A', bestProfitValue = 0;
-      let peakExpenseMonth = 'N/A', peakExpenseValue = 0;
-      for (const m of months) {
-        const revenue = m.liquor + m.food;
-        if (revenue > bestRevenueValue) {
-          bestRevenueValue = revenue;
-          bestRevenueMonth = m.sheetName;
-        }
-        if (m.net > bestProfitValue) {
-          bestProfitValue = m.net;
-          bestProfitMonth = m.sheetName;
-        }
-        if (m.expenses > peakExpenseValue) {
-          peakExpenseValue = m.expenses;
-          peakExpenseMonth = m.sheetName;
-        }
-      }
-
-      return {
-        fileName: activeFile.fileName,
-        runTimestamp: activeFile.runTimestamp.toISOString(),
-        totalTransactions: activeFile.totalRows,
-        totalMonths: months.length,
-        masterTotals: {
-          liquorSales,
-          foodSales,
-          creditRecovery,
-          expenses,
-          creditExtended,
-          totalInflows,
-          totalOutflows,
-          netCashflow,
-          surplusStatus: netCashflow >= 0 ? 'Surplus' : 'Deficit'
-        },
-        benchmarks: {
-          bestRevenueMonth,
-          bestRevenueValue,
-          bestProfitMonth,
-          bestProfitValue,
-          peakExpenseMonth,
-          peakExpenseValue,
-          liquorPercentage,
-          foodPercentage,
-          creditRecoveryRate,
-          creditOutstandingGap
-        },
-        months,
-        transactions: txs,
-        alerts: evaluatedAlerts.map(a => ({
-          ruleId: a.ruleId,
-          ruleName: a.ruleName,
-          severity: a.severity,
-          message: a.message,
-        })),
-        errors: dbErrors.map(e => ({
-          row: e.rowNumber,
-          invoiceNumber: e.invoiceNumber || undefined,
-          error: e.errorMessage,
-        })),
-        intelligence: (activeFile.aiIntelligence as string[]) || [],
-        aiGenerated: activeFile.aiGenerated
-      };
+      return await buildDebitorsReport(activeFile);
     }
   } catch (err) {
     logger.error({ err }, 'Failed to dynamically reconstruct report summary');
