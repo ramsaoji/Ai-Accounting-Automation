@@ -131,9 +131,14 @@ export function App() {
   // Lazy load full reports when user leaves the portal view to enter a specific workspace console
   useEffect(() => {
     if (appSessionToken && activeView !== 'portal') {
-      fetchWorkspaceData(activeWorkspace);
+      const isSalesFullyLoaded = activeWorkspace === 'sales' && salesData && 'benchmarks' in salesData;
+      const isDebitorsFullyLoaded = activeWorkspace === 'debitors' && debitorsData && debitorsData.aggregates && 'totalDebitSum' in debitorsData.aggregates;
+      
+      if (!isSalesFullyLoaded && !isDebitorsFullyLoaded) {
+        fetchWorkspaceData(activeWorkspace);
+      }
     }
-  }, [appSessionToken, activeWorkspace, activeView, fetchWorkspaceData]);
+  }, [appSessionToken, activeWorkspace, activeView, fetchWorkspaceData, salesData, debitorsData]);
 
   const businessName = useMemo(() => {
     return deriveBusinessName(salesData?.fileName ?? debitorsData?.fileName);
