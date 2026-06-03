@@ -43,6 +43,10 @@ export async function handleCallbackData(data: string, chatId: string, messageId
     await sendGodownStockCategories(chatId, messageId);
   } else if (data === 'godown_stock_alerts') {
     await sendGodownStockAlerts(chatId, messageId);
+  } else if (data === 'godown_stock_top_movers') {
+    await sendGodownStockTopMovers(chatId, messageId);
+  } else if (data === 'godown_stock_inflows') {
+    await sendGodownStockInflows(chatId, messageId);
   }
 }
 
@@ -571,30 +575,76 @@ export async function sendDebitorsHighRisk(chatId: string, editMessageId?: numbe
 }
 
 export async function sendGodownStockSummary(chatId: string, editMessageId?: number): Promise<void> {
-  const inlineKeyboard = {
-    inline_keyboard: [
-      [
-        { text: "📊 Inventory Valuation", callback_data: "godown_stock_metrics" }
-      ],
-      [
-        { text: "🗂️ Category Breakdown", callback_data: "godown_stock_categories" }
-      ],
-      [
-        { text: "🚨 Low Stock & Audit Alerts", callback_data: "godown_stock_alerts" }
-      ],
-      [
-        { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
-      ]
-    ]
-  };
+  const data = await loadReport('godown_stock');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Stock Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
 
-  await telegramClient.sendMessage(
-    `🏭 *${config.BUSINESS_NAME} - Godown Stock Directory*\n\nSelect an option below to view godown inventory metrics, valuations, and low-stock alerts:`,
-    'Markdown',
-    inlineKeyboard,
-    chatId,
-    editMessageId
-  );
+  try {
+    const agg = data.aggregates || {};
+    const catAggs = data.categoryAggregates || [];
+    
+    // Create a beautiful text-based table
+    let table = `\`Category    Closing Val  Selling Val  Items\`\n`;
+    table += `\`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\`\n`;
+    catAggs.forEach((c: any) => {
+      const catName = (c.category || 'General').padEnd(11).substring(0, 11);
+      const closing = `₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}`.padEnd(12).substring(0, 12);
+      const selling = `₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}`.padEnd(12).substring(0, 12);
+      const count = String(c.itemsCount || 0).padStart(5);
+      table += `\`${catName} ${closing} ${selling} ${count}\`\n`;
+    });
+
+    const summaryText = `🏭 *${config.BUSINESS_NAME} - Let's dive into your Godown Stock summary.*\n\n` +
+      `I've reviewed the data, and here are the key highlights:\n\n` +
+      table + `\n` +
+      `As you can see, your liquor stock has a closing value of *₹${Math.round(catAggs.find((c: any) => c.category === 'Liquor')?.closingValue || 0).toLocaleString('en-IN')}* and a selling value of *₹${Math.round(catAggs.find((c: any) => c.category === 'Liquor')?.sellingValue || 0).toLocaleString('en-IN')}*. You have a total of *${agg.totalItemsCount || 0}* items in stock, with *${catAggs.find((c: any) => c.category === 'Liquor')?.itemsCount || 0}* being liquor items.\n\n` +
+      `📊 *Godown Stock Interactive Panel*\n` +
+      `Select an option below to view deeper stock insights, top-moving items, inflow logs, and active alerts:`;
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "📊 Valuation", callback_data: "godown_stock_metrics" },
+          { text: "🗂️ Categories", callback_data: "godown_stock_categories" }
+        ],
+        [
+          { text: "🚨 Stock & Audit Alerts", callback_data: "godown_stock_alerts" }
+        ],
+        [
+          { text: "🔥 Top Moving (Stock-Out)", callback_data: "godown_stock_top_movers" },
+          { text: "📥 Recent Inflows", callback_data: "godown_stock_inflows" }
+        ],
+        [
+          { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
+        ]
+      ]
+    };
+
+    await telegramClient.sendMessage(
+      summaryText,
+      'Markdown',
+      inlineKeyboard,
+      chatId,
+      editMessageId
+    );
+  } catch (err: any) {
+    logger.error({ err }, 'Failed to send godown stock summary');
+    await telegramClient.sendMessage(
+      `❌ *Failed to load stock summary:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
 }
 
 export async function sendGodownStockMetrics(chatId: string, editMessageId?: number): Promise<void> {
@@ -615,9 +665,9 @@ export async function sendGodownStockMetrics(chatId: string, editMessageId?: num
     const metricsText = `📊 *${config.BUSINESS_NAME} - Inventory Valuation Metrics*\n` +
       `🕒 *Last Reconciled*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
       `• 📦 *Active Items (Stock > 0)*: ${agg.totalItemsCount || 0} products\n` +
-      `• 💰 *Valuation at Cost*: ₹${Math.round(agg.totalClosingValue || 0).toLocaleString()}\n` +
-      `• 📈 *Valuation at Retail*: ₹${Math.round(agg.totalSellingValue || 0).toLocaleString()}\n` +
-      `• 🧪 *Total Liquid Volume*: *${Math.round(agg.totalVolumeLiters || 0).toLocaleString()} Liters*\n` +
+      `• 💰 *Valuation at Cost*: ₹${Math.round(agg.totalClosingValue || 0).toLocaleString('en-IN')}\n` +
+      `• 📈 *Valuation at Retail*: ₹${Math.round(agg.totalSellingValue || 0).toLocaleString('en-IN')}\n` +
+      `• 🧪 *Total Liquid Volume*: *${Math.round(agg.totalVolumeLiters || 0).toLocaleString('en-IN')} Liters*\n` +
       `• 📥 *Stock In Count*: ${agg.stockInCount || 0}\n` +
       `• 📤 *Stock Out Count*: ${agg.stockOutCount || 0}\n\n` +
       `💡 _Valuation at Cost is computed as closing stock multiplied by Cost Price. Valuation at Retail is computed using Selling Price._`;
@@ -663,8 +713,9 @@ export async function sendGodownStockCategories(chatId: string, editMessageId?: 
       catAggs.forEach((c: any) => {
         text += `• *${c.category || 'General'}*:\n` +
           `  - Products: ${c.itemsCount || 0} items\n` +
-          `  - Valuation (Cost): ₹${Math.round(c.closingValue || 0).toLocaleString()}\n` +
-          `  - Volume: ${Math.round(c.totalVolumeLiters || 0).toLocaleString()} L\n\n`;
+          `  - Valuation (Cost): ₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}\n` +
+          `  - Valuation (Retail): ₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}\n` +
+          `  - Volume: ${Math.round(c.totalVolumeLiters || 0).toLocaleString('en-IN')} L\n\n`;
       });
     } else {
       text += `_No category metrics found!_\n`;
@@ -732,6 +783,116 @@ export async function sendGodownStockAlerts(chatId: string, editMessageId?: numb
   } catch (err: any) {
     await telegramClient.sendMessage(
       `❌ *Failed to Read Stock Alerts:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendGodownStockTopMovers(chatId: string, editMessageId?: number): Promise<void> {
+  const data = await loadReport('godown_stock');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Stock Summary Found*`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const items = data.items || [];
+    const topMovers = [...items]
+      .filter((item: any) => Number(item.stockOut || 0) > 0)
+      .sort((a: any, b: any) => Number(b.stockOut || 0) - Number(a.stockOut || 0))
+      .slice(0, 10);
+
+    let text = `🔥 *${config.BUSINESS_NAME} - Top 10 Moving Items (Stock-Out)*\n\n`;
+
+    if (topMovers.length > 0) {
+      topMovers.forEach((item: any, i: number) => {
+        const qty = item.stockOut;
+        const retailValue = qty * (item.sellingPrice || 0);
+        text += `${i + 1}. *${item.itemName}* (${item.bottleSizeMl}ml):\n` +
+          `   • Outflow: *${qty} units* (${item.packaging || 'bottle'})\n` +
+          `   • Retail Value: *₹${Math.round(retailValue).toLocaleString('en-IN')}*\n` +
+          `   • Current Stock: *${item.closingStock} left*\n\n`;
+      });
+    } else {
+      text += `_No items have been registered as stock-out in the current ledger._\n`;
+    }
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '◀️ Back to Stock Menu', callback_data: 'godown_stock_menu' }
+        ]
+      ]
+    };
+
+    await telegramClient.sendMessage(text, 'Markdown', inlineKeyboard, chatId, editMessageId);
+  } catch (err: any) {
+    await telegramClient.sendMessage(
+      `❌ *Failed to Read Top Movers:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendGodownStockInflows(chatId: string, editMessageId?: number): Promise<void> {
+  const data = await loadReport('godown_stock');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Stock Summary Found*`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const items = data.items || [];
+    const topInflows = [...items]
+      .filter((item: any) => Number(item.stockIn || 0) > 0)
+      .sort((a: any, b: any) => Number(b.stockIn || 0) - Number(a.stockIn || 0))
+      .slice(0, 10);
+
+    let text = `📥 *${config.BUSINESS_NAME} - Top 10 Inflow / Restocked Items*\n\n`;
+
+    if (topInflows.length > 0) {
+      topInflows.forEach((item: any, i: number) => {
+        const qty = item.stockIn;
+        const costValue = qty * (item.costPrice || 0);
+        text += `${i + 1}. *${item.itemName}* (${item.bottleSizeMl}ml):\n` +
+          `   • Restocked: *${qty} units* (${item.packaging || 'bottle'})\n` +
+          `   • Cost Value: *₹${Math.round(costValue).toLocaleString('en-IN')}*\n` +
+          `   • Current Stock: *${item.closingStock} total*\n\n`;
+      });
+    } else {
+      text += `_No items have been registered as stock-in in the current ledger._\n`;
+    }
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '◀️ Back to Stock Menu', callback_data: 'godown_stock_menu' }
+        ]
+      ]
+    };
+
+    await telegramClient.sendMessage(text, 'Markdown', inlineKeyboard, chatId, editMessageId);
+  } catch (err: any) {
+    await telegramClient.sendMessage(
+      `❌ *Failed to Read Inflow Items:*\n\n\`${err.message}\``,
       'Markdown',
       getMainMenuKeyboard(),
       chatId,

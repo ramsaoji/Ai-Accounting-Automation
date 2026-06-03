@@ -622,7 +622,8 @@ export class OrchestratorService {
     // 2. Rules Engine
     const alerts = await rulesEngine.evaluate(allTransactions, {
       fileType,
-      fileName
+      fileName,
+      godownStockItems: allGodownStockItems
     });
 
     // 3. AI Service

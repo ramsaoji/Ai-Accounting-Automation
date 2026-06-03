@@ -11,6 +11,7 @@ import { NegativeOrZeroTransactionRule } from './definitions/negative-or-zero.ru
 import { DuplicateDateRule } from './definitions/duplicate-date.rule.js';
 import { CrossWorkbookReconciliationRule } from './definitions/cross-workbook.rule.js';
 import { OutstandingCreditCapRule } from './definitions/outstanding-credit-cap.rule.js';
+import { GodownStockAlertsRule } from './definitions/godown-stock-alerts.rule.js';
 
 /**
  * Central Rules Engine Orchestrator
@@ -28,6 +29,7 @@ export class RulesEngine {
     this.registerRule(new DuplicateDateRule());
     this.registerRule(new CrossWorkbookReconciliationRule());
     this.registerRule(new OutstandingCreditCapRule()); // Queries DB dynamically
+    this.registerRule(new GodownStockAlertsRule());
   }
 
   /**

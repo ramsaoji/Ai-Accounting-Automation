@@ -544,8 +544,28 @@ export async function reEvaluateAlertsForFile(
   fileType: 'sales' | 'debitors' | 'godown_stock',
   fileName: string
 ): Promise<void> {
-  const dbTxs = await db.select().from(schema.transactions).where(eq(schema.transactions.fileId, fileId));
-  const evaluatedAlerts = await evaluateDbTransactions(dbTxs, fileType, fileName);
+  let evaluatedAlerts: any[] = [];
+  if (fileType === 'godown_stock') {
+    const dbStockItems = await db.select().from(schema.godownStockItems).where(eq(schema.godownStockItems.fileId, fileId));
+    const mappedStockItems = dbStockItems.map(item => ({
+      ...item,
+      openingStock: Number(item.openingStock),
+      stockIn: Number(item.stockIn),
+      stockOut: Number(item.stockOut),
+      closingStock: Number(item.closingStock),
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+      totalValue: Number(item.totalValue),
+      costPrice: item.costPrice ? Number(item.costPrice) : null,
+      sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : null,
+      totalCostValue: item.totalCostValue ? Number(item.totalCostValue) : null,
+      totalSellValue: item.totalSellValue ? Number(item.totalSellValue) : null,
+    }));
+    evaluatedAlerts = await rulesEngine.evaluate([], { fileType, fileName, godownStockItems: mappedStockItems as any });
+  } else {
+    const dbTxs = await db.select().from(schema.transactions).where(eq(schema.transactions.fileId, fileId));
+    evaluatedAlerts = await evaluateDbTransactions(dbTxs, fileType, fileName);
+  }
 
   await db.transaction(async (tx) => {
     await tx.delete(schema.auditAlerts).where(eq(schema.auditAlerts.fileId, fileId));

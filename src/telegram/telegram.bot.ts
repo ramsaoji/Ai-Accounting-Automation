@@ -183,6 +183,10 @@ export class TelegramBot {
           toastText = "Loading category breakdown...";
         } else if (data === 'godown_stock_alerts') {
           toastText = "Loading stock & audit alerts...";
+        } else if (data === 'godown_stock_top_movers') {
+          toastText = "Loading top moving items...";
+        } else if (data === 'godown_stock_inflows') {
+          toastText = "Loading recent restocks...";
         }
         
         await axios.post(answerUrl, {
@@ -244,7 +248,7 @@ export class TelegramBot {
       const cleanText = text.toLowerCase();
       const isKnownCommand = 
         text.startsWith('/') || 
-        ['sales summary', 'debitors list', 'sync ledger', 'service health', 'help', 'start'].some(cmd => cleanText.includes(cmd));
+        ['sales summary', 'debitors list', 'godown stock', 'sync ledger', 'service health', 'help', 'start'].some(cmd => cleanText.includes(cmd));
 
       if (isKnownCommand) {
         await handleCommand(text, chatId);

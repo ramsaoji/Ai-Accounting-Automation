@@ -1,4 +1,4 @@
-import { Transaction } from '../types/accounting.types.js';
+import { Transaction, GodownStockItem } from '../types/accounting.types.js';
 
 export type AlertSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 
@@ -14,6 +14,7 @@ export interface RuleAlert {
 export interface RuleContext {
   fileType?: 'sales' | 'debitors' | 'godown_stock';
   fileName?: string;
+  godownStockItems?: GodownStockItem[];
 }
 
 export interface Rule {
