@@ -11,7 +11,8 @@ import {
   Sun,
   Moon,
   LogOut,
-  Settings
+  Settings,
+  Database
 } from 'lucide-react';
 import {
   Sidebar,
@@ -37,16 +38,20 @@ import {
 
 
 export interface AppSidebarProps {
-  activeWorkspace: 'sales' | 'debitors';
-  setActiveWorkspace: (w: 'sales' | 'debitors') => void;
+  activeWorkspace: 'sales' | 'debitors' | 'godown_stock';
+  setActiveWorkspace: (w: 'sales' | 'debitors' | 'godown_stock') => void;
   activeView: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor';
   setActiveView: (v: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
   businessName: string;
-  activeAlerts: unknown[];
+  highAlertsCount: number;
   theme: 'dark' | 'light' | 'system';
   setTheme: (t: 'dark' | 'light' | 'system') => void;
-  onOpenSecuritySettings: () => void;
+  onOpenSecuritySettings: (tab?: 'app-lock' | 'upload' | 'system-settings') => void;
+  onOpenHistoryRetention: () => void;
   onLogout: () => void;
+  hasSales?: boolean;
+  hasDebitors?: boolean;
+  hasStock?: boolean;
 }
 
 export function AppSidebar({
@@ -55,11 +60,15 @@ export function AppSidebar({
   activeView,
   setActiveView,
   businessName,
-  activeAlerts,
+  highAlertsCount,
   theme,
   setTheme,
   onOpenSecuritySettings,
-  onLogout
+  onOpenHistoryRetention,
+  onLogout,
+  hasSales = true,
+  hasDebitors = true,
+  hasStock = true,
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -67,7 +76,7 @@ export function AppSidebar({
     ? typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
     : theme === 'dark';
 
-  const handleWorkspaceSelect = (workspace: 'sales' | 'debitors') => {
+  const handleWorkspaceSelect = (workspace: 'sales' | 'debitors' | 'godown_stock') => {
     setActiveWorkspace(workspace);
     if (activeView === 'portal') setActiveView('overview');
     if (isMobile) {
@@ -101,12 +110,12 @@ export function AppSidebar({
               >
                 <div className="flex items-center gap-2.5">
                   <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                    {activeWorkspace === 'sales' ? 'SG' : 'DL'}
+                    {activeWorkspace === 'sales' ? 'SG' : activeWorkspace === 'debitors' ? 'DL' : 'IN'}
                   </div>
                   <div className="flex flex-col text-left group-data-[collapsible=icon]:hidden">
                     <span className="text-xs font-bold leading-none">{businessName}</span>
                     <span className="text-[0.68rem] text-muted-foreground mt-1 leading-none">
-                      {activeWorkspace === 'sales' ? 'Daily Sales Register' : 'Customer Debitors'}
+                      {activeWorkspace === 'sales' ? 'Daily Sales Register' : activeWorkspace === 'debitors' ? 'Customer Debitors' : 'Godown Stock Register'}
                     </span>
                   </div>
                 </div>
@@ -118,27 +127,44 @@ export function AppSidebar({
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 
-                <DropdownMenuItem
-                  onClick={() => handleWorkspaceSelect('sales')}
-                  className="flex items-center justify-between text-xs cursor-pointer py-2"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <BarChart3 className="size-4 text-primary" />
-                    <span className="font-medium">Daily Sales Register</span>
-                  </div>
-                  {activeWorkspace === 'sales' && <Check className="size-3.5 text-primary" />}
-                </DropdownMenuItem>
+                {hasSales && (
+                  <DropdownMenuItem
+                    onClick={() => handleWorkspaceSelect('sales')}
+                    className="flex items-center justify-between text-xs cursor-pointer py-2"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <BarChart3 className="size-4 text-primary" />
+                      <span className="font-medium">Daily Sales Register</span>
+                    </div>
+                    {activeWorkspace === 'sales' && <Check className="size-3.5 text-primary" />}
+                  </DropdownMenuItem>
+                )}
 
-                <DropdownMenuItem
-                  onClick={() => handleWorkspaceSelect('debitors')}
-                  className="flex items-center justify-between text-xs cursor-pointer py-2"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users className="size-4 text-primary" />
-                    <span className="font-medium">Debitors Outstanding Ledger</span>
-                  </div>
-                  {activeWorkspace === 'debitors' && <Check className="size-3.5 text-primary" />}
-                </DropdownMenuItem>
+                {hasDebitors && (
+                  <DropdownMenuItem
+                    onClick={() => handleWorkspaceSelect('debitors')}
+                    className="flex items-center justify-between text-xs cursor-pointer py-2"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users className="size-4 text-primary" />
+                      <span className="font-medium">Debitors Outstanding Ledger</span>
+                    </div>
+                    {activeWorkspace === 'debitors' && <Check className="size-3.5 text-primary" />}
+                  </DropdownMenuItem>
+                )}
+
+                {hasStock && (
+                  <DropdownMenuItem
+                    onClick={() => handleWorkspaceSelect('godown_stock')}
+                    className="flex items-center justify-between text-xs cursor-pointer py-2"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Grid className="size-4 text-primary" />
+                      <span className="font-medium">Godown Stock Register</span>
+                    </div>
+                    {activeWorkspace === 'godown_stock' && <Check className="size-3.5 text-primary" />}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>
@@ -202,9 +228,9 @@ export function AppSidebar({
                 >
                   <ShieldAlert className="size-4 shrink-0" />
                   <span className="group-data-[collapsible=icon]:hidden">Rules & Alerts</span>
-                  {activeAlerts.length > 0 && (
+                  {highAlertsCount > 0 && (
                     <span className="ml-auto text-[0.62rem] font-bold px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 leading-none group-data-[collapsible=icon]:hidden">
-                      {activeAlerts.length}
+                      {highAlertsCount}
                     </span>
                   )}
                 </SidebarMenuButton>
@@ -222,6 +248,25 @@ export function AppSidebar({
                   <span>AI Strategic Chat</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {/* History Retention Nav Button */}
+              {activeWorkspace !== 'debitors' && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      onOpenHistoryRetention();
+                      if (isMobile) {
+                        setOpenMobile(false);
+                      }
+                    }}
+                    className="text-xs font-semibold animate-in slide-in-from-left duration-200"
+                    tooltip="History Retention"
+                  >
+                    <Database className="size-4 shrink-0" />
+                    <span>History Retention</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -240,6 +285,8 @@ export function AppSidebar({
               <span>{isDark ? 'Light Theme' : 'Dark Theme'}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+
 
           <SidebarMenuItem>
             <SidebarMenuButton

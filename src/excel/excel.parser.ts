@@ -47,6 +47,17 @@ export class ExcelParser {
       return parseDebitorsWorkbook(workbook, fileName);
     }
 
+    // 2. Signature-based check for Godown Stock Workbook
+    const hasTodays = workbook.worksheets.some(s => s.name === 'Todays');
+    const hasHistory = workbook.worksheets.some(s => s.name === 'History' || s.name === 'History_');
+    const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
+    const isGodownStockFile = cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
+
+    if (hasTodays && hasHistory && isGodownStockFile) {
+      const { parseGodownStockWorkbook } = await import('./parsers/godown.parser.js');
+      return parseGodownStockWorkbook(workbook, fileName);
+    }
+
     const matchingHotelGauravSheets: ExcelJS.Worksheet[] = [];
 
     // 2. Signature-based check for Hotel Gaurav specialized Multi-Month format
@@ -73,7 +84,7 @@ export class ExcelParser {
     if (matchingHotelGauravSheets.length > 0) {
       logger.info({ count: matchingHotelGauravSheets.length }, 'Detected Hotel Gaurav monthly/yearly sheets to parse.');
       for (const sheet of matchingHotelGauravSheets) {
-        const parsed = parseHotelGauravSheet(sheet, fileName);
+        const parsed = await parseHotelGauravSheet(sheet, fileName);
         sheets.push(parsed);
       }
       return {
@@ -88,7 +99,7 @@ export class ExcelParser {
       throw new Error(`The Excel file '${fileName}' contains no worksheets`);
     }
 
-    const parsedStandard = parseStandardSheet(worksheet, fileName);
+    const parsedStandard = await parseStandardSheet(worksheet, fileName);
     return {
       fileName,
       sheets: [parsedStandard],

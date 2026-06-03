@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 export function useAccountingData() {
   const [salesData, setSalesData] = useState<MasterSummary | null>(null);
   const [debitorsData, setDebitorsData] = useState<MasterSummary | null>(null);
+  const [godownStockData, setGodownStockData] = useState<MasterSummary | null>(null);
   const [connectionMode, setConnectionMode] = useState<'live' | 'static' | 'empty'>('empty');
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [isLocalDb, setIsLocalDb] = useState<boolean>(false);
@@ -18,6 +19,7 @@ export function useAccountingData() {
 
   const lastSalesTimestamp = useRef<string | undefined>(undefined);
   const lastDebitorsTimestamp = useRef<string | undefined>(undefined);
+  const lastGodownStockTimestamp = useRef<string | undefined>(undefined);
   const hasInitiallySynced = useRef<boolean>(false);
   const syncRequestId = useRef<number>(0);
 
@@ -49,9 +51,10 @@ export function useAccountingData() {
 
       // Map portal summary to minimal MasterSummary objects to let PortalSection render instantly out-of-the-box
       if (result.sales) {
+        const isNewFile = lastSalesTimestamp.current !== result.sales.runTimestamp;
         setSalesData((prev) => {
           // If we already have full sales report loaded, don't overwrite it with a minimal one
-          if (prev && prev.benchmarks) return prev;
+          if (prev && prev.benchmarks && !isNewFile) return prev;
           
           return {
             fileName: result.sales!.fileName,
@@ -64,6 +67,8 @@ export function useAccountingData() {
             },
             months: result.sales!.sparkline.map((net: number) => ({ net })),
             alerts: Array(result.sales!.alertCount).fill({}),
+            highAlertCount: result.sales!.highAlertCount ?? result.sales!.alertCount,
+            dateRange: result.sales!.dateRange ?? null,
             transactions: [],
             errors: [],
             intelligence: [],
@@ -77,9 +82,10 @@ export function useAccountingData() {
       }
 
       if (result.debitors) {
+        const isNewFile = lastDebitorsTimestamp.current !== result.debitors.runTimestamp;
         setDebitorsData((prev) => {
           // If we already have full debitors report loaded, don't overwrite it
-          if (prev && prev.aggregates?.totalDebitSum !== undefined) return prev;
+          if (prev && prev.aggregates?.totalDebitSum !== undefined && !isNewFile) return prev;
           
           return {
             fileName: result.debitors!.fileName,
@@ -92,6 +98,8 @@ export function useAccountingData() {
             },
             topDebitors: result.debitors!.sparkline.map((pending: number) => ({ pending })),
             alerts: Array(result.debitors!.alertCount).fill({}),
+            highAlertCount: result.debitors!.highAlertCount ?? result.debitors!.alertCount,
+            dateRange: result.debitors!.dateRange ?? null,
             transactions: [],
             errors: [],
             intelligence: [],
@@ -102,6 +110,36 @@ export function useAccountingData() {
       } else {
         setDebitorsData(null);
         lastDebitorsTimestamp.current = undefined;
+      }
+
+      if (result.godownStock) {
+        const isNewFile = lastGodownStockTimestamp.current !== result.godownStock.runTimestamp;
+        setGodownStockData((prev) => {
+          if (prev && prev.aggregates?.totalClosingValue !== undefined && !isNewFile) return prev;
+          
+          return {
+            fileName: result.godownStock!.fileName,
+            runTimestamp: result.godownStock!.runTimestamp,
+            totalTransactions: result.godownStock!.totalItems,
+            aggregates: {
+              totalClosingValue: result.godownStock!.totalClosingValue,
+              totalSellingValue: result.godownStock!.totalSellingValue,
+              activeItemsCount: result.godownStock!.activeItemsCount,
+            },
+            historicalTrends: result.godownStock!.sparkline.map((val: number) => ({ totalCostValue: val })),
+            alerts: Array(result.godownStock!.alertCount).fill({}),
+            highAlertCount: result.godownStock!.highAlertCount ?? result.godownStock!.alertCount,
+            dateRange: result.godownStock!.dateRange ?? null,
+            items: [],
+            errors: [],
+            intelligence: [],
+            aiGenerated: false
+          } as any;
+        });
+        lastGodownStockTimestamp.current = result.godownStock.runTimestamp;
+      } else {
+        setGodownStockData(null);
+        lastGodownStockTimestamp.current = undefined;
       }
 
       hasInitiallySynced.current = true;
@@ -120,7 +158,7 @@ export function useAccountingData() {
   /**
    * Lazy load the complete transactions and analytics report for a specific workspace console view.
    */
-  const fetchWorkspaceData = useCallback(async (workspace: 'sales' | 'debitors') => {
+  const fetchWorkspaceData = useCallback(async (workspace: 'sales' | 'debitors' | 'godown_stock') => {
     setIsWorkspaceLoading(true);
     try {
       if (workspace === 'sales') {
@@ -131,13 +169,21 @@ export function useAccountingData() {
           const data = mapMasterSummary(await res.json(), false);
           setSalesData(data);
         }
-      } else {
+      } else if (workspace === 'debitors') {
         const res = await authFetch(`${apiBaseUrl}/api/v1/data/debitors`, {
           headers: getAuthHeaders(),
         });
         if (res.ok) {
           const data = mapMasterSummary(await res.json(), true);
           setDebitorsData(data);
+        }
+      } else if (workspace === 'godown_stock') {
+        const res = await authFetch(`${apiBaseUrl}/api/v1/data/godown-stock`, {
+          headers: getAuthHeaders(),
+        });
+        if (res.ok) {
+          const data = mapMasterSummary(await res.json(), false);
+          setGodownStockData(data);
         }
       }
     } catch (error) {
@@ -151,6 +197,7 @@ export function useAccountingData() {
   return {
     salesData,
     debitorsData,
+    godownStockData,
     connectionMode,
     isDbConnected,
     isLocalDb,

@@ -99,6 +99,8 @@ export function useManualUpload({ onSuccess, isSyncingDriveRef }: UseManualUploa
       }
 
       // Final state
+      const successCount = progressFiles.filter((f) => f.status === 'success').length;
+
       if (errorOccurred) {
         setUploadProgress((prev) =>
           prev
@@ -111,6 +113,9 @@ export function useManualUpload({ onSuccess, isSyncingDriveRef }: UseManualUploa
             : prev
         );
         toast.error(`Ingestion completed with errors: ${lastError}`);
+        if (successCount > 0) {
+          await onSuccess(true);
+        }
       } else {
         setUploadProgress((prev) =>
           prev

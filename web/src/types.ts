@@ -60,17 +60,25 @@ export interface MasterSummary {
   fileName: string;
   runTimestamp: string;
   isDebitorsList?: boolean;
+  isGodownStockList?: boolean;
   totalTransactions: number;
+  totalItems?: number;
   totalMonths?: number;
   aggregates?: {
-    totalDebitSum: number;
-    totalCreditSum: number;
-    totalPendingSum: number;
-    collectionSuccessRate: string;
-    averageOutstandingDues: number;
-    activeDebitorsCount: number;
-    topDebtorName: string;
-    topDebtorValue: number;
+    totalDebitSum?: number;
+    totalCreditSum?: number;
+    totalPendingSum?: number;
+    collectionSuccessRate?: string;
+    averageOutstandingDues?: number;
+    activeDebitorsCount?: number;
+    topDebtorName?: string;
+    topDebtorValue?: number;
+    // Stock specific aggregates
+    totalClosingValue?: number;
+    totalSellingValue?: number;
+    totalItemsCount?: number;
+    totalVolumeLiters?: number;
+    activeItemsCount?: number;
   };
   masterTotals?: {
     liquorSales: number;
@@ -98,11 +106,18 @@ export interface MasterSummary {
   topDebitors?: DebitorSummary[];
   months?: MonthlySummary[];
   transactions?: Transaction[];
+  items?: any[];
+  historicalTrends?: any[];
+  categoryAggregates?: any[];
   // Using inline imports to reference shared backend types
   alerts: Alert[];
   errors: ParsingError[];
   intelligence: string[];
   aiGenerated?: boolean;
+  /** Only medium/high/critical severity alerts (excludes info/low noise) */
+  highAlertCount?: number;
+  /** Earliest and latest data coverage labels for the dataset */
+  dateRange?: { from: string; to: string } | null;
 }
 
 export interface ChatMessage {

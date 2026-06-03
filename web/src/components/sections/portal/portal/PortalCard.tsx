@@ -23,23 +23,25 @@ interface PortalItem {
   filename: string;
   lastUpdated: string;
   stats: PortalStat[];
-  alertCount: number;
+  alertCount: number;      // High/medium/critical severity only
+  totalAlertCount: number; // All alerts including info/low
   tags: string[];
   sparkline: SparklineItem[];
   dataKey: string;
   stroke: string;
+  isActive: boolean;
 }
 
 interface PortalCardProps {
   portal: PortalItem;
-  onLaunchWorkspace: (workspace: 'sales' | 'debitors', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
+  onLaunchWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
 }
 
 export const PortalCard: React.FC<PortalCardProps> = ({ portal, onLaunchWorkspace }) => {
   return (
     <Card
       className="border hover:border-primary/50 hover:shadow-sm transition-all duration-300 bg-card/45 overflow-hidden flex flex-col justify-between group cursor-pointer"
-      onClick={() => onLaunchWorkspace(portal.id as 'sales' | 'debitors')}
+      onClick={() => onLaunchWorkspace(portal.id as 'sales' | 'debitors' | 'godown_stock')}
     >
       <div className="p-4 md:p-6 flex flex-col gap-4 md:gap-5">
         {/* Card Title & Icon */}
@@ -58,11 +60,18 @@ export const PortalCard: React.FC<PortalCardProps> = ({ portal, onLaunchWorkspac
             </div>
           </div>
 
-          {/* Active badge */}
-          <span className="flex items-center gap-1 text-[0.62rem] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full select-none">
-            <span className="size-1.5 rounded-full bg-success"></span>
-            Active
-          </span>
+          {/* Active / Inactive status badge */}
+          {portal.isActive ? (
+            <span className="flex items-center gap-1 text-[0.62rem] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full select-none">
+              <span className="size-1.5 rounded-full bg-success"></span>
+              Active
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[0.62rem] font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full select-none">
+              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+              Awaiting Ingestion
+            </span>
+          )}
         </div>
 
         {/* Grid stats */}
@@ -85,17 +94,29 @@ export const PortalCard: React.FC<PortalCardProps> = ({ portal, onLaunchWorkspac
             <span className="text-[0.58rem] font-bold text-muted-foreground uppercase tracking-wider select-none">
               Dynamic Trend
             </span>
-            {portal.alertCount > 0 ? (
+          {portal.alertCount > 0 ? (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onLaunchWorkspace(portal.id as 'sales' | 'debitors', 'auditor');
+                  onLaunchWorkspace(portal.id as 'sales' | 'debitors' | 'godown_stock', 'auditor');
                 }}
                 className="text-[0.68rem] text-destructive dark:text-red-400 font-semibold flex items-center gap-1 mt-0.5 hover:underline focus:outline-none cursor-pointer text-left"
               >
                 <AlertTriangle className="size-3.5 text-destructive dark:text-red-400 shrink-0" />
-                <span>Flagged: {portal.alertCount} {portal.alertCount === 1 ? 'anomaly' : 'anomalies'}</span>
+                <span>{portal.alertCount} critical/high anomalies</span>
+              </button>
+            ) : portal.totalAlertCount > 0 ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLaunchWorkspace(portal.id as 'sales' | 'debitors' | 'godown_stock', 'auditor');
+                }}
+                className="text-[0.68rem] text-amber-500 font-semibold flex items-center gap-1 mt-0.5 hover:underline focus:outline-none cursor-pointer text-left"
+              >
+                <AlertTriangle className="size-3.5 text-amber-500 shrink-0" />
+                <span>{portal.totalAlertCount.toLocaleString()} medium/low priority notices</span>
               </button>
             ) : (
               <span className="text-[0.68rem] text-success font-semibold flex items-center gap-1 mt-0.5">

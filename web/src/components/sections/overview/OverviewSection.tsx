@@ -26,6 +26,7 @@ interface OverviewSectionProps {
 export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, connectionMode }) => {
   const isMobile = useIsMobile();
   const isDebitors = summary.isDebitorsList === true;
+  const isStock = summary.isGodownStockList === true;
   const [activeChartTab, setActiveChartTab] = useState<'primary' | 'distribution'>('primary');
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
 
@@ -175,6 +176,17 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
     };
   }, [summary.topDebitors, summary.transactions, summary.aggregates, isDebitors, selectedMonths]);
 
+  // Dynamic calculations for Stock aggregates
+  const dynamicStockTotals = useMemo(() => {
+    if (!isStock || !summary.aggregates) return null;
+    return {
+      totalClosingValue: summary.aggregates.totalClosingValue ?? 0,
+      totalSellingValue: summary.aggregates.totalSellingValue ?? 0,
+      totalItemsCount: summary.aggregates.totalItemsCount ?? 0,
+      totalVolumeLiters: summary.aggregates.totalVolumeLiters ?? 0,
+    };
+  }, [summary.aggregates, isStock]);
+
   const debitorsAgeingData = useMemo(() => {
     const list = dynamicDebitorTotals?.topDebitorsList ?? [];
     const high = list.filter((d: DebitorSummary) => (d.pending ?? 0) > 20000).reduce((s: number, d: DebitorSummary) => s + (d.pending ?? 0), 0);
@@ -194,7 +206,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
     return {
       ...summary,
       months: filteredMonths,
-      topDebitors: dynamicDebitorTotals?.topDebitorsList ?? []
+      topDebitors: dynamicDebitorTotals?.topDebitorsList ?? [],
+      historicalTrends: summary.historicalTrends || [],
+      categoryAggregates: summary.categoryAggregates || []
     };
   }, [summary, filteredMonths, dynamicDebitorTotals]);
 
@@ -205,7 +219,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="font-heading font-semibold text-xl tracking-tight text-foreground">
-              {isDebitors ? 'Debitors Command Hub' : 'Ledger Performance Console'}
+              {isDebitors ? 'Debitors Command Hub' : isStock ? 'Inventory Command Hub' : 'Ledger Performance Console'}
             </h1>
             <div className="flex items-center gap-1 text-[0.65rem] font-bold text-success bg-success/10 border border-success/20 px-2.5 py-0.5 rounded-full select-none shrink-0">
               <ShieldCheck className="size-3 text-success" />
@@ -245,7 +259,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
       </div>
 
       {/* Date Filter & Control Widget Card — only for sales (has month sheets) */}
-      {!isDebitors && (
+      {!isDebitors && !isStock && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-xl bg-card/40 select-none shadow-xs">
           <div className="w-full sm:w-auto">
             <DatePickerWithRange 
@@ -267,8 +281,10 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
       {/* KPI Cards Grid */}
       <OverviewKpiCards
         isDebitors={isDebitors}
+        isStock={isStock}
         dynamicDebitorTotals={dynamicDebitorTotals}
         dynamicSalesTotals={dynamicSalesTotals}
+        dynamicStockTotals={dynamicStockTotals}
       />
 
       {/* Tab-switched Recharts Graphic Panel */}
@@ -277,10 +293,10 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
           <div>
             <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <LineIcon className="size-4.5 text-primary" />
-              {isDebitors ? "Debitor Liabilities Analytics" : "Ledger Time-Series Performance"}
+              {isDebitors ? "Debitor Liabilities Analytics" : isStock ? "Inventory Valuation Trends" : "Ledger Time-Series Performance"}
             </CardTitle>
             <CardDescription className="text-xs mt-0.5">
-              {isDebitors ? "Interactive analytics plotting liabilities and aging splits." : "Executive charts tracing cashflow surpluses and category expenditures."}
+              {isDebitors ? "Interactive analytics plotting liabilities and aging splits." : isStock ? "Interactive analytics plotting total cost and sell valuations." : "Executive charts tracing cashflow surpluses and category expenditures."}
             </CardDescription>
           </div>
 
@@ -294,7 +310,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
                   : 'bg-background hover:bg-muted text-muted-foreground'
               }`}
             >
-              {isDebitors ? 'Top Debitors' : 'Cashflow Timeline'}
+              {isDebitors ? 'Top Debitors' : isStock ? 'Valuation History' : 'Cashflow Timeline'}
             </button>
             <button
               type="button"
@@ -305,7 +321,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
                   : 'bg-background hover:bg-muted text-muted-foreground'
               }`}
             >
-              {isDebitors ? 'Ageing Splits' : 'Outflow Distribution'}
+              {isDebitors ? 'Ageing Splits' : isStock ? 'Category Splits' : 'Outflow Distribution'}
             </button>
           </div>
         </CardHeader>
@@ -322,6 +338,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
             >
               <OverviewCharts
                 isDebitors={isDebitors}
+                isStock={isStock}
                 summary={chartSummaryMock}
                 isMobile={isMobile}
                 activeChartTab={activeChartTab}

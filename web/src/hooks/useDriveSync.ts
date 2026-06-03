@@ -117,6 +117,8 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData, isUploadi
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
+            // Silently refresh dashboard data in case there were partial file sync successes
+            await fetchRealData(true);
             toast.error(`${failMsg}: ${statusResult.error || 'Server error.'}`);
             isSyncingRef.current = false;
             setIsSyncingDrive(false);
@@ -167,6 +169,7 @@ export function useDriveSync({ salesData, debitorsData, fetchRealData, isUploadi
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
+            await fetchRealData(true);
             toast.error('Sync polling timed out due to a network error. Please retry.');
             isSyncingRef.current = false;
             setIsSyncingDrive(false);

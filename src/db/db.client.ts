@@ -286,10 +286,100 @@ export async function setAuditPolicySetting(
 }
 
 /**
+ * Retrieves history retention days for a specific file type from structured table.
+ */
+export async function getHistoryRetentionDays(fileType: string, defaultDays = 90): Promise<number> {
+  try {
+    const existing = await db
+      .select()
+      .from(schema.historyRetentionSettings)
+      .where(eq(schema.historyRetentionSettings.fileType, fileType))
+      .limit(1);
+    if (existing.length > 0) {
+      return existing[0].retentionDays;
+    }
+    return defaultDays;
+  } catch (err) {
+    logger.error({ err, fileType }, 'Failed to query history retention days, using default');
+    return defaultDays;
+  }
+}
+
+/**
+ * Updates history retention days for a specific file type in structured table.
+ */
+export async function setHistoryRetentionDays(fileType: string, retentionDays: number): Promise<void> {
+  try {
+    const existing = await db
+      .select()
+      .from(schema.historyRetentionSettings)
+      .where(eq(schema.historyRetentionSettings.fileType, fileType))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(schema.historyRetentionSettings)
+        .set({ retentionDays, updatedAt: new Date() })
+        .where(eq(schema.historyRetentionSettings.fileType, fileType));
+    } else {
+      await db
+        .insert(schema.historyRetentionSettings)
+        .values({
+          fileType,
+          retentionDays,
+          updatedAt: new Date()
+        });
+    }
+    logger.info({ fileType, retentionDays }, 'History retention setting saved successfully');
+  } catch (err) {
+    logger.error({ err, fileType, retentionDays }, 'Failed to update history retention days');
+    throw err;
+  }
+}
+
+/**
  * Seeds initial system configurations on boot if not already present.
  */
 export async function initSystemSettings(): Promise<void> {
   try {
+    // 0. Seed default history retention settings and migrate old keys if they exist
+    const defaultRetention = [
+      { fileType: 'godown_stock', retentionDays: 90 },
+      { fileType: 'sales', retentionDays: 0 },
+    ];
+
+    for (const item of defaultRetention) {
+      const existing = await db
+        .select()
+        .from(schema.historyRetentionSettings)
+        .where(eq(schema.historyRetentionSettings.fileType, item.fileType))
+        .limit(1);
+      if (existing.length === 0) {
+        // Look up fallback from systemSettings first if exists
+        const fallbackKey = `${item.fileType}_history_days`;
+        const oldVal = await getSystemSetting(fallbackKey, String(item.retentionDays));
+        logger.info({ fileType: item.fileType, retentionDays: oldVal }, 'Seeding default history retention setting...');
+        await db.insert(schema.historyRetentionSettings).values({
+          fileType: item.fileType,
+          retentionDays: parseInt(oldVal, 10),
+          updatedAt: new Date()
+        });
+      }
+    }
+
+    // Delete the old 'stock_history_days' key so it doesn't clutter the systemSettings table
+    const oldStockDaysSetting = await db
+      .select()
+      .from(schema.systemSettings)
+      .where(eq(schema.systemSettings.key, 'stock_history_days'))
+      .limit(1);
+    if (oldStockDaysSetting.length > 0) {
+      logger.info('Deleting old "stock_history_days" configuration key from system_settings table...');
+      await db
+        .delete(schema.systemSettings)
+        .where(eq(schema.systemSettings.key, 'stock_history_days'));
+    }
+
     // 1. Check if the old 'ai_chat_enabled' exists in the database to migrate preference
     const oldSetting = await db
       .select()

@@ -26,6 +26,7 @@ interface AdvisorSectionProps {
 
 export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvider: initialAiProvider }) => {
   const isDebitors = summary.isDebitorsList === true;
+  const isStock = summary.isGodownStockList === true;
   
   const businessName = useMemo(() => {
     return deriveBusinessName(summary?.fileName);
@@ -83,7 +84,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
   const [activePlaybook, setActivePlaybook] = useState<'revenue' | 'recovery' | 'auditing'>('revenue');
 
   // Zustand Store hooks for persistent chat logs
-  const workspaceKey = isDebitors ? 'debitors' : 'sales';
+  const workspaceKey = isStock ? 'godown_stock' : (isDebitors ? 'debitors' : 'sales');
   const messages = useAccountingStore((state) => state.chatHistories[`chat:${workspaceKey}:${summary.fileName}`] || []);
   const loadChatHistory = useAccountingStore((state) => state.loadChatHistory);
   const addChatMessage = useAccountingStore((state) => state.addChatMessage);
@@ -164,6 +165,27 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
 
   // Chips derived from selected playbook & register context
   const suggestions = useMemo(() => {
+    if (isStock) {
+      if (activePlaybook === 'auditing') {
+        return [
+          "What inventory alerts or audit discrepancies were flagged?",
+          "Are there any products with high stock levels and no sales?",
+          "Check bottle size and packaging consistency."
+        ];
+      }
+      if (activePlaybook === 'recovery') {
+        return [
+          "Suggest pricing updates for slow-moving categories.",
+          "Analyze stock levels to optimize ordering thresholds.",
+          "Assess liquor vs beer turnover splits."
+        ];
+      }
+      return [
+        "Compare Valuation at Cost vs Valuation at Retail.",
+        "What is the total liquor volume currently in stock?",
+        "Provide stock summary by categories."
+      ];
+    }
     if (isDebitors) {
       if (activePlaybook === 'recovery') {
         return [
@@ -205,7 +227,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
         "Calculate gross margin split forecasts."
       ];
     }
-  }, [isDebitors, activePlaybook]);
+  }, [isStock, isDebitors, activePlaybook]);
 
   const activePlaybookInfo = useMemo(() => {
     const playbook = playbooks.find((p) => p.id === activePlaybook);

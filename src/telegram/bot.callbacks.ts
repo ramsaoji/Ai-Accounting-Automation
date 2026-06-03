@@ -35,6 +35,14 @@ export async function handleCallbackData(data: string, chatId: string, messageId
     await sendDebitorsTop5(chatId, messageId);
   } else if (data === 'debitors_high_risk') {
     await sendDebitorsHighRisk(chatId, messageId);
+  } else if (data === 'godown_stock_menu') {
+    await sendGodownStockSummary(chatId, messageId);
+  } else if (data === 'godown_stock_metrics') {
+    await sendGodownStockMetrics(chatId, messageId);
+  } else if (data === 'godown_stock_categories') {
+    await sendGodownStockCategories(chatId, messageId);
+  } else if (data === 'godown_stock_alerts') {
+    await sendGodownStockAlerts(chatId, messageId);
   }
 }
 
@@ -554,6 +562,176 @@ export async function sendDebitorsHighRisk(chatId: string, editMessageId?: numbe
   } catch (err: any) {
     await telegramClient.sendMessage(
       `❌ *Failed to Read High Risk Debitors:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendGodownStockSummary(chatId: string, editMessageId?: number): Promise<void> {
+  const inlineKeyboard = {
+    inline_keyboard: [
+      [
+        { text: "📊 Inventory Valuation", callback_data: "godown_stock_metrics" }
+      ],
+      [
+        { text: "🗂️ Category Breakdown", callback_data: "godown_stock_categories" }
+      ],
+      [
+        { text: "🚨 Low Stock & Audit Alerts", callback_data: "godown_stock_alerts" }
+      ],
+      [
+        { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
+      ]
+    ]
+  };
+
+  await telegramClient.sendMessage(
+    `🏭 *${config.BUSINESS_NAME} - Godown Stock Directory*\n\nSelect an option below to view godown inventory metrics, valuations, and low-stock alerts:`,
+    'Markdown',
+    inlineKeyboard,
+    chatId,
+    editMessageId
+  );
+}
+
+export async function sendGodownStockMetrics(chatId: string, editMessageId?: number): Promise<void> {
+  const data = await loadReport('godown_stock');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Stock Summary Found*\n\nPlease trigger a sync first using /sync to ingest spreadsheets and generate summaries.`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const agg = data.aggregates || {};
+    const metricsText = `📊 *${config.BUSINESS_NAME} - Inventory Valuation Metrics*\n` +
+      `🕒 *Last Reconciled*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
+      `• 📦 *Active Items (Stock > 0)*: ${agg.totalItemsCount || 0} products\n` +
+      `• 💰 *Valuation at Cost*: ₹${Math.round(agg.totalClosingValue || 0).toLocaleString()}\n` +
+      `• 📈 *Valuation at Retail*: ₹${Math.round(agg.totalSellingValue || 0).toLocaleString()}\n` +
+      `• 🧪 *Total Liquid Volume*: *${Math.round(agg.totalVolumeLiters || 0).toLocaleString()} Liters*\n` +
+      `• 📥 *Stock In Count*: ${agg.stockInCount || 0}\n` +
+      `• 📤 *Stock Out Count*: ${agg.stockOutCount || 0}\n\n` +
+      `💡 _Valuation at Cost is computed as closing stock multiplied by Cost Price. Valuation at Retail is computed using Selling Price._`;
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '◀️ Back to Stock Menu', callback_data: 'godown_stock_menu' }
+        ]
+      ]
+    };
+
+    await telegramClient.sendMessage(metricsText, 'Markdown', inlineKeyboard, chatId, editMessageId);
+  } catch (err: any) {
+    await telegramClient.sendMessage(
+      `❌ *Failed to Read Stock Metrics:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendGodownStockCategories(chatId: string, editMessageId?: number): Promise<void> {
+  const data = await loadReport('godown_stock');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Stock Summary Found*`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const catAggs = data.categoryAggregates || [];
+    let text = `🗂️ *${config.BUSINESS_NAME} - Stock Category Breakdown*\n\n`;
+
+    if (catAggs.length > 0) {
+      catAggs.forEach((c: any) => {
+        text += `• *${c.category || 'General'}*:\n` +
+          `  - Products: ${c.itemsCount || 0} items\n` +
+          `  - Valuation (Cost): ₹${Math.round(c.closingValue || 0).toLocaleString()}\n` +
+          `  - Volume: ${Math.round(c.totalVolumeLiters || 0).toLocaleString()} L\n\n`;
+      });
+    } else {
+      text += `_No category metrics found!_\n`;
+    }
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '◀️ Back to Stock Menu', callback_data: 'godown_stock_menu' }
+        ]
+      ]
+    };
+
+    await telegramClient.sendMessage(text, 'Markdown', inlineKeyboard, chatId, editMessageId);
+  } catch (err: any) {
+    await telegramClient.sendMessage(
+      `❌ *Failed to Read Stock Categories:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendGodownStockAlerts(chatId: string, editMessageId?: number): Promise<void> {
+  const data = await loadReport('godown_stock');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Stock Summary Found*`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const alerts = data.alerts || [];
+    let text = `🚨 *${config.BUSINESS_NAME} - Low Stock & Audit Alerts*\n\n`;
+
+    if (alerts.length > 0) {
+      alerts.slice(0, 10).forEach((a: any, i: number) => {
+        const severityLabel = a.severity === 'high' || a.severity === 'critical' ? '🔴' : '⚠️';
+        text += `${i + 1}. ${severityLabel} *${a.ruleName || 'Audit Issue'}*:\n` +
+          `   _${a.message || 'Discrepancy detected'}_ \n\n`;
+      });
+      if (alerts.length > 10) {
+        text += `_...and ${alerts.length - 10} more alerts. Check the auditor console for full details._\n`;
+      }
+    } else {
+      text += `✅ _No stock alerts or audit discrepancies found! All inventory is reconciled._\n`;
+    }
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '◀️ Back to Stock Menu', callback_data: 'godown_stock_menu' }
+        ]
+      ]
+    };
+
+    await telegramClient.sendMessage(text, 'Markdown', inlineKeyboard, chatId, editMessageId);
+  } catch (err: any) {
+    await telegramClient.sendMessage(
+      `❌ *Failed to Read Stock Alerts:*\n\n\`${err.message}\``,
       'Markdown',
       getMainMenuKeyboard(),
       chatId,

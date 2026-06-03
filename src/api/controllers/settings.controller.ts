@@ -1,5 +1,13 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { getSystemSetting, setSystemSetting, getAuditPolicySetting, setAuditPolicySetting, db } from '../../db/db.client.js';
+import { 
+  getSystemSetting, 
+  setSystemSetting, 
+  getAuditPolicySetting, 
+  setAuditPolicySetting, 
+  db, 
+  getHistoryRetentionDays, 
+  setHistoryRetentionDays 
+} from '../../db/db.client.js';
 import * as schema from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { config } from '../../config/config.js';
@@ -13,6 +21,8 @@ export const updateSettingsSchema = z.object({
   ruleHighExpenseCeiling: z.number().optional(),
   ruleSuspiciousSpikeMultiplier: z.number().optional(),
   ruleOutstandingCreditCap: z.number().optional(),
+  godownStockHistoryDays: z.number().optional(),
+  salesHistoryDays: z.number().optional(),
 });
 
 function getAvailableProviders(): string[] {
@@ -64,6 +74,8 @@ export async function getSettings(request: FastifyRequest, reply: FastifyReply):
     const telegramEnabledStr = await getSystemSetting('telegram_chat_enabled', 'true');
     const aiProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
     const aiModel = await getSystemSetting('ai_model', config.AI_MODEL);
+    const godownStockHistoryDays = await getHistoryRetentionDays('godown_stock', 90);
+    const salesHistoryDays = await getHistoryRetentionDays('sales', 0);
 
     const ruleHighExpenseCeilingStr = await getAuditPolicySetting(fileType, fileName, 'ruleHighExpenseCeiling', '50000');
     const ruleSuspiciousSpikeMultiplierStr = await getAuditPolicySetting(fileType, fileName, 'ruleSuspiciousSpikeMultiplier', '3');
@@ -78,6 +90,8 @@ export async function getSettings(request: FastifyRequest, reply: FastifyReply):
       ruleHighExpenseCeiling: Number(ruleHighExpenseCeilingStr) || 50000,
       ruleSuspiciousSpikeMultiplier: Number(ruleSuspiciousSpikeMultiplierStr) || 3,
       ruleOutstandingCreditCap: Number(ruleOutstandingCreditCapStr) || 100000,
+      godownStockHistoryDays,
+      salesHistoryDays,
     });
   } catch (error: any) {
     reply.code(500).send({ error: 'Failed to retrieve system settings' });
@@ -93,6 +107,8 @@ export async function updateSettings(
     ruleHighExpenseCeiling?: number;
     ruleSuspiciousSpikeMultiplier?: number;
     ruleOutstandingCreditCap?: number;
+    godownStockHistoryDays?: number;
+    salesHistoryDays?: number;
   } }>,
   reply: FastifyReply
 ): Promise<void> {
@@ -104,7 +120,9 @@ export async function updateSettings(
       aiModel,
       ruleHighExpenseCeiling,
       ruleSuspiciousSpikeMultiplier,
-      ruleOutstandingCreditCap
+      ruleOutstandingCreditCap,
+      godownStockHistoryDays,
+      salesHistoryDays
     } = request.body;
 
     const query = request.query as SettingsQuery;
@@ -116,6 +134,12 @@ export async function updateSettings(
     }
     if (aiModel !== undefined) {
       await setSystemSetting('ai_model', aiModel);
+    }
+    if (godownStockHistoryDays !== undefined) {
+      await setHistoryRetentionDays('godown_stock', godownStockHistoryDays);
+    }
+    if (salesHistoryDays !== undefined) {
+      await setHistoryRetentionDays('sales', salesHistoryDays);
     }
 
     let thresholdsChanged = false;
@@ -147,7 +171,7 @@ export async function updateSettings(
 
       if (activeFile) {
         const { reEvaluateAlertsForFile } = await import('./report.controller.js');
-        await reEvaluateAlertsForFile(activeFile.id, fileType as 'sales' | 'debitors' | 'stock', activeFile.fileName);
+        await reEvaluateAlertsForFile(activeFile.id, fileType as 'sales' | 'debitors' | 'godown_stock', activeFile.fileName);
       }
     }
 
@@ -178,6 +202,8 @@ export async function updateSettings(
 
     const webEnabledStr = await getSystemSetting('web_chat_enabled', 'true');
     const telegramEnabledStr = await getSystemSetting('telegram_chat_enabled', 'true');
+    const updatedGodownStockHistoryDays = await getHistoryRetentionDays('godown_stock', 90);
+    const updatedSalesHistoryDays = await getHistoryRetentionDays('sales', 0);
     const ruleHighExpenseCeilingStr = await getAuditPolicySetting(fileType, fileName, 'ruleHighExpenseCeiling', '50000');
     const ruleSuspiciousSpikeMultiplierStr = await getAuditPolicySetting(fileType, fileName, 'ruleSuspiciousSpikeMultiplier', '3');
     const ruleOutstandingCreditCapStr = await getAuditPolicySetting(fileType, fileName, 'ruleOutstandingCreditCap', '100000');
@@ -192,6 +218,8 @@ export async function updateSettings(
       ruleHighExpenseCeiling: Number(ruleHighExpenseCeilingStr) || 50000,
       ruleSuspiciousSpikeMultiplier: Number(ruleSuspiciousSpikeMultiplierStr) || 3,
       ruleOutstandingCreditCap: Number(ruleOutstandingCreditCapStr) || 100000,
+      godownStockHistoryDays: updatedGodownStockHistoryDays,
+      salesHistoryDays: updatedSalesHistoryDays,
     });
   } catch (error: any) {
     reply.code(500).send({ error: 'Failed to update system settings' });

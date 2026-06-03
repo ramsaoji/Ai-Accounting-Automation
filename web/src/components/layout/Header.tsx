@@ -7,7 +7,7 @@ import { UploadModal } from '@/components/shared/UploadModal';
 interface HeaderProps {
   businessName: string;
   activeView: string;
-  activeWorkspace: 'sales' | 'debitors';
+  activeWorkspace: 'sales' | 'debitors' | 'godown_stock';
   connectionMode: 'live' | 'static' | 'empty';
   isSyncingDrive: boolean;
   isUploading: boolean;
@@ -40,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
             <>
               <span className="hidden sm:inline">/</span>
               <span className="capitalize font-semibold text-foreground hidden md:inline">
-                {activeWorkspace === 'sales' ? 'Sales Register' : 'Customer Debitors'}
+                {activeWorkspace === 'sales' ? 'Sales Register' : activeWorkspace === 'debitors' ? 'Customer Debitors' : 'Godown Stock'}
               </span>
             </>
           )}

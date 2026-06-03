@@ -78,6 +78,30 @@ export async function handleAiQuery(query: string, chatId: string): Promise<void
       JSON.stringify(prunedDebitors, null, 2) + '\n';
   }
 
+  const stockData = await loadReport('godown_stock');
+  if (stockData) {
+    const prunedStock = {
+      fileName: stockData.fileName,
+      timestamp: stockData.runTimestamp || stockData.timestamp || 'N/A',
+      totalItems: stockData.totalItems,
+      aggregates: stockData.aggregates,
+      categoryAggregates: stockData.categoryAggregates || [],
+      itemsSample: stockData.items?.slice(0, 15).map((item: any) => ({
+        itemName: item.itemName,
+        category: item.category,
+        closingStock: item.closingStock,
+        costPrice: item.costPrice,
+        sellingPrice: item.sellingPrice,
+        totalCostValue: item.totalCostValue
+      })) || [],
+      alertsCount: stockData.alerts?.length || 0,
+      alertsSample: stockData.alerts?.slice(0, 5) || []
+    };
+
+    combinedContext += `\n=== ${config.BUSINESS_NAME.toUpperCase()} GODOWN STOCK SUMMARY ===\n` +
+      JSON.stringify(prunedStock, null, 2) + '\n';
+  }
+
   if (!combinedContext) {
     await telegramClient.sendMessage(
       `⚠️ *No Financial Records Found*\n\nUnable to access ledger summaries. Please run /sync first to ingest spreadsheets.`,

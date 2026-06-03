@@ -35,22 +35,30 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
 // Normalized parsing of backend/static response alerts
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mapMasterSummary(data: any, isDebitors: boolean): MasterSummary {
+  const alerts = data.alerts ? data.alerts.map((a: any) => ({
+    ruleId: a.ruleId,
+    ruleName: a.ruleName,
+    severity: a.severity,
+    message: isDebitors ? a.message : (a.example || a.message)
+  })) : [];
+  
+  const HIGH_SEVERITY = new Set(['high', 'critical']);
+  const highAlertCount = data.highAlertCount !== undefined
+    ? data.highAlertCount
+    : alerts.filter((a: any) => HIGH_SEVERITY.has(a.severity)).length;
+
   return {
     ...data,
     runTimestamp: data.runTimestamp || data.timestamp || new Date().toLocaleString(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    alerts: data.alerts ? data.alerts.map((a: any) => ({
-      ruleId: a.ruleId,
-      ruleName: a.ruleName,
-      severity: a.severity,
-      message: isDebitors ? a.message : (a.example || a.message)
-    })) : []
+    alerts,
+    highAlertCount
   };
 }
 
 export interface SyncResult {
   sales: MasterSummary | null;
   debitors: MasterSummary | null;
+  godownStock: MasterSummary | null;
   mode: 'live' | 'static' | 'empty';
   isDbConnected?: boolean;
   isLocalDb?: boolean;
@@ -71,6 +79,8 @@ export interface PortalSummaryResult {
     totalTransactions: number;
     totalMonths: number;
     alertCount: number;
+    highAlertCount: number;
+    dateRange: { from: string; to: string } | null;
     totalInflows: number;
     netCashflow: number;
     sparkline: number[];
@@ -80,9 +90,23 @@ export interface PortalSummaryResult {
     runTimestamp: string;
     totalTransactions: number;
     alertCount: number;
+    highAlertCount: number;
+    dateRange: { from: string; to: string } | null;
     totalPendingSum: number;
     collectionSuccessRate: string;
     activeDebitorsCount: number;
+    sparkline: number[];
+  };
+  godownStock?: {
+    fileName: string;
+    runTimestamp: string;
+    totalItems: number;
+    alertCount: number;
+    highAlertCount: number;
+    dateRange: { from: string; to: string } | null;
+    totalClosingValue: number;
+    totalSellingValue: number;
+    activeItemsCount: number;
     sparkline: number[];
   };
   mode: 'live' | 'static' | 'empty';
@@ -157,11 +181,14 @@ export async function fetchPortalSummary(): Promise<PortalSummaryResult> {
 export async function fetchAccountingData(): Promise<SyncResult> {
   // Concurrent API fetch including system config to dynamically check Google Drive status
   try {
-    const [salesRes, debitorsRes, healthRes] = await Promise.all([
+    const [salesRes, debitorsRes, stockRes, healthRes] = await Promise.all([
       authFetch(`${apiBaseUrl}/api/v1/data/sales`, {
         headers: getAuthHeaders()
       }),
       authFetch(`${apiBaseUrl}/api/v1/data/debitors`, {
+        headers: getAuthHeaders()
+      }),
+      authFetch(`${apiBaseUrl}/api/v1/data/godown-stock`, {
         headers: getAuthHeaders()
       }),
       authFetch(`${apiBaseUrl}/api/v1/system/config`, {
@@ -171,6 +198,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
 
     const sales = salesRes.ok ? mapMasterSummary(await salesRes.json(), false) : null;
     const debitors = debitorsRes.ok ? mapMasterSummary(await debitorsRes.json(), true) : null;
+    const godownStock = stockRes.ok ? mapMasterSummary(await stockRes.json(), false) : null;
     
     let mode: 'live' | 'static' | 'empty' = 'static';
     let isDbConnected = false;
@@ -193,6 +221,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
     return {
       sales,
       debitors,
+      godownStock,
       mode,
       isDbConnected,
       isLocalDb,
@@ -206,6 +235,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
     return {
       sales: null,
       debitors: null,
+      godownStock: null,
       mode: 'empty',
       isDbConnected: false,
       isLocalDb: false,
@@ -220,7 +250,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
  */
 export async function sendAdvisorChatMessage(
   message: string,
-  isDebitors: boolean,
+  workspace: 'sales' | 'debitors' | 'godown_stock',
   history: { sender: 'user' | 'ai'; text: string }[]
 ): Promise<string> {
   const res = await authFetch(`${apiBaseUrl}/api/v1/chat`, {
@@ -231,7 +261,7 @@ export async function sendAdvisorChatMessage(
     },
     body: JSON.stringify({
       message,
-      workspace: isDebitors ? 'debitors' : 'sales',
+      workspace,
       history,
     }),
   });
@@ -456,6 +486,8 @@ export interface SystemSettings {
   ruleHighExpenseCeiling: number;
   ruleSuspiciousSpikeMultiplier: number;
   ruleOutstandingCreditCap: number;
+  godownStockHistoryDays?: number;
+  salesHistoryDays?: number;
 }
 
 export async function fetchSystemSettings(fileType?: string, fileName?: string): Promise<SystemSettings> {

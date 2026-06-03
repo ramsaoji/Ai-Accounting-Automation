@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { MasterSummary, Transaction, MonthlySummary, DebitorSummary } from '@/types';
 import { DatePickerWithRange } from '@/components/ui/DatePickerWithRange';
 import { LedgerTable } from './ledger/LedgerTable';
+import type { GodownStockTableItem } from './ledger/GodownStockLedgerTable';
 import { getSheetDate, parseSheetNameToValue } from '@/utils/format';
 import {
   Search,
@@ -29,7 +30,7 @@ import { toast } from 'sonner';
 
 interface LedgerSectionProps {
   summary: MasterSummary;
-  activeTab: 'sales' | 'debitors';
+  activeTab: 'sales' | 'debitors' | 'godown_stock';
   relevantFileName: string | undefined;
 }
 
@@ -68,6 +69,18 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const [salesSortOrder, setSalesSortOrder] = useState<'asc' | 'desc'>('desc');
   const [debtorSortBy, setDebtorSortBy] = useState<string>('pending');
   const [debtorSortOrder, setDebtorSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [stockSortBy, setStockSortBy] = useState<string>('itemName');
+  const [stockSortOrder, setStockSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleStockSort = (column: string) => {
+    if (stockSortBy === column) {
+      setStockSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setStockSortBy(column);
+      setStockSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Server-side transactions grid states
   const [txList, setTxList] = useState<Transaction[]>([]);
@@ -123,14 +136,14 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
-    if (activeSubTab !== 'transactions') return;
+    if (activeSubTab !== 'transactions' || activeTab === 'godown_stock') return;
 
     let isMounted = true;
     const loadTx = async () => {
       setTxLoading(true);
       try {
         const res = await fetchTransactions({
-          fileType: activeTab,
+          fileType: activeTab as 'sales' | 'debitors',
           page: txPage,
           limit: txLimit,
           search: txSearch,
@@ -294,6 +307,36 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     });
   }, [summary.months, debouncedSearchTerm, selectedMonths, salesSortBy, salesSortOrder]);
 
+  // Filter & Search Logic for Stock Items
+  const processedStock = useMemo(() => {
+    if (!summary.items) return [];
+    
+    let list = summary.items as unknown as GodownStockTableItem[];
+
+    if (debouncedSearchTerm.trim()) {
+      const q = debouncedSearchTerm.toLowerCase();
+      list = list.filter((item) =>
+        item.itemName.toLowerCase().includes(q) ||
+        (item.category && item.category.toLowerCase().includes(q))
+      );
+    }
+
+    return [...list].sort((a, b) => {
+      const valA = a[stockSortBy as keyof GodownStockTableItem];
+      const valB = b[stockSortBy as keyof GodownStockTableItem];
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return stockSortOrder === 'asc' 
+          ? valA.localeCompare(valB) 
+          : valB.localeCompare(valA);
+      }
+
+      const numA = Number(valA ?? 0);
+      const numB = Number(valB ?? 0);
+      return stockSortOrder === 'asc' ? numA - numB : numB - numA;
+    });
+  }, [summary.items, debouncedSearchTerm, stockSortBy, stockSortOrder]);
+
 
 
   // Dynamic values for rendering progress/bars
@@ -370,6 +413,8 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   // Pagination Logic
   const totalItems = isDebitors
     ? processedDebitors.length
+    : activeTab === 'godown_stock'
+    ? processedStock.length
     : processedMonths.length;
 
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -503,6 +548,11 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     return processedMonths.slice(start, start + itemsPerPage);
   }, [processedMonths, currentPage]);
 
+  const paginatedStock = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return processedStock.slice(start, start + itemsPerPage);
+  }, [processedStock, currentPage]);
+
 
 
   return (
@@ -520,30 +570,32 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       </div>
 
       {/* Tab Selector */}
-      <div className="flex border bg-muted/20 rounded-lg p-0.5 select-none w-fit shrink-0">
-        <button
-          type="button"
-          onClick={() => { setActiveSubTab('ledger'); setCurrentPage(1); }}
-          className={`text-xs px-4 py-2 font-bold rounded-md transition-all cursor-pointer ${
-            activeSubTab === 'ledger'
-              ? 'bg-background text-foreground shadow-xs'
-              : 'text-muted-foreground hover:bg-muted/10'
-          }`}
-        >
-          {isDebitors ? 'Customer Balances' : 'Monthly Summaries'}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setActiveSubTab('transactions'); setCurrentPage(1); }}
-          className={`text-xs px-4 py-2 font-bold rounded-md transition-all cursor-pointer ${
-            activeSubTab === 'transactions'
-              ? 'bg-background text-foreground shadow-xs'
-              : 'text-muted-foreground hover:bg-muted/10'
-          }`}
-        >
-          Raw Transactions
-        </button>
-      </div>
+      {activeTab !== 'godown_stock' && (
+        <div className="flex border bg-muted/20 rounded-lg p-0.5 select-none w-fit shrink-0">
+          <button
+            type="button"
+            onClick={() => { setActiveSubTab('ledger'); setCurrentPage(1); }}
+            className={`text-xs px-4 py-2 font-bold rounded-md transition-all cursor-pointer ${
+              activeSubTab === 'ledger'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:bg-muted/10'
+            }`}
+          >
+            {isDebitors ? 'Customer Balances' : 'Monthly Summaries'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveSubTab('transactions'); setCurrentPage(1); }}
+            className={`text-xs px-4 py-2 font-bold rounded-md transition-all cursor-pointer ${
+              activeSubTab === 'transactions'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:bg-muted/10'
+            }`}
+          >
+            Raw Transactions
+          </button>
+        </div>
+      )}
 
       {/* Main Table Card */}
       <Card className="border shadow-xs bg-card/45 overflow-hidden flex flex-col justify-between">
@@ -611,7 +663,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                 </div>
 
                 {/* Date Filter Widget — only for sales (has month sheets) in ledger view and transactions view */}
-                {!isDebitors && (activeSubTab === 'ledger' || activeSubTab === 'transactions') && (
+                {!isDebitors && activeTab !== 'godown_stock' && (activeSubTab === 'ledger' || activeSubTab === 'transactions') && (
                   <div className="w-full sm:w-auto">
                     <DatePickerWithRange 
                       selectedMonths={activeSubTab === 'transactions' ? txSelectedMonths : selectedMonths} 
@@ -694,9 +746,10 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
           <div className="flex-1 overflow-auto">
             {activeSubTab === 'ledger' ? (
               <LedgerTable
-                isDebitors={isDebitors}
+                activeTab={activeTab}
                 paginatedDebitors={paginatedDebitors}
                 paginatedMonths={paginatedMonths}
+                paginatedStock={paginatedStock}
                 maxOutstandingDuesLimit={maxOutstandingDuesLimit}
                 totalPendingSum={totalPendingSum}
                 topDebtorValue={topDebtorValue}
@@ -709,6 +762,9 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                 debtorSortBy={debtorSortBy}
                 debtorSortOrder={debtorSortOrder}
                 onDebtorSort={handleDebtorSort}
+                stockSortBy={stockSortBy}
+                stockSortOrder={stockSortOrder}
+                onStockSort={handleStockSort}
               />
             ) : (              /* Raw Transactions Explorer Tab */
               txLoading ? (

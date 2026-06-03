@@ -11,8 +11,9 @@ export async function sendAdvisorChatMessage(
   summary: MasterSummary,
   history: { sender: 'user' | 'ai'; text: string }[]
 ): Promise<string> {
+  const workspace = summary.isGodownStockList ? 'godown_stock' : (isDebitors ? 'debitors' : 'sales');
   try {
-    return await apiSendAdvisorChatMessage(message, isDebitors, history);
+    return await apiSendAdvisorChatMessage(message, workspace, history);
   } catch (err: any) {
     console.warn('AI Chat API offline or disabled.', err);
     const errMsg = err?.message || '';

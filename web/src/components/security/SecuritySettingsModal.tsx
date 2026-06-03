@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 interface SecuritySettingsModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultTab?: 'app-lock' | 'upload' | 'system-settings';
 }
 
 const SystemSettingsSkeleton: React.FC = () => {
@@ -78,8 +79,9 @@ const SystemSettingsSkeleton: React.FC = () => {
 export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   isOpen,
   onOpenChange,
+  defaultTab = 'app-lock',
 }) => {
-  const [activeTab, setActiveTab] = useState<'app-lock' | 'upload' | 'system-settings'>('app-lock');
+  const [activeTab, setActiveTab] = useState<'app-lock' | 'upload' | 'system-settings'>(defaultTab);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -103,7 +105,13 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
   React.useEffect(() => {
-    if (isOpen && activeTab === 'system-settings') {
+    if (isOpen && defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [isOpen, defaultTab]);
+
+  React.useEffect(() => {
+    if (isOpen && (activeTab === 'system-settings' || activeTab === 'upload')) {
       setIsLoadingSettings(true);
       fetchSystemSettings()
         .then((data) => {
@@ -764,9 +772,11 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                     )}
                   </div>
                 </div>
+
               </div>
             )}
           </TabsContent>
+
           </Tabs>
 
           <DialogFooter className="sm:justify-between gap-2 mt-4 shrink-0">

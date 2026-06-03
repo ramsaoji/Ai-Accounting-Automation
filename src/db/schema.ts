@@ -5,7 +5,7 @@ import { relations } from 'drizzle-orm';
 export const files = pgTable('files', {
   id: uuid('id').defaultRandom().primaryKey(),
   fileName: varchar('file_name', { length: 255 }).notNull(),
-  fileType: varchar('file_type', { length: 50 }).notNull(), // 'sales' | 'debitors' | 'stock' | 'payroll' | 'party_ledger'
+  fileType: varchar('file_type', { length: 50 }).notNull(), // 'sales' | 'debitors' | 'godown_stock' | 'payroll' | 'party_ledger'
   runTimestamp: timestamp('run_timestamp').notNull(),
   totalRows: integer('total_rows').notNull(),
   aiSummary: text('ai_summary'),
@@ -16,7 +16,10 @@ export const files = pgTable('files', {
   errorMessage: text('error_message'),
   contentHash: varchar('content_hash', { length: 64 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('files_type_latest_idx').on(table.fileType, table.isLatest),
+  index('files_run_timestamp_idx').on(table.runTimestamp)
+]);
 
 // 2. Transactions (Sales counter logs, payroll lines, supplier payments)
 export const transactions = pgTable('transactions', {
@@ -33,25 +36,40 @@ export const transactions = pgTable('transactions', {
   metadata: jsonb('metadata'), // Dynamic metadata catches columns/drift
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('transactions_file_id_idx').on(table.fileId)
+  index('transactions_file_id_idx').on(table.fileId),
+  index('transactions_date_idx').on(table.date),
+  index('transactions_category_idx').on(table.category)
 ]);
 
-// 3. Stock Items (For godown and counter inventory registers)
-export const stockItems = pgTable('stock_items', {
+// 3. Godown Stock Items (For godown inventory registers)
+export const godownStockItems = pgTable('godown_stock_items', {
   id: serial('id').primaryKey(),
   fileId: uuid('file_id').references(() => files.id, { onDelete: 'cascade' }).notNull(),
+  snapshotDate: date('snapshot_date').notNull(),
   sheetName: varchar('sheet_name', { length: 100 }).notNull(), // e.g. "Liquor Counter Stock"
   itemCode: varchar('item_code', { length: 100 }),
   itemName: varchar('item_name', { length: 255 }).notNull(),
   category: varchar('category', { length: 100 }),
-  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
-  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
-  totalValue: numeric('total_value', { precision: 12, scale: 2 }).notNull(),
+  bottleSizeMl: integer('bottle_size_ml').notNull(),
+  openingStock: numeric('opening_stock', { precision: 12, scale: 3 }).default('0').notNull(),
+  stockIn: numeric('stock_in', { precision: 12, scale: 3 }).default('0').notNull(),
+  stockOut: numeric('stock_out', { precision: 12, scale: 3 }).default('0').notNull(),
+  closingStock: numeric('closing_stock', { precision: 12, scale: 3 }).default('0').notNull(),
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(), // kept for backwards compatibility
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(), // kept for backwards compatibility
+  totalValue: numeric('total_value', { precision: 12, scale: 2 }).notNull(), // kept for backwards compatibility
+  costPrice: numeric('cost_price', { precision: 12, scale: 2 }),
+  sellingPrice: numeric('selling_price', { precision: 12, scale: 2 }),
+  totalCostValue: numeric('total_cost_value', { precision: 14, scale: 2 }),
+  totalSellValue: numeric('total_sell_value', { precision: 14, scale: 2 }),
   location: varchar('location', { length: 100 }).notNull(), // 'godown' | 'counter'
   metadata: jsonb('metadata'), // Captures custom inventory columns
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('stock_items_file_id_idx').on(table.fileId)
+  index('godown_stock_items_file_id_idx').on(table.fileId),
+  index('godown_stock_items_snapshot_date_idx').on(table.snapshotDate),
+  index('godown_stock_items_item_name_idx').on(table.itemName),
+  index('godown_stock_items_category_idx').on(table.category)
 ]);
 
 // 4. Party Balances (Outstanding credit balances for debtors and creditors/suppliers)
@@ -119,7 +137,7 @@ export const systemSettings = pgTable('system_settings', {
 // 10. Audit Policies (Workspace/File-specific rules thresholds)
 export const auditPolicies = pgTable('audit_policies', {
   id: serial('id').primaryKey(),
-  fileType: varchar('file_type', { length: 50 }).notNull(), // 'sales' | 'debitors' | 'stock'
+  fileType: varchar('file_type', { length: 50 }).notNull(), // 'sales' | 'debitors' | 'godown_stock'
   fileName: varchar('file_name', { length: 255 }), // Nullable override
   ruleId: varchar('rule_id', { length: 50 }).notNull(), // 'RULE_002', 'RULE_008'
   parameterKey: varchar('parameter_key', { length: 100 }).notNull(), // 'ruleHighExpenseCeiling', etc.
@@ -130,10 +148,17 @@ export const auditPolicies = pgTable('audit_policies', {
   index('audit_policies_file_name_idx').on(table.fileName),
 ]);
 
+// 11. History Retention Settings (Workspace-specific retention days)
+export const historyRetentionSettings = pgTable('history_retention_settings', {
+  fileType: varchar('file_type', { length: 50 }).primaryKey(), // 'sales' | 'godown_stock' | etc.
+  retentionDays: integer('retention_days').default(90).notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // ─── Schema Relations ────────────────────────────────────────────────────────
 export const filesRelations = relations(files, ({ many }) => ({
   transactions: many(transactions),
-  stockItems: many(stockItems),
+  godownStockItems: many(godownStockItems),
   partyBalances: many(partyBalances),
   auditAlerts: many(auditAlerts),
   parsingErrors: many(parsingErrors),
@@ -146,9 +171,9 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
   }),
 }));
 
-export const stockItemsRelations = relations(stockItems, ({ one }) => ({
+export const godownStockItemsRelations = relations(godownStockItems, ({ one }) => ({
   file: one(files, {
-    fields: [stockItems.fileId],
+    fields: [godownStockItems.fileId],
     references: [files.id],
   }),
 }));

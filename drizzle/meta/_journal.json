@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1780150752297,
-      "tag": "0000_warm_wrecker",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1780218450281,
-      "tag": "0001_greedy_timeslip",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1780234381701,
-      "tag": "0002_ambitious_northstar",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1780243668639,
-      "tag": "0003_misty_gabe_jones",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1780319068343,
-      "tag": "0004_zippy_ikaris",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1780320714846,
-      "tag": "0005_redundant_ben_urich",
+      "when": 1780501684490,
+      "tag": "0000_pink_spectrum",
       "breakpoints": true
     }
   ]

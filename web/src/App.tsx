@@ -29,6 +29,7 @@ const LedgerSection = lazy(() => import('@/components/sections/ledger/LedgerSect
 const AuditorSection = lazy(() => import('@/components/sections/auditor/AuditorSection').then(m => ({ default: m.AuditorSection })));
 const AdvisorSection = lazy(() => import('@/components/sections/advisor/AdvisorSection').then(m => ({ default: m.AdvisorSection })));
 const SecuritySettingsModal = lazy(() => import('@/components/security/SecuritySettingsModal').then(m => ({ default: m.SecuritySettingsModal })));
+const HistoryRetentionModal = lazy(() => import('@/components/security/HistoryRetentionModal').then(m => ({ default: m.HistoryRetentionModal })));
 
 
 export function App() {
@@ -51,6 +52,17 @@ export function App() {
 
 
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
+  const [isRetentionOpen, setIsRetentionOpen] = useState(false);
+  const [securityModalInitialTab, setSecurityModalInitialTab] = useState<'app-lock' | 'upload' | 'system-settings'>('app-lock');
+
+  const handleOpenSecuritySettings = (tab: 'app-lock' | 'upload' | 'system-settings' | 'history-retention' = 'app-lock') => {
+    if (tab === 'history-retention') {
+      setIsRetentionOpen(true);
+    } else {
+      setSecurityModalInitialTab(tab as any);
+      setIsSecurityOpen(true);
+    }
+  };
 
   // Query status of the HttpOnly session cookie on initial app mount
   useEffect(() => {
@@ -93,7 +105,7 @@ export function App() {
   }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
-  const { salesData, debitorsData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, isWorkspaceLoading, aiProvider, sync: fetchRealData, fetchWorkspaceData } = useAccountingData();
+  const { salesData, debitorsData, godownStockData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, isWorkspaceLoading, aiProvider, sync: fetchRealData, fetchWorkspaceData } = useAccountingData();
 
   const isSyncingDriveRef = useRef(false);
   const isUploadingRef = useRef(false);
@@ -125,41 +137,59 @@ export function App() {
   }, [appSessionToken, fetchRealData]);
 
   const relevantFileName = useMemo(() => {
-    return activeWorkspace === 'sales' ? salesData?.fileName : debitorsData?.fileName;
-  }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName]);
+    if (activeWorkspace === 'sales') return salesData?.fileName;
+    if (activeWorkspace === 'debitors') return debitorsData?.fileName;
+    return godownStockData?.fileName;
+  }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName, godownStockData?.fileName]);
 
   // Lazy load full reports when user leaves the portal view to enter a specific workspace console
   useEffect(() => {
     if (appSessionToken && activeView !== 'portal') {
       const isSalesFullyLoaded = activeWorkspace === 'sales' && salesData && 'benchmarks' in salesData;
       const isDebitorsFullyLoaded = activeWorkspace === 'debitors' && debitorsData && debitorsData.aggregates && 'totalDebitSum' in debitorsData.aggregates;
+      const isGodownStockFullyLoaded = activeWorkspace === 'godown_stock' && godownStockData && 'isGodownStockList' in godownStockData;
       
-      if (!isSalesFullyLoaded && !isDebitorsFullyLoaded) {
-        fetchWorkspaceData(activeWorkspace);
+      if (activeWorkspace === 'sales' && !isSalesFullyLoaded) {
+        fetchWorkspaceData('sales');
+      } else if (activeWorkspace === 'debitors' && !isDebitorsFullyLoaded) {
+        fetchWorkspaceData('debitors');
+      } else if (activeWorkspace === 'godown_stock' && !isGodownStockFullyLoaded) {
+        fetchWorkspaceData('godown_stock');
       }
     }
-  }, [appSessionToken, activeWorkspace, activeView, fetchWorkspaceData, salesData, debitorsData]);
+  }, [appSessionToken, activeWorkspace, activeView, fetchWorkspaceData, salesData, debitorsData, godownStockData]);
 
   const businessName = useMemo(() => {
-    return deriveBusinessName(salesData?.fileName ?? debitorsData?.fileName);
-  }, [salesData?.fileName, debitorsData?.fileName]);
+    return deriveBusinessName(salesData?.fileName ?? debitorsData?.fileName ?? godownStockData?.fileName);
+  }, [salesData?.fileName, debitorsData?.fileName, godownStockData?.fileName]);
 
 
 
   // activeSummary points to the currently active dataset
-  const activeSummary = activeWorkspace === 'sales' ? salesData : debitorsData;
+  const activeSummary = activeWorkspace === 'sales' ? salesData : activeWorkspace === 'debitors' ? debitorsData : godownStockData;
 
-  // activeAlerts selects the alerts for the active workspace (centralized backend source of truth)
   const activeAlerts = useMemo(() => {
     if (activeWorkspace === 'sales') {
       return salesData?.alerts || [];
-    } else {
+    } else if (activeWorkspace === 'debitors') {
       return debitorsData?.alerts || [];
+    } else {
+      return godownStockData?.alerts || [];
     }
-  }, [activeWorkspace, salesData, debitorsData]);
+  }, [activeWorkspace, salesData, debitorsData, godownStockData]);
+
+  const highAlertsCount = useMemo(() => {
+    const activeData = activeWorkspace === 'sales' ? salesData : activeWorkspace === 'debitors' ? debitorsData : godownStockData;
+    if (!activeData) return 0;
+    if (activeData.highAlertCount !== undefined) {
+      return activeData.highAlertCount;
+    }
+    const HIGH_SEVERITY = new Set(['high', 'critical']);
+    return (activeData.alerts || []).filter((a: any) => HIGH_SEVERITY.has(a.severity)).length;
+  }, [activeWorkspace, salesData, debitorsData, godownStockData]);
 
   // Launch workspace callback from portal
-  const handleLaunchWorkspace = (workspace: 'sales' | 'debitors', view: 'overview' | 'ledger' | 'auditor' | 'advisor' = 'overview') => {
+  const handleLaunchWorkspace = (workspace: 'sales' | 'debitors' | 'godown_stock', view: 'overview' | 'ledger' | 'auditor' | 'advisor' = 'overview') => {
     setActiveWorkspace(workspace);
     setActiveView(view);
   };
@@ -184,7 +214,7 @@ export function App() {
   }
 
   // Global Onboarding View: if both datasets are empty on clean prod deployment
-  if (!salesData && !debitorsData) {
+  if (!salesData && !debitorsData && !godownStockData) {
     return (
       <TooltipProvider>
         <OnboardingWizard
@@ -220,11 +250,15 @@ export function App() {
             activeView={activeView}
             setActiveView={setActiveView}
             businessName={businessName}
-            activeAlerts={activeAlerts}
+            highAlertsCount={highAlertsCount}
             theme={theme}
             setTheme={setTheme}
-            onOpenSecuritySettings={() => setIsSecurityOpen(true)}
+            onOpenSecuritySettings={handleOpenSecuritySettings}
+            onOpenHistoryRetention={() => setIsRetentionOpen(true)}
             onLogout={handleLogout}
+            hasSales={!!salesData}
+            hasDebitors={!!debitorsData}
+            hasStock={!!godownStockData}
           />
 
           {/* Sidebar Main Content Inset Wrapper */}
@@ -258,8 +292,7 @@ export function App() {
                     <PortalSection
                       salesData={salesData}
                       debitorsData={debitorsData}
-                      salesAlertCount={salesData?.alerts?.length || 0}
-                      debitorsAlertCount={debitorsData?.alerts?.length || 0}
+                      stockData={godownStockData}
                       onLaunchWorkspace={handleLaunchWorkspace}
                       cronSchedule={cronSchedule}
                       connectionMode={connectionMode}
@@ -307,7 +340,16 @@ export function App() {
 
         </div>
       </SidebarProvider>
-      <SecuritySettingsModal isOpen={isSecurityOpen} onOpenChange={setIsSecurityOpen} />
+      <SecuritySettingsModal 
+        isOpen={isSecurityOpen} 
+        onOpenChange={setIsSecurityOpen}
+        defaultTab={securityModalInitialTab}
+      />
+      <HistoryRetentionModal
+        isOpen={isRetentionOpen}
+        onOpenChange={setIsRetentionOpen}
+        activeWorkspace={activeWorkspace}
+      />
       <DriveSyncProgressCard isSyncing={isSyncingDrive} progress={syncProgress} onClose={resetDriveSync} />
       <IngestionProgressModal
         progress={uploadProgress}

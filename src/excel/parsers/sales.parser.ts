@@ -3,12 +3,18 @@ import { SheetParsingResult, ParsingError, Transaction } from '../../types/accou
 import { buildHeaderMap, mapRowToTransaction, extractStringValue } from '../excel.mapper.js';
 import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
+import { getHistoryRetentionDays } from '../../db/db.client.js';
 
-export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: string): SheetParsingResult {
+export async function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: string): Promise<SheetParsingResult> {
   logger.info({ sheetName: worksheet.name, totalRows: worksheet.rowCount }, `Specialized parsing for ${config.BUSINESS_NAME} Daily Sales Register`);
   
   const transactions: Transaction[] = [];
   const errors: ParsingError[] = [];
+
+  const historyDays = await getHistoryRetentionDays('sales', 0);
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - historyDays);
+  cutoffDate.setHours(0, 0, 0, 0);
 
   let sumLiquor = 0;
   let sumFood = 0;
@@ -105,6 +111,11 @@ export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: st
         throw new Error(`Invalid date format: ${dateStr}`);
       }
 
+      // Respect daily sales history retention window if enabled
+      if (historyDays > 0 && dateObj < cutoffDate) {
+        continue;
+      }
+
       if (liquorSale > 0) {
         transactions.push({
           date: dateObj,
@@ -192,11 +203,16 @@ export function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: st
   };
 }
 
-export function parseStandardSheet(worksheet: ExcelJS.Worksheet, fileName: string): SheetParsingResult {
+export async function parseStandardSheet(worksheet: ExcelJS.Worksheet, fileName: string): Promise<SheetParsingResult> {
   logger.info({ sheetName: worksheet.name, totalRows: worksheet.rowCount }, 'Parsing worksheet with standard ledger schema');
 
   const transactions: Transaction[] = [];
   const errors: ParsingError[] = [];
+
+  const historyDays = await getHistoryRetentionDays('sales', 0);
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - historyDays);
+  cutoffDate.setHours(0, 0, 0, 0);
   
   let headerRowIndex = -1;
   let headerMap = new Map<string, number>();
@@ -239,6 +255,12 @@ export function parseStandardSheet(worksheet: ExcelJS.Worksheet, fileName: strin
 
     try {
       const transaction = mapRowToTransaction(values, headerMap);
+
+      // Respect daily sales history retention window if enabled
+      if (historyDays > 0 && transaction.date < cutoffDate) {
+        continue;
+      }
+
       transactions.push(transaction);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);

@@ -3,11 +3,14 @@ import { Search } from 'lucide-react';
 import type { DebitorSummary, MonthlySummary } from '@/types';
 import { DebitorLedgerTable } from './DebitorLedgerTable';
 import { MonthlySalesLedgerTable } from './MonthlySalesLedgerTable';
+import { GodownStockLedgerTable } from './GodownStockLedgerTable';
+import type { GodownStockTableItem } from './GodownStockLedgerTable';
 
 interface LedgerTableProps {
-  isDebitors: boolean;
+  activeTab: 'sales' | 'debitors' | 'godown_stock';
   paginatedDebitors: DebitorSummary[];
   paginatedMonths: MonthlySummary[];
+  paginatedStock: GodownStockTableItem[];
   maxOutstandingDuesLimit: number;
   totalPendingSum: number;
   topDebtorValue: number;
@@ -20,12 +23,16 @@ interface LedgerTableProps {
   debtorSortBy: string;
   debtorSortOrder: 'asc' | 'desc';
   onDebtorSort: (column: string) => void;
+  stockSortBy: string;
+  stockSortOrder: 'asc' | 'desc';
+  onStockSort: (column: string) => void;
 }
 
 export const LedgerTable: React.FC<LedgerTableProps> = ({
-  isDebitors,
+  activeTab,
   paginatedDebitors,
   paginatedMonths,
+  paginatedStock,
   maxOutstandingDuesLimit,
   totalPendingSum,
   topDebtorValue,
@@ -38,13 +45,20 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
   debtorSortBy,
   debtorSortOrder,
   onDebtorSort,
+  stockSortBy,
+  stockSortOrder,
+  onStockSort,
 }) => {
   if (totalItems === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center select-none min-h-[300px] w-full">
         <Search className="size-10 text-muted-foreground/45 animate-pulse shrink-0" />
         <span className="text-sm font-bold text-foreground">
-          {isDebitors ? "No matching client profiles" : "No matching spreadsheet monthly records"}
+          {activeTab === 'debitors' 
+            ? "No matching client profiles" 
+            : activeTab === 'sales'
+            ? "No matching spreadsheet monthly records"
+            : "No matching inventory items"}
         </span>
         <span className="text-xs text-muted-foreground max-w-xs leading-normal">
           Try adjusting your search filters or clear the query.
@@ -53,7 +67,7 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
     );
   }
 
-  if (isDebitors) {
+  if (activeTab === 'debitors') {
     return (
       <DebitorLedgerTable
         paginatedDebitors={paginatedDebitors}
@@ -64,6 +78,17 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
         debtorSortBy={debtorSortBy}
         debtorSortOrder={debtorSortOrder}
         onDebtorSort={onDebtorSort}
+      />
+    );
+  }
+
+  if (activeTab === 'godown_stock') {
+    return (
+      <GodownStockLedgerTable
+        paginatedItems={paginatedStock}
+        stockSortBy={stockSortBy}
+        stockSortOrder={stockSortOrder}
+        onStockSort={onStockSort}
       />
     );
   }
@@ -79,3 +104,4 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
     />
   );
 };
+

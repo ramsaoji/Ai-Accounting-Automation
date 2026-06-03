@@ -370,20 +370,26 @@ export class OrchestratorService {
           const parseResult = await excelParser.parseBuffer(buffer, fileName);
           const allTransactions = parseResult.sheets.flatMap(s => s.transactions);
           const allErrors = parseResult.sheets.flatMap(s => s.errors);
+          const allGodownStockItems = parseResult.sheets.flatMap(s => s.godownStockItems || []);
 
-          if (allTransactions.length === 0) {
-            logger.info(`Workbook "${fileName}" contains zero valid transactions. Skipping.`);
+          const cleanFileName = fileName.replace(/\.[^/.]+$/, ''); // Strip extension
+          const isGodownStock = parseResult.isGodownStockList || cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
+          const fileType = parseResult.isDebitorsList ? 'debitors' : isGodownStock ? 'godown_stock' : 'sales';
+
+          const totalValidRecords = isGodownStock ? allGodownStockItems.length : allTransactions.length;
+          if (totalValidRecords === 0) {
+            logger.info(`Workbook "${fileName}" contains zero valid records. Skipping.`);
             continue;
           }
 
           logger.info(
-            { sheets: parseResult.sheets.length, transactions: allTransactions.length },
+            { sheets: parseResult.sheets.length, transactions: allTransactions.length, godownStockItems: allGodownStockItems.length },
             'Auditing and generating unified Master Summary report'
           );
 
           // 2. Rules Engine: Run modular business validations
           const alerts = await rulesEngine.evaluate(allTransactions, {
-            fileType: parseResult.isDebitorsList ? 'debitors' : 'sales',
+            fileType,
             fileName
           });
 
@@ -399,20 +405,24 @@ export class OrchestratorService {
             parsingErrors: allErrors,
             sheets: parseResult.sheets,
             isDebitorsList: parseResult.isDebitorsList,
+            isGodownStockList: parseResult.isGodownStockList,
             debitors: parseResult.sheets.find(s => s.debitors !== undefined)?.debitors,
             debitorsLimit,
           });
 
-          const cleanFileName = fileName.replace(/\.[^/.]+$/, ''); // Strip extension
-
-          // 4. Build daily-sales array if this is a sales register (shared helper)
-          const dailySalesArray = !parseResult.isDebitorsList
-            ? buildDailySalesArray(allTransactions)
-            : undefined;
-
           // 4. DB mode: persist relationally to PostgreSQL DB
           try {
-            const contentHash = calculateTransactionsHash(allTransactions, allErrors, alerts);
+            const hashItems = isGodownStock
+              ? allGodownStockItems.map(s => ({
+                  date: s.snapshotDate,
+                  amount: s.closingStock,
+                  type: 'credit',
+                  vendor: s.itemName,
+                  category: s.category,
+                  invoiceNumber: `${s.bottleSizeMl}-${s.sheetName}`
+                }))
+              : allTransactions;
+            const contentHash = calculateTransactionsHash(hashItems, allErrors, alerts);
             await this.saveToRelationalDb(
               fileName,
               parseResult,
@@ -593,19 +603,25 @@ export class OrchestratorService {
     const parseResult = await excelParser.parseBuffer(buffer, fileName);
     const allTransactions = parseResult.sheets.flatMap(s => s.transactions);
     const allErrors = parseResult.sheets.flatMap(s => s.errors);
+    const allGodownStockItems = parseResult.sheets.flatMap(s => s.godownStockItems || []);
 
-    if (allTransactions.length === 0) {
-      throw new Error(`Workbook "${fileName}" contains zero valid transactions.`);
+    const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
+    const isGodownStock = parseResult.isGodownStockList || cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
+    const fileType = parseResult.isDebitorsList ? 'debitors' : isGodownStock ? 'godown_stock' : 'sales';
+
+    const totalValidRecords = isGodownStock ? allGodownStockItems.length : allTransactions.length;
+    if (totalValidRecords === 0) {
+      throw new Error(`Workbook "${fileName}" contains zero valid ${isGodownStock ? 'stock items' : 'transactions'}.`);
     }
 
     logger.info(
-      { sheets: parseResult.sheets.length, transactions: allTransactions.length },
+      { sheets: parseResult.sheets.length, transactions: allTransactions.length, godownStockItems: allGodownStockItems.length },
       'Auditing and generating upload summary report'
     );
 
     // 2. Rules Engine
     const alerts = await rulesEngine.evaluate(allTransactions, {
-      fileType: parseResult.isDebitorsList ? 'debitors' : 'sales',
+      fileType,
       fileName
     });
 
@@ -619,16 +635,26 @@ export class OrchestratorService {
       parsingErrors: allErrors,
       sheets: parseResult.sheets,
       isDebitorsList: parseResult.isDebitorsList,
+      isGodownStockList: isGodownStock,
       debitors: parseResult.sheets.find(s => s.debitors !== undefined)?.debitors,
       debitorsLimit: 10,
     });
 
     const summaryObj = JSON.parse(reports.jsonSummary);
 
-    // 4. Persist to Neon DB relationally
     // 4. Persist to PostgreSQL DB relationally
     try {
-      const contentHash = calculateTransactionsHash(allTransactions, allErrors, alerts);
+      const hashItems = isGodownStock
+        ? allGodownStockItems.map(s => ({
+            date: s.snapshotDate,
+            amount: s.closingStock,
+            type: 'credit',
+            vendor: s.itemName,
+            category: s.category,
+            invoiceNumber: `${s.bottleSizeMl}-${s.sheetName}`
+          }))
+        : allTransactions;
+      const contentHash = calculateTransactionsHash(hashItems, allErrors, alerts);
       await this.saveToRelationalDb(
         fileName,
         parseResult,
@@ -642,7 +668,8 @@ export class OrchestratorService {
       logger.info({ fileName }, 'Persisted uploaded report relationally to PostgreSQL DB.');
     } catch (dbErr: unknown) {
       const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
-      logger.error({ err: message }, 'Failed to persist uploaded report relationally to PostgreSQL DB');
+      logger.error({ err: dbErr }, 'Failed to persist uploaded report relationally to PostgreSQL DB');
+      throw new Error(`Database persistence failed: ${message}`);
     }
 
     const durationMs = Date.now() - startTime;
@@ -669,15 +696,14 @@ export class OrchestratorService {
     if (!db) return;
     const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
     const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
-    const isStock = cleanFileName.toUpperCase().includes('STOCK');
-    const fileType = isDebtors ? 'debitors' : isStock ? 'stock' : 'sales';
+    const isGodownStock = cleanFileName.toUpperCase().includes('STOCK');
+    const fileType = isDebtors ? 'debitors' : isGodownStock ? 'godown_stock' : 'sales';
     const summaryObj = JSON.parse(reports.jsonSummary);
 
     await db.transaction(async (tx) => {
-      // 1. Mark previous active version of this file as not latest
+      // 1. CASCADE DELETE previous active version of this file
       await tx
-        .update(schema.files)
-        .set({ isLatest: false })
+        .delete(schema.files)
         .where(
           and(
             eq(schema.files.fileName, fileName),
@@ -703,7 +729,7 @@ export class OrchestratorService {
         .returning();
 
       // 3. Insert transactions (finance ledgers)
-      if (fileType !== 'stock' && allTransactions.length > 0) {
+      if (fileType !== 'godown_stock' && allTransactions.length > 0) {
         const batchSize = 1000;
         for (let i = 0; i < allTransactions.length; i += batchSize) {
           const chunk = allTransactions.slice(i, i + batchSize).map(t => ({
@@ -723,22 +749,33 @@ export class OrchestratorService {
       }
 
       // 4. Insert stock items (inventory)
-      if (fileType === 'stock' && allTransactions.length > 0) {
+      const godownStockItemsList = parseResult.sheets.flatMap((s: any) => s.godownStockItems || []);
+      if (fileType === 'godown_stock' && godownStockItemsList.length > 0) {
         const batchSize = 1000;
-        for (let i = 0; i < allTransactions.length; i += batchSize) {
-          const chunk = allTransactions.slice(i, i + batchSize).map(t => ({
+        for (let i = 0; i < godownStockItemsList.length; i += batchSize) {
+          const chunk = godownStockItemsList.slice(i, i + batchSize).map((s: any) => ({
             fileId: newFile.id,
-            sheetName: t.sheetName || 'Stock',
-            itemName: t.vendor || t.particulars || 'Item',
-            itemCode: t.invoiceNumber || null,
-            category: t.category || 'General',
-            quantity: '1',
-            unitPrice: String(t.amount || 0),
-            totalValue: String(t.amount || 0),
-            location: cleanFileName.toUpperCase().includes('GODWON') ? 'godown' : 'counter',
-            metadata: {}
+            snapshotDate: s.snapshotDate instanceof Date ? s.snapshotDate : new Date(s.snapshotDate),
+            sheetName: s.sheetName || 'Stock',
+            itemCode: s.itemCode || null,
+            itemName: s.itemName,
+            category: s.category || 'General',
+            bottleSizeMl: s.bottleSizeMl,
+            openingStock: String(s.openingStock || 0),
+            stockIn: String(s.stockIn || 0),
+            stockOut: String(s.stockOut || 0),
+            closingStock: String(s.closingStock || 0),
+            quantity: String(s.quantity || 0),
+            unitPrice: String(s.unitPrice || 0),
+            totalValue: String(s.totalValue || 0),
+            costPrice: s.costPrice !== null && s.costPrice !== undefined ? String(s.costPrice) : null,
+            sellingPrice: s.sellingPrice !== null && s.sellingPrice !== undefined ? String(s.sellingPrice) : null,
+            totalCostValue: s.totalCostValue !== null && s.totalCostValue !== undefined ? String(s.totalCostValue) : null,
+            totalSellValue: s.totalSellValue !== null && s.totalSellValue !== undefined ? String(s.totalSellValue) : null,
+            location: s.location || 'godown',
+            metadata: s.metadata || {}
           }));
-          await tx.insert(schema.stockItems).values(chunk);
+          await tx.insert(schema.godownStockItems).values(chunk);
         }
       }
 
@@ -762,27 +799,31 @@ export class OrchestratorService {
 
       // 6. Insert audit alerts
       if (alerts.length > 0) {
-        await tx.insert(schema.auditAlerts).values(
-          alerts.map(a => ({
+        const batchSize = 1000;
+        for (let i = 0; i < alerts.length; i += batchSize) {
+          const chunk = alerts.slice(i, i + batchSize).map(a => ({
             fileId: newFile.id,
             ruleId: a.ruleId,
             ruleName: a.ruleName,
             severity: a.severity,
             message: a.message,
-          }))
-        );
+          }));
+          await tx.insert(schema.auditAlerts).values(chunk);
+        }
       }
 
       // 7. Insert parsing errors
       if (allErrors.length > 0) {
-        await tx.insert(schema.parsingErrors).values(
-          allErrors.map(e => ({
+        const batchSize = 1000;
+        for (let i = 0; i < allErrors.length; i += batchSize) {
+          const chunk = allErrors.slice(i, i + batchSize).map(e => ({
             fileId: newFile.id,
             rowNumber: e.row,
             invoiceNumber: e.invoiceNumber || null,
             errorMessage: e.error,
-          }))
-        );
+          }));
+          await tx.insert(schema.parsingErrors).values(chunk);
+        }
       }
     });
 

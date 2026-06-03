@@ -1,9 +1,11 @@
 import type { Transaction, TransactionType } from './sales.types.js';
 import { TransactionSchema, TransactionTypeSchema } from './sales.types.js';
 import type { DebitorSummary } from './debitors.types.js';
+import type { GodownStockItem } from './godown-stock.types.js';
+import { GodownStockItemSchema } from './godown-stock.types.js';
 
-export type { Transaction, TransactionType, DebitorSummary };
-export { TransactionSchema, TransactionTypeSchema };
+export type { Transaction, TransactionType, DebitorSummary, GodownStockItem };
+export { TransactionSchema, TransactionTypeSchema, GodownStockItemSchema };
 
 export interface ParsingError {
   row: number;
@@ -16,10 +18,12 @@ export interface SheetParsingResult {
   transactions: Transaction[];
   errors: ParsingError[];
   debitors?: DebitorSummary[];
+  godownStockItems?: GodownStockItem[];
 }
 
 export interface ExcelParsingResult {
   fileName: string;
   sheets: SheetParsingResult[];
   isDebitorsList?: boolean;
+  isGodownStockList?: boolean;
 }

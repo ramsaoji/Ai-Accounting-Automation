@@ -1,1 +1,0 @@
-ALTER TABLE "files" ADD COLUMN "content_hash" varchar(64);

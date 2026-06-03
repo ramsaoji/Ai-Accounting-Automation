@@ -3,20 +3,20 @@ import type { ChatMessage } from '../types';
 
 interface AccountingState {
   appSessionToken: string;
-  activeWorkspace: 'sales' | 'debitors';
+  activeWorkspace: 'sales' | 'debitors' | 'godown_stock';
   activeView: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor';
   chatHistories: Record<string, ChatMessage[]>;
 
   // Mutators
   setToken: (token: string, remember?: boolean) => void;
   clearToken: () => void;
-  setActiveWorkspace: (workspace: 'sales' | 'debitors') => void;
+  setActiveWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock') => void;
   setActiveView: (view: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
-  getChatHistory: (workspace: 'sales' | 'debitors', fileName: string) => ChatMessage[];
-  loadChatHistory: (workspace: 'sales' | 'debitors', fileName: string, businessName: string) => void;
-  addChatMessage: (workspace: 'sales' | 'debitors', fileName: string, message: ChatMessage) => void;
-  clearChat: (workspace: 'sales' | 'debitors', fileName: string) => void;
-  setChatHistory: (workspace: 'sales' | 'debitors', fileName: string, history: ChatMessage[]) => void;
+  getChatHistory: (workspace: 'sales' | 'debitors' | 'godown_stock', fileName: string) => ChatMessage[];
+  loadChatHistory: (workspace: 'sales' | 'debitors' | 'godown_stock', fileName: string, businessName: string) => void;
+  addChatMessage: (workspace: 'sales' | 'debitors' | 'godown_stock', fileName: string, message: ChatMessage) => void;
+  clearChat: (workspace: 'sales' | 'debitors' | 'godown_stock', fileName: string) => void;
+  setChatHistory: (workspace: 'sales' | 'debitors' | 'godown_stock', fileName: string, history: ChatMessage[]) => void;
 }
 
 const getInitialToken = () => {

@@ -11,7 +11,7 @@ import { Errors } from '../errors.js';
 
 export const chatSchema = z.object({
   message: z.string().min(1, 'Message is required').max(4000, 'Message must not exceed 4000 characters'),
-  workspace: z.enum(['sales', 'debitors']),
+  workspace: z.enum(['sales', 'debitors', 'godown_stock']),
   history: z.array(
     z.object({
       sender: z.enum(['user', 'ai']),
@@ -43,8 +43,9 @@ export async function handleAdvisorChat(
     }
 
     // Determine correct summary file based on requested workspace
+    const reportType = workspace === 'godown_stock' ? 'godown_stock' : (workspace === 'debitors' ? 'debitors' : 'sales');
     const isDebitors = workspace === 'debitors';
-    const reportType = isDebitors ? 'debitors' : 'sales';
+    const isGodownStock = workspace === 'godown_stock';
 
     let summaryJson: unknown = null;
 
@@ -70,9 +71,14 @@ export async function handleAdvisorChat(
     // Prune the summary JSON to be token-efficient (eliminating duplicate alert details)
     const prunedSummary = {
       fileName: summary.fileName,
-      timestamp: summary.timestamp,
+      timestamp: summary.runTimestamp || summary.timestamp,
       isDebitorsList: !!summary.isDebitorsList,
+      isGodownStockList: !!summary.isGodownStockList,
       aggregates,
+      categoryAggregates: summary.categoryAggregates,
+      historicalTrends: summary.historicalTrends,
+      itemsSample: Array.isArray(summary.items) ? (summary.items as any[]).slice(0, 15) : [],
+      allItems: Array.isArray(summary.items) ? (summary.items as any[]).slice(0, 100) : [],
       topDebitors: Array.isArray(summary.topDebitors) ? (summary.topDebitors as any[]).slice(0, 10) : [],
       allDebitors: Array.isArray(summary.topDebitors) ? (summary.topDebitors as any[]).slice(0, 50) : [],
       totalMonths: summary.totalMonths,
@@ -93,7 +99,18 @@ export async function handleAdvisorChat(
     const businessName = config.BUSINESS_NAME;
     let domainContext = '';
 
-    if (isDebitors) {
+    if (isGodownStock) {
+      domainContext = `
+You are helping the owner understand their godown inventory, stock levels, valuations, bottle volumes, and potential audit discrepancies.
+Key metrics available:
+- Total items tracked: ${summary.totalItems} products
+- Valuation at Cost: ₹${Math.round(Number(aggregates?.totalClosingValue ?? 0)).toLocaleString()}
+- Valuation at Retail (Selling): ₹${Math.round(Number(aggregates?.totalSellingValue ?? 0)).toLocaleString()}
+- Total active items (closing stock > 0): ${aggregates?.totalItemsCount} items
+- Total volume: ${Math.round(Number(aggregates?.totalVolumeLiters ?? 0)).toLocaleString()} Liters
+- Stock In / Stock Out transactions count: In: ${aggregates?.stockInCount}, Out: ${aggregates?.stockOutCount}
+`;
+    } else if (isDebitors) {
       domainContext = `
 You are helping the owner understand their customer credits, outstanding dues (Udhari), credit recoveries, and collection risk profiles.
 Key metrics available:

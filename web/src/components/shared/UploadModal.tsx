@@ -210,7 +210,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <DialogHeader>
               <DialogTitle className="text-sm font-bold">Upload Accounting Spreadsheet(s)</DialogTitle>
               <DialogDescription className="text-xs">
-                Ingest liquor registers, daily cash sales, or debtors lists. Select your files below and click Upload to begin.
+                Ingest daily sales registers, outstanding debtors lists, or godown stock ledgers. Select your files below and click Upload to begin.
               </DialogDescription>
             </DialogHeader>
 
@@ -246,7 +246,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                             </button>
                           } />
                           <TooltipContent className="block max-w-[240px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                            Upload a Daily Sales Register spreadsheet containing monthly sales sheets (e.g. "January 2026"), or a Customer Debitors Outstanding ledger spreadsheet.
+                            Upload a Daily Sales Register spreadsheet, a Customer Debitors Outstanding ledger, or a Godown Stock Register spreadsheet.
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>

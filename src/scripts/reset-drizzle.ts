@@ -1,6 +1,6 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
-import { initDb, initSecurityConfig, initSystemSettings } from '../db/db.client.js';
+
 
 dotenv.config();
 
@@ -31,10 +31,12 @@ async function resetDrizzle() {
       DROP TABLE IF EXISTS "parsing_errors" CASCADE;
       DROP TABLE IF EXISTS "audit_alerts" CASCADE;
       DROP TABLE IF EXISTS "party_balances" CASCADE;
-      DROP TABLE IF EXISTS "stock_items" CASCADE;
+      DROP TABLE IF EXISTS "godown_stock_items" CASCADE;
       DROP TABLE IF EXISTS "transactions" CASCADE;
       DROP TABLE IF EXISTS "security_config" CASCADE;
       DROP TABLE IF EXISTS "system_settings" CASCADE;
+      DROP TABLE IF EXISTS "history_retention_settings" CASCADE;
+      DROP TABLE IF EXISTS "audit_policies" CASCADE;
       DROP TABLE IF EXISTS "files" CASCADE;
       DROP TABLE IF EXISTS "__drizzle_migrations" CASCADE;
       DROP SCHEMA IF EXISTS "drizzle" CASCADE;
@@ -48,17 +50,7 @@ async function resetDrizzle() {
     await pool.end();
   }
 
-  // Run the Drizzle initial migrations and seed security config
-  try {
-    console.log('🏗️ Booting database initializers to apply migrations and seed credentials...');
-    await initDb();
-    await initSecurityConfig();
-    await initSystemSettings();
-    console.log('🎉 Drizzle reset completed successfully! The database is clean and primed.');
-  } catch (err: any) {
-    console.error('❌ Error executing migrations:', err.message);
-    process.exit(1);
-  }
+
 }
 
 resetDrizzle();

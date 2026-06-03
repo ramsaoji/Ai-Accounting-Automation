@@ -12,7 +12,7 @@ export interface RuleAlert {
 }
 
 export interface RuleContext {
-  fileType?: 'sales' | 'debitors' | 'stock';
+  fileType?: 'sales' | 'debitors' | 'godown_stock';
   fileName?: string;
 }
 

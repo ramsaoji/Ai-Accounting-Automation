@@ -22,6 +22,7 @@ interface DebitorsAgeingItem {
 
 interface OverviewChartsProps {
   isDebitors: boolean;
+  isStock?: boolean;
   summary: MasterSummary;
   isMobile: boolean;
   activeChartTab: 'primary' | 'distribution';
@@ -30,6 +31,7 @@ interface OverviewChartsProps {
 
 export const OverviewCharts: React.FC<OverviewChartsProps> = ({
   isDebitors,
+  isStock = false,
   summary,
   isMobile,
   activeChartTab,
@@ -38,7 +40,7 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
   return (
     <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
       {activeChartTab === 'primary' ? (
-        // Primary Tab: Top Debitors (Bar) or Sales Timeline (Area)
+        // Primary Tab: Top Debitors (Bar) or Stock Valuation Timeline (Area) or Sales Timeline (Area)
         isDebitors && summary.topDebitors ? (
           <BarChart
             layout="vertical"
@@ -68,6 +70,31 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
               ))}
             </Bar>
           </BarChart>
+        ) : isStock && summary.historicalTrends ? (
+          <AreaChart data={summary.historicalTrends} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
+            <defs>
+              <linearGradient id="colorCostValue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25}/>
+                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.0}/>
+              </linearGradient>
+              <linearGradient id="colorSellValue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0.0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
+            <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={10} />
+            <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
+            <RechartsTooltip 
+              contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
+              itemStyle={{ color: 'var(--foreground)' }}
+              labelStyle={{ color: 'var(--muted-foreground)' }}
+              formatter={(v) => `₹${Number(v).toLocaleString()}`} 
+            />
+            <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+            <Area type="monotone" name="Stock Cost Valuation" dataKey="totalCostValue" stroke="var(--primary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorCostValue)" />
+            <Area type="monotone" name="Stock Sell Valuation" dataKey="totalSellValue" stroke="var(--chart-2)" strokeWidth={1} strokeDasharray="4 4" fillOpacity={1} fill="url(#colorSellValue)" />
+          </AreaChart>
         ) : summary.months ? (
           <AreaChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
             <defs>
@@ -95,7 +122,7 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
           </AreaChart>
         ) : null
       ) : (
-        // Secondary Tab: Ageing Splits (Bar) or Outflow splits
+        // Secondary Tab: Ageing Splits (Bar) or Stock Category Split (Bar) or Sales Outflow splits (Bar)
         isDebitors ? (
           <BarChart data={debitorsAgeingData} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
@@ -113,6 +140,22 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
                 <Cell key={`cell-${entry.range}`} fill={entry.color} />
               ))}
             </Bar>
+          </BarChart>
+        ) : isStock && summary.categoryAggregates ? (
+          <BarChart data={summary.categoryAggregates} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
+            <XAxis dataKey="category" stroke="var(--muted-foreground)" fontSize={10} />
+            <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
+            <RechartsTooltip 
+              cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
+              contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
+              itemStyle={{ color: 'var(--foreground)' }}
+              labelStyle={{ color: 'var(--muted-foreground)' }}
+              formatter={(v) => `₹${Number(v).toLocaleString()}`} 
+            />
+            <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+            <Bar dataKey="closingValue" name="Cost Valuation" fill="var(--primary)" />
+            <Bar dataKey="sellingValue" name="Sell Valuation" fill="var(--chart-2)" />
           </BarChart>
         ) : summary.months ? (
           <BarChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>

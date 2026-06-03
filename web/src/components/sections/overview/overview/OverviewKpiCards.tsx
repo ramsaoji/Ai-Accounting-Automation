@@ -27,16 +27,27 @@ interface SalesTotals {
   creditRecoveryRate: string;
 }
 
+interface StockTotals {
+  totalClosingValue: number;
+  totalSellingValue: number;
+  totalItemsCount: number;
+  totalVolumeLiters: number;
+}
+
 interface OverviewKpiCardsProps {
   isDebitors: boolean;
+  isStock?: boolean;
   dynamicDebitorTotals: DebitorTotals | null;
   dynamicSalesTotals: SalesTotals | null;
+  dynamicStockTotals: StockTotals | null;
 }
 
 export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
   isDebitors,
+  isStock = false,
   dynamicDebitorTotals,
   dynamicSalesTotals,
+  dynamicStockTotals,
 }) => {
   if (isDebitors && dynamicDebitorTotals) {
     return (
@@ -75,7 +86,44 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
     );
   }
 
-  if (!isDebitors && dynamicSalesTotals) {
+  if (isStock && dynamicStockTotals) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 select-none">
+        <KpiCard
+          title="Stock Valuation (Cost)"
+          tooltipText="Total cost valuation of closing stock currently in the godown."
+          value={formatINR(dynamicStockTotals.totalClosingValue)}
+          description="Total cost valuation of inventory."
+          icon={<TrendingUp className="text-primary size-4 shrink-0" />}
+          variant="green"
+        />
+        <KpiCard
+          title="Estimated Sell Value"
+          tooltipText="Total estimated selling valuation of closing stock currently in the godown."
+          value={formatINR(dynamicStockTotals.totalSellingValue)}
+          description="Potential inventory sell value."
+          icon={<BarChart3 className="text-amber-500 size-4 shrink-0" />}
+          variant="gold"
+        />
+        <KpiCard
+          title="Active Inventory Lines"
+          tooltipText="Total count of active unique products carrying positive stock volumes."
+          value={dynamicStockTotals.totalItemsCount}
+          description="Active products in stock."
+          icon={<Users className="text-primary size-4 shrink-0" />}
+        />
+        <KpiCard
+          title="Total Volume"
+          tooltipText="Consolidated volume of closing stock measured in liters."
+          value={`${Math.round(dynamicStockTotals.totalVolumeLiters).toLocaleString('en-IN')} Liters`}
+          description="Consolidated volume in liters."
+          icon={<Percent className="text-primary size-4 shrink-0" />}
+        />
+      </div>
+    );
+  }
+
+  if (!isDebitors && !isStock && dynamicSalesTotals) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 select-none">
         <KpiCard
@@ -114,3 +162,4 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
 
   return null;
 };
+

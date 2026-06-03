@@ -1,4 +1,4 @@
-import type { Transaction, ParsingError, DebitorSummary } from '../types/accounting.types.js';
+import type { Transaction, ParsingError, DebitorSummary, GodownStockItem } from '../types/accounting.types.js';
 import type { RuleAlert } from '../rules/rules.types.js';
 
 /**
@@ -8,6 +8,7 @@ export interface SheetSummaryData {
   sheetName: string;
   transactions: Transaction[];
   errors: ParsingError[];
+  godownStockItems?: GodownStockItem[];
 }
 
 /**
@@ -21,6 +22,7 @@ export interface PromptInputData {
   parsingErrors: ParsingError[];
   sheets?: SheetSummaryData[];
   isDebitorsList?: boolean;
+  isGodownStockList?: boolean;
   debitors?: DebitorSummary[];
   debitorsLimit?: number;
 }

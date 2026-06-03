@@ -175,6 +175,14 @@ export class TelegramBot {
           toastText = "Loading top outstanding debits...";
         } else if (data === 'debitors_high_risk') {
           toastText = "Loading high risk accounts...";
+        } else if (data === 'godown_stock_menu') {
+          toastText = "Loading godown stock portal...";
+        } else if (data === 'godown_stock_metrics') {
+          toastText = "Loading inventory valuation metrics...";
+        } else if (data === 'godown_stock_categories') {
+          toastText = "Loading category breakdown...";
+        } else if (data === 'godown_stock_alerts') {
+          toastText = "Loading stock & audit alerts...";
         }
         
         await axios.post(answerUrl, {

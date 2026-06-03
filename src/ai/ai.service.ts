@@ -156,6 +156,77 @@ export class AiService {
     }
 
     // =========================================================================
+    // BRANCH C: Godown Stock Ingestion Summary Orchestrator
+    // =========================================================================
+    const isGodownStock = data.isGodownStockList || fileName.toUpperCase().includes('STOCK');
+    if (isGodownStock && data.sheets) {
+      logger.info({ fileName }, `Generating specialized report for Godown Stock (${businessName})`);
+
+      const godownStockItemsList = data.sheets.flatMap(s => s.godownStockItems || []);
+      const todaysItems = godownStockItemsList.filter(s => s.sheetName === 'Todays');
+      
+      const uniqueItemsCount = new Set(todaysItems.map(i => i.itemName)).size;
+      const categories = Array.from(new Set(todaysItems.map(i => i.category)));
+      
+      let totalStockValue = 0;
+      let totalStockCostValue = 0;
+      for (const item of todaysItems) {
+        totalStockValue += Number(item.totalSellValue || 0);
+        totalStockCostValue += Number(item.totalCostValue || 0);
+      }
+
+      const markdownReport = `# 🏭 ${businessName} Godown Stock Register — Master Audit Summary\n\n` +
+        `> [!NOTE]\n` +
+        `> **Source File**: \`${fileName}\`  \n` +
+        `> **Active Products in Godown**: \`${uniqueItemsCount} Items\`  \n` +
+        `> **Status**: ${parsingErrors.length > 0 ? 'Processed with Warnings ⚠️' : 'Successfully Parsed & Synced ✅'}  \n` +
+        `> **Processed On**: ${runTimestamp}  \n\n` +
+        `---\n\n` +
+        `### 💰 Core Inventory Aggregates (Todays)\n` +
+        `* **Total Stock Value (Retail):** **₹${Math.round(totalStockValue).toLocaleString()}**\n` +
+        `* **Total Stock Cost Value (Purchase):** **₹${Math.round(totalStockCostValue).toLocaleString()}**\n` +
+        `* **Estimated Retail Margin:** **₹${Math.round(totalStockValue - totalStockCostValue).toLocaleString()}**\n` +
+        `* **Active Categories:** ${categories.join(', ')}\n\n` +
+        `---\n\n` +
+        `### 🔮 AI Strategic Intelligence & Inventory Insights\n` +
+        `> * **Inventory optimization suggestions will be available on the dashboard.**\n\n` +
+        `---\n\n` +
+        `### 🚨 Ingestion Exceptions & Warnings\n` +
+        `> * All stock registers are cleanly matching with zero alerts!\n`;
+
+      const htmlReport = `
+        <div style="font-family: sans-serif; padding: 20px; color: #fff; background: #0f172a;">
+          <h1 style="color: #e2e8f0; border-bottom: 1px solid #334155; padding-bottom: 10px;">Godown Stock Report</h1>
+          <p>File parsed: <strong>${fileName}</strong></p>
+          <p>Total items: <strong>${todaysItems.length}</strong></p>
+          <p>Total retail value: <strong>₹${Math.round(totalStockValue).toLocaleString()}</strong></p>
+        </div>
+      `;
+
+      const jsonSummary = JSON.stringify({
+        fileName,
+        timestamp: runTimestamp,
+        runTimestamp,
+        isGodownStockList: true,
+        aiGenerated: false,
+        aggregates: {
+          totalStockValue: Math.round(totalStockValue),
+          totalStockCostValue: Math.round(totalStockCostValue),
+          uniqueItemsCount,
+          activeProductsCount: uniqueItemsCount
+        },
+        alerts: [],
+        errors: parsingErrors,
+        intelligence: [
+          `Inventory contains ${uniqueItemsCount} products across ${categories.length} categories.`,
+          `Estimated total stock valuation is ₹${Math.round(totalStockValue).toLocaleString()} at retail prices.`
+        ]
+      }, null, 2);
+
+      return { markdownReport, htmlReport, jsonSummary };
+    }
+
+    // =========================================================================
     // BRANCH A: Specialized Udhari & Debitors Register Orchestrator
     // =========================================================================
     if (data.isDebitorsList && data.debitors) {

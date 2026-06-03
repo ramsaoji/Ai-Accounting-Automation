@@ -11,7 +11,7 @@ import { TokenPayload } from './security.controller.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { Errors } from '../errors.js';
 
-async function evaluateDbTransactions(dbTxs: any[], fileType: 'sales' | 'debitors' | 'stock', fileName: string): Promise<any[]> {
+async function evaluateDbTransactions(dbTxs: any[], fileType: 'sales' | 'debitors' | 'godown_stock', fileName: string): Promise<any[]> {
   const transactionsForAudit = dbTxs.map(t => ({
     date: new Date(t.date),
     invoiceNumber: t.invoiceNumber || '',
@@ -47,12 +47,37 @@ function getMonthYearLabel(dateVal: any, sheetName: string): string {
   return cleanSheet;
 }
 
+/**
+ * Parses a sheet name like "Jan 2025" or "December 2024" into a Date for sorting.
+ */
+function getSheetDate(sheetName: string): Date | null {
+  const clean = sheetName.trim().toLowerCase();
+  const yearMatch = clean.match(/\b(20\d{2})\b/);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[1], 10);
+    const monthsMap: Record<string, number> = {
+      january: 0, jan: 0, february: 1, feb: 1, march: 2, mar: 2,
+      april: 3, apr: 3, may: 4, june: 5, jun: 5, july: 6, jul: 6,
+      august: 7, aug: 7, september: 8, sept: 8, sep: 8,
+      october: 9, oct: 9, november: 10, nov: 10, december: 11, dec: 11,
+    };
+    const monthMatch = clean.match(/(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)/);
+    const monthIdx = monthMatch ? (monthsMap[monthMatch[0]] ?? 0) : 0;
+    return new Date(year, monthIdx, 1);
+  }
+  return null;
+}
+
 export const reportCache = new Map<string, any>();
+const HIGH_SEVERITY = new Set(['high', 'critical']);
+const serverStartTime = Date.now();
 
 export async function buildSalesReport(activeFile: any): Promise<any> {
-  const cached = reportCache.get(activeFile.id);
-  if (cached) {
-    return cached;
+  if (config.NODE_ENV !== 'development') {
+    const cached = reportCache.get(activeFile.id);
+    if (cached) {
+      return cached;
+    }
   }
 
   // 2. Query transactions, errors and pre-saved alerts concurrently
@@ -177,6 +202,20 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
     creditOutstandingGap
   };
 
+  const sortedMonths = [...months].sort((a: any, b: any) => {
+    const da = getSheetDate(a.sheetName);
+    const db = getSheetDate(b.sheetName);
+    if (!da || !db) return 0;
+    return da.getTime() - db.getTime();
+  });
+  const dateRange = sortedMonths.length >= 2
+    ? { from: sortedMonths[0].sheetName, to: sortedMonths[sortedMonths.length - 1].sheetName }
+    : sortedMonths.length === 1
+      ? { from: sortedMonths[0].sheetName, to: sortedMonths[0].sheetName }
+      : null;
+
+  const highAlertCount = dbAlerts.filter(a => HIGH_SEVERITY.has(a.severity)).length;
+
   // 7. Structure complete MasterSummary response object
   const summaryPayload = {
     fileName: activeFile.fileName,
@@ -199,7 +238,9 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
       error: e.errorMessage,
     })),
     intelligence: (activeFile.aiIntelligence as string[]) || [],
-    aiGenerated: activeFile.aiGenerated
+    aiGenerated: activeFile.aiGenerated,
+    highAlertCount,
+    dateRange
   };
 
   reportCache.set(activeFile.id, summaryPayload);
@@ -207,9 +248,11 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
 }
 
 export async function buildDebitorsReport(activeFile: any): Promise<any> {
-  const cached = reportCache.get(activeFile.id);
-  if (cached) {
-    return cached;
+  if (config.NODE_ENV !== 'development') {
+    const cached = reportCache.get(activeFile.id);
+    if (cached) {
+      return cached;
+    }
   }
 
   // 2. Query debtor snapshots, transactions, errors and pre-saved alerts concurrently
@@ -259,6 +302,8 @@ export async function buildDebitorsReport(activeFile: any): Promise<any> {
     collectionSuccessRate
   };
 
+  const highAlertCount = dbAlerts.filter(a => HIGH_SEVERITY.has(a.severity)).length;
+
   // 6. Structure complete MasterSummary response object
   const summaryPayload = {
     fileName: activeFile.fileName,
@@ -280,7 +325,214 @@ export async function buildDebitorsReport(activeFile: any): Promise<any> {
       error: e.errorMessage,
     })),
     intelligence: (activeFile.aiIntelligence as string[]) || [],
-    aiGenerated: activeFile.aiGenerated
+    aiGenerated: activeFile.aiGenerated,
+    highAlertCount,
+    dateRange: null
+  };
+
+  reportCache.set(activeFile.id, summaryPayload);
+  return summaryPayload;
+}
+
+export async function buildGodownStockReport(activeFile: any): Promise<any> {
+  if (config.NODE_ENV !== 'development') {
+    const cached = reportCache.get(activeFile.id);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const [dbStockItems, dbErrors, dbAlerts] = await Promise.all([
+    db.select().from(schema.godownStockItems).where(eq(schema.godownStockItems.fileId, activeFile.id)),
+    db.select().from(schema.parsingErrors).where(eq(schema.parsingErrors.fileId, activeFile.id)),
+    db.select().from(schema.auditAlerts).where(eq(schema.auditAlerts.fileId, activeFile.id)),
+  ]);
+
+  const todaysItems = dbStockItems.filter(item => item.sheetName === 'Todays');
+
+  let latestItems = todaysItems;
+  if (latestItems.length === 0 && dbStockItems.length > 0) {
+    const dates = dbStockItems.map(item => new Date(item.snapshotDate).getTime());
+    const maxDate = Math.max(...dates);
+    latestItems = dbStockItems.filter(item => new Date(item.snapshotDate).getTime() === maxDate);
+  }
+
+  let totalClosingValue = 0;
+  let totalSellingValue = 0;
+  let totalVolumeLiters = 0;
+  let totalStockInCount = 0;
+  let totalStockOutCount = 0;
+  let activeItemsCount = 0;
+
+  const categoryMap = new Map<string, {
+    category: string;
+    closingValue: number;
+    sellingValue: number;
+    itemsCount: number;
+    totalVolumeLiters: number;
+    stockInCount: number;
+    stockOutCount: number;
+  }>();
+
+  const categories = ['Liquor', 'Strong Beer', 'Mild Beer', 'Wine'];
+  for (const cat of categories) {
+    categoryMap.set(cat, {
+      category: cat,
+      closingValue: 0,
+      sellingValue: 0,
+      itemsCount: 0,
+      totalVolumeLiters: 0,
+      stockInCount: 0,
+      stockOutCount: 0
+    });
+  }
+
+  for (const item of latestItems) {
+    const stockIn = Number(item.stockIn);
+    const stockOut = Number(item.stockOut);
+    const closingStock = Number(item.closingStock);
+    const costPrice = item.costPrice ? Number(item.costPrice) : 0;
+    const sellingPrice = item.sellingPrice ? Number(item.sellingPrice) : 0;
+
+    const totalCostVal = item.totalCostValue ? Number(item.totalCostValue) : (closingStock * costPrice);
+    const totalSellVal = item.totalSellValue ? Number(item.totalSellValue) : (closingStock * sellingPrice);
+    const volumeLiters = (closingStock * item.bottleSizeMl) / 1000;
+
+    totalClosingValue += totalCostVal;
+    totalSellingValue += totalSellVal;
+    totalVolumeLiters += volumeLiters;
+    totalStockInCount += stockIn;
+    totalStockOutCount += stockOut;
+    
+    if (closingStock > 0) {
+      activeItemsCount++;
+    }
+
+    const cat = item.category || 'General';
+    if (!categoryMap.has(cat)) {
+      categoryMap.set(cat, {
+        category: cat,
+        closingValue: 0,
+        sellingValue: 0,
+        itemsCount: 0,
+        totalVolumeLiters: 0,
+        stockInCount: 0,
+        stockOutCount: 0
+      });
+    }
+
+    const catAgg = categoryMap.get(cat)!;
+    catAgg.closingValue += totalCostVal;
+    catAgg.sellingValue += totalSellVal;
+    catAgg.totalVolumeLiters += volumeLiters;
+    catAgg.stockInCount += stockIn;
+    catAgg.stockOutCount += stockOut;
+    if (closingStock > 0) {
+      catAgg.itemsCount++;
+    }
+  }
+
+  const categoryAggregates = Array.from(categoryMap.values());
+
+  const aggregates = {
+    totalClosingValue,
+    totalSellingValue,
+    totalItemsCount: activeItemsCount,
+    totalVolumeLiters,
+    stockInCount: totalStockInCount,
+    stockOutCount: totalStockOutCount
+  };
+
+  const trendsMap = new Map<string, {
+    date: string;
+    totalCostValue: number;
+    totalSellValue: number;
+    totalClosingStock: number;
+    totalStockIn: number;
+    totalStockOut: number;
+  }>();
+
+  for (const item of dbStockItems) {
+    const dateStr = String(item.snapshotDate);
+
+    const closingStock = Number(item.closingStock);
+    const stockIn = Number(item.stockIn);
+    const stockOut = Number(item.stockOut);
+    const costPrice = item.costPrice ? Number(item.costPrice) : 0;
+    const sellingPrice = item.sellingPrice ? Number(item.sellingPrice) : 0;
+
+    const totalCostVal = item.totalCostValue ? Number(item.totalCostValue) : (closingStock * costPrice);
+    const totalSellVal = item.totalSellValue ? Number(item.totalSellValue) : (closingStock * sellingPrice);
+
+    if (!trendsMap.has(dateStr)) {
+      trendsMap.set(dateStr, {
+        date: dateStr,
+        totalCostValue: 0,
+        totalSellValue: 0,
+        totalClosingStock: 0,
+        totalStockIn: 0,
+        totalStockOut: 0
+      });
+    }
+
+    const trend = trendsMap.get(dateStr)!;
+    trend.totalCostValue += totalCostVal;
+    trend.totalSellValue += totalSellVal;
+    trend.totalClosingStock += closingStock;
+    trend.totalStockIn += stockIn;
+    trend.totalStockOut += stockOut;
+  }
+
+  const historicalTrends = Array.from(trendsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+  const mappedItems = latestItems.map(item => ({
+    itemName: item.itemName,
+    category: item.category,
+    bottleSizeMl: item.bottleSizeMl,
+    openingStock: Number(item.openingStock),
+    stockIn: Number(item.stockIn),
+    stockOut: Number(item.stockOut),
+    closingStock: Number(item.closingStock),
+    costPrice: item.costPrice ? Number(item.costPrice) : null,
+    sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : null,
+    totalCostValue: item.totalCostValue ? Number(item.totalCostValue) : null,
+    totalSellValue: item.totalSellValue ? Number(item.totalSellValue) : null,
+    packaging: (item.metadata as any)?.packaging || 'bottle'
+  }));
+
+  const sortedTrends = [...historicalTrends].sort((a, b) => a.date.localeCompare(b.date));
+  const dateRange = sortedTrends.length >= 2
+    ? { from: sortedTrends[0].date, to: sortedTrends[sortedTrends.length - 1].date }
+    : sortedTrends.length === 1
+      ? { from: sortedTrends[0].date, to: sortedTrends[0].date }
+      : null;
+
+  const highAlertCount = dbAlerts.filter(a => HIGH_SEVERITY.has(a.severity)).length;
+
+  const summaryPayload = {
+    fileName: activeFile.fileName,
+    runTimestamp: activeFile.runTimestamp.toISOString(),
+    isGodownStockList: true,
+    totalItems: latestItems.length,
+    aggregates,
+    categoryAggregates,
+    items: mappedItems,
+    historicalTrends,
+    alerts: dbAlerts.map(a => ({
+      ruleId: a.ruleId,
+      ruleName: a.ruleName,
+      severity: a.severity,
+      message: a.message,
+    })),
+    errors: dbErrors.map(e => ({
+      row: e.rowNumber,
+      invoiceNumber: e.invoiceNumber || undefined,
+      error: e.errorMessage,
+    })),
+    intelligence: (activeFile.aiIntelligence as string[]) || [],
+    aiGenerated: activeFile.aiGenerated,
+    highAlertCount,
+    dateRange
   };
 
   reportCache.set(activeFile.id, summaryPayload);
@@ -289,7 +541,7 @@ export async function buildDebitorsReport(activeFile: any): Promise<any> {
 
 export async function reEvaluateAlertsForFile(
   fileId: string,
-  fileType: 'sales' | 'debitors' | 'stock',
+  fileType: 'sales' | 'debitors' | 'godown_stock',
   fileName: string
 ): Promise<void> {
   const dbTxs = await db.select().from(schema.transactions).where(eq(schema.transactions.fileId, fileId));
@@ -320,14 +572,16 @@ export async function reEvaluateAlertsForFile(
  */
 export async function getPortalSummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
-    const [latestSalesFile, latestDebitorsFile] = await Promise.all([
+    const [latestSalesFile, latestDebitorsFile, latestGodownStockFile] = await Promise.all([
       db.select().from(schema.files).where(and(eq(schema.files.fileType, 'sales'), eq(schema.files.isLatest, true))).limit(1).then(r => r[0]),
-      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'debitors'), eq(schema.files.isLatest, true))).limit(1).then(r => r[0])
+      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'debitors'), eq(schema.files.isLatest, true))).limit(1).then(r => r[0]),
+      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'godown_stock'), eq(schema.files.isLatest, true))).limit(1).then(r => r[0])
     ]);
 
     const salesKey = latestSalesFile ? `${latestSalesFile.id}-${latestSalesFile.runTimestamp.getTime()}` : 'no-sales';
     const debitorsKey = latestDebitorsFile ? `${latestDebitorsFile.id}-${latestDebitorsFile.runTimestamp.getTime()}` : 'no-debitors';
-    const etag = `W/"portal-${salesKey}-${debitorsKey}"`;
+    const godownStockKey = latestGodownStockFile ? `${latestGodownStockFile.id}-${latestGodownStockFile.runTimestamp.getTime()}` : 'no-godown-stock';
+    const etag = `W/"portal-${salesKey}-${debitorsKey}-${godownStockKey}-${serverStartTime}"`;
 
     reply.header('ETag', etag);
     reply.header('Cache-Control', 'private, no-cache, must-revalidate');
@@ -337,9 +591,10 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
       return;
     }
 
-    const [salesReport, debitorsReport] = await Promise.all([
+    const [salesReport, debitorsReport, godownStockReport] = await Promise.all([
       latestSalesFile ? buildSalesReport(latestSalesFile) : Promise.resolve(null),
-      latestDebitorsFile ? buildDebitorsReport(latestDebitorsFile) : Promise.resolve(null)
+      latestDebitorsFile ? buildDebitorsReport(latestDebitorsFile) : Promise.resolve(null),
+      latestGodownStockFile ? buildGodownStockReport(latestGodownStockFile) : Promise.resolve(null)
     ]);
 
     const response: any = {};
@@ -351,6 +606,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         totalTransactions: salesReport.totalTransactions,
         totalMonths: salesReport.totalMonths,
         alertCount: salesReport.alerts.length,
+        highAlertCount: salesReport.highAlertCount,
+        dateRange: salesReport.dateRange,
         totalInflows: salesReport.masterTotals.totalInflows,
         netCashflow: salesReport.masterTotals.netCashflow,
         sparkline: salesReport.months.map((m: any) => m.net)
@@ -363,10 +620,27 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         runTimestamp: debitorsReport.runTimestamp,
         totalTransactions: debitorsReport.totalTransactions,
         alertCount: debitorsReport.alerts.length,
+        highAlertCount: debitorsReport.highAlertCount,
+        dateRange: null,
         totalPendingSum: debitorsReport.aggregates.totalPendingSum,
         collectionSuccessRate: debitorsReport.aggregates.collectionSuccessRate,
         activeDebitorsCount: debitorsReport.aggregates.activeDebitorsCount,
         sparkline: debitorsReport.topDebitors.slice(0, 15).map((d: any) => d.pending)
+      };
+    }
+
+    if (godownStockReport) {
+      response.godownStock = {
+        fileName: godownStockReport.fileName,
+        runTimestamp: godownStockReport.runTimestamp,
+        totalItems: godownStockReport.totalItems,
+        alertCount: godownStockReport.alerts.length,
+        highAlertCount: godownStockReport.highAlertCount,
+        dateRange: godownStockReport.dateRange,
+        totalClosingValue: godownStockReport.aggregates.totalClosingValue,
+        totalSellingValue: godownStockReport.aggregates.totalSellingValue,
+        activeItemsCount: godownStockReport.aggregates.totalItemsCount,
+        sparkline: godownStockReport.historicalTrends.slice(-15).map((t: any) => t.totalCostValue)
       };
     }
 
@@ -459,6 +733,46 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
     const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
     logger.error({ err: message }, 'Failed to fetch debtors report from relational PostgreSQL DB');
     reply.code(503).send(Errors.databaseError('Debitors report'));
+  }
+}
+
+/**
+ * GET /api/v1/data/godown-stock
+ * Serves real-time stock valuation summary, category aggregates and historical movement trends.
+ */
+export async function getGodownStockReport(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  try {
+    const [activeFile] = await db
+      .select()
+      .from(schema.files)
+      .where(
+        and(
+          eq(schema.files.fileType, 'godown_stock'),
+          eq(schema.files.isLatest, true)
+        )
+      )
+      .limit(1);
+
+    if (!activeFile) {
+      reply.code(404).send(Errors.notFound('Godown Stock summary dataset (relational DB is empty)'));
+      return;
+    }
+
+    const etag = `W/"godown-stock-${activeFile.id}-${activeFile.runTimestamp.getTime()}"`;
+    reply.header('ETag', etag);
+    reply.header('Cache-Control', 'private, no-cache, must-revalidate');
+
+    if (request.headers['if-none-match'] === etag) {
+      reply.code(304).send();
+      return;
+    }
+
+    const report = await buildGodownStockReport(activeFile);
+    reply.code(200).send(report);
+  } catch (dbErr: unknown) {
+    const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+    logger.error({ err: message }, 'Failed to fetch godown stock report from database');
+    reply.code(503).send(Errors.databaseError('Godown Stock report'));
   }
 }
 
@@ -591,7 +905,7 @@ export async function getSyncStatus(request: FastifyRequest, reply: FastifyReply
  * Programmatically reconstructs the complete structured MasterSummary object from relational database tables.
  * This is used to share context with the AI advisor chat and Telegram Bot without duplicating query aggregation logic.
  */
-export async function getReconstructedReport(reportType: 'sales' | 'debitors'): Promise<any | null> {
+export async function getReconstructedReport(reportType: 'sales' | 'debitors' | 'godown_stock'): Promise<any | null> {
   if (!db) return null;
   try {
     const [activeFile] = await db
@@ -609,8 +923,10 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors'): 
 
     if (reportType === 'sales') {
       return await buildSalesReport(activeFile);
-    } else {
+    } else if (reportType === 'debitors') {
       return await buildDebitorsReport(activeFile);
+    } else {
+      return await buildGodownStockReport(activeFile);
     }
   } catch (err) {
     logger.error({ err }, 'Failed to dynamically reconstruct report summary');

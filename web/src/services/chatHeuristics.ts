@@ -6,7 +6,22 @@ import type { MasterSummary } from '../types';
 export function generateOfflineHeuristicResponse(query: string, isDebitors: boolean, summary: MasterSummary): string {
   const q = query.toLowerCase();
   
-  if (isDebitors) {
+  if (summary.isGodownStockList) {
+    const totalClosingValue = summary.aggregates?.totalClosingValue || 0;
+    const totalSellingValue = summary.aggregates?.totalSellingValue || 0;
+    const totalItemsCount = summary.aggregates?.totalItemsCount || 0;
+    const totalVolume = summary.aggregates?.totalVolumeLiters || 0;
+
+    if (q.includes('valuation') || q.includes('value') || q.includes('cost') || q.includes('retail')) {
+      return `Our total stock valuation stands at **₹${totalClosingValue.toLocaleString('en-IN')}** at Cost Price, and **₹${totalSellingValue.toLocaleString('en-IN')}** at Retail Selling Price. This represents a potential margin difference of **₹${(totalSellingValue - totalClosingValue).toLocaleString('en-IN')}** when fully sold!`;
+    }
+    if (q.includes('volume') || q.includes('liter') || q.includes('liquor') || q.includes('beer') || q.includes('wine')) {
+      return `We currently hold a total liquid volume of **${totalVolume.toLocaleString('en-IN')} Liters** in active stock across **${totalItemsCount}** distinct items. This volume includes all categories like Liquor, Strong Beer, Mild Beer, and Wine.`;
+    }
+    if (q.includes('alert') || q.includes('warning') || q.includes('discrepancy') || q.includes('audit')) {
+      return `Yes, the system flagged **${summary.alerts?.length || 0} inventory alerts**. This includes audit anomalies like items with negative stock calculations or pricing mismatches. I recommend reviewing the Auditor page in the console for the full itemized list.`;
+    }
+  } else if (isDebitors) {
     const totalPending = summary.aggregates?.totalPendingSum || 0;
     const successRate = summary.aggregates?.collectionSuccessRate || '0%';
     const topName = summary.aggregates?.topDebtorName || 'None';
@@ -41,5 +56,5 @@ export function generateOfflineHeuristicResponse(query: string, isDebitors: bool
     }
   }
 
-  return `I hear you! Looking at "${summary.fileName}", our numbers indicate a strong financial base with ₹${(isDebitors ? summary.aggregates?.totalPendingSum : summary.masterTotals?.netCashflow)?.toLocaleString('en-IN')} in play. To optimize this, I recommend scheduling a quick staff sync to review billing entries, capping high credit extensions, and setting target sales goals. What specific numbers would you like me to pull next?`;
+  return `I hear you! Looking at "${summary.fileName}", our numbers indicate a strong financial base with ₹${(summary.isGodownStockList ? summary.aggregates?.totalClosingValue : (isDebitors ? summary.aggregates?.totalPendingSum : summary.masterTotals?.netCashflow))?.toLocaleString('en-IN')} in play. To optimize this, I recommend scheduling a quick staff sync to review billing entries, capping high credit extensions, and setting target sales goals. What specific numbers would you like me to pull next?`;
 }

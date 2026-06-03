@@ -206,7 +206,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="text-sm font-bold text-foreground">Ingestion Control Center</span>
                     <span className="text-[10px] text-muted-foreground leading-normal">
-                      The engine requires either your Daily Sales Register or Customer Debitors Ledger to compile dashboards.
+                      The engine requires your Daily Sales Register, Customer Debitors Ledger, or Godown Stock Register to compile dashboards.
                     </span>
                   </div>
                 </div>
@@ -215,7 +215,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 <div className="h-px bg-border/60 w-full" aria-hidden="true" />
 
                 {/* Expected Specifications Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-muted-foreground">
                   <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
                     <div className="size-1.5 rounded-full bg-primary shrink-0" />
                     <span className="font-semibold truncate">Daily Sales Register (.xlsx)</span>
@@ -223,6 +223,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
                     <div className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
                     <span className="font-semibold truncate">Debitors Ledger (.xlsx)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
+                    <div className="size-1.5 rounded-full bg-blue-500 shrink-0" />
+                    <span className="font-semibold truncate">Godown Stock (.xlsx)</span>
                   </div>
                 </div>
 

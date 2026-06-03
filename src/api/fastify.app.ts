@@ -16,7 +16,7 @@ import {
   checkSessionStatus,
   logoutUser
 } from './controllers/security.controller.js';
-import { getSalesReport, getDebitorsReport, getPortalSummary, triggerPipeline, handleFileUpload, getSyncStatus, getTransactionsList } from './controllers/report.controller.js';
+import { getSalesReport, getDebitorsReport, getGodownStockReport, getPortalSummary, triggerPipeline, handleFileUpload, getSyncStatus, getTransactionsList } from './controllers/report.controller.js';
 import { handleAdvisorChat, chatSchema } from './controllers/chat.controller.js';
 import { getSettings, updateSettings, updateSettingsSchema } from './controllers/settings.controller.js';
 import { checkFastifyAuth } from './fastify.auth.js';
@@ -107,6 +107,7 @@ export function createFastifyApp() {
     v1Routes.get('/api/v1/portal-summary', getPortalSummary);
     v1Routes.get('/api/v1/data/sales', getSalesReport);
     v1Routes.get('/api/v1/data/debitors', getDebitorsReport);
+    v1Routes.get('/api/v1/data/godown-stock', getGodownStockReport);
     v1Routes.get('/api/v1/transactions', getTransactionsList);
     v1Routes.post('/api/v1/trigger-pipeline', triggerPipeline);
     v1Routes.get('/api/v1/sync-status', getSyncStatus);
