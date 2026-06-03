@@ -36,6 +36,14 @@ export class ExcelParser {
   async parseBuffer(buffer: Buffer, fileName: string): Promise<ExcelParsingResult> {
     logger.info({ fileName, sizeBytes: buffer.length }, 'Parsing Excel buffer');
     
+    const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
+    const isGodownStockFile = cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
+
+    if (isGodownStockFile) {
+      const { parseGodownStockWorkbookStreaming } = await import('./parsers/godown.parser.js');
+      return parseGodownStockWorkbookStreaming(buffer, fileName);
+    }
+
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as any);
     
@@ -45,17 +53,6 @@ export class ExcelParser {
 
     if (hasEntryList && hasBreakup) {
       return parseDebitorsWorkbook(workbook, fileName);
-    }
-
-    // 2. Signature-based check for Godown Stock Workbook
-    const hasTodays = workbook.worksheets.some(s => s.name === 'Todays');
-    const hasHistory = workbook.worksheets.some(s => s.name === 'History' || s.name === 'History_');
-    const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
-    const isGodownStockFile = cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
-
-    if (hasTodays && hasHistory && isGodownStockFile) {
-      const { parseGodownStockWorkbook } = await import('./parsers/godown.parser.js');
-      return parseGodownStockWorkbook(workbook, fileName);
     }
 
     const matchingHotelGauravSheets: ExcelJS.Worksheet[] = [];
