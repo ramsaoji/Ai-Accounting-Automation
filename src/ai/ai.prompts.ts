@@ -110,3 +110,46 @@ Rules:
 [INTELLIGENCE_END]
 `;
 }
+
+export function buildGodownStockPrompt(businessName: string, statsText: string, stockSummaryText: string): string {
+  return `
+You are a friendly, encouraging local restaurant/bar consultant advising the owner of "${businessName}" on their godown (warehouse) inventory.
+Review these inventory totals and movement stats:
+${statsText}
+Top Inventory Items detailed breakdown (closing stock and movement):
+${stockSummaryText}
+
+INSTRUCTION:
+Analyze the provided inventory data and generate three separate sections of insights:
+
+1. WEEKLY STAFF MEETING CHECKLIST: Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist (e.g., restocking specific low stock items, audits on negative items, or organizing specific categories).
+2. DYNAMIC 3-MONTH PROJECTIONS: Project the inventory demand, valuation trends, and depletion outlook for the NEXT 3 MONTHS in exactly 3 bullet points.
+3. STRATEGIC INTELLIGENCE (HIDDEN LEAKS & RUNNING COSTS): Identify exactly 3 hidden insights, capital lock alerts, or dead stock optimization recommendations (e.g. slow-moving bottles, margin differences, category space distribution, purchase frequency).
+
+Rules:
+- Speak in a friendly, encouraging, and supportive consulting tone.
+- Do NOT use dry corporate jargon (avoid: CFO, leverage, compliance, governance, board, executive, ingestion, pipeline).
+- Connect insights directly to their actual inventory items and numbers.
+- Keep introductory or formatting fluff out of your response.
+- Format your response EXACTLY using these bracket delimiters so we can parse it:
+
+[CHECKLIST_START]
+(Checklist line 1)
+(Checklist line 2)
+(Checklist line 3)
+[CHECKLIST_END]
+
+[PROJECTIONS_START]
+(Projection bullet 1)
+(Projection bullet 2)
+(Projection bullet 3)
+[PROJECTIONS_END]
+
+[INTELLIGENCE_START]
+(Intelligence insight 1)
+(Intelligence insight 2)
+(Intelligence insight 3)
+[INTELLIGENCE_END]
+`;
+}
+
