@@ -183,15 +183,15 @@ function parseBlockRows(
     if (!colB) continue;
 
     const colB_upper = colB.toUpperCase();
-    if (colB_upper.includes('STRONG BEER')) {
+    if (colB_upper === 'STRONG BEER') {
       currentCategory = 'Strong Beer';
       continue;
     }
-    if (colB_upper.includes('MILD BEER')) {
+    if (colB_upper === 'MILD BEER') {
       currentCategory = 'Mild Beer';
       continue;
     }
-    if (colB_upper.includes('WINE') && !colB_upper.includes('PORT WINE') && !colB_upper.includes('RED WINE')) {
+    if (colB_upper === 'WINE') {
       currentCategory = 'Wine';
       continue;
     }
@@ -484,15 +484,15 @@ export async function parseGodownStockWorkbookStreaming(buffer: Buffer, fileName
         if (!colB) continue;
 
         const colB_upper = colB.toUpperCase();
-        if (colB_upper.includes('STRONG BEER')) {
+        if (colB_upper === 'STRONG BEER') {
           currentCategory = 'Strong Beer';
           continue;
         }
-        if (colB_upper.includes('MILD BEER')) {
+        if (colB_upper === 'MILD BEER') {
           currentCategory = 'Mild Beer';
           continue;
         }
-        if (colB_upper.includes('WINE') && !colB_upper.includes('PORT WINE') && !colB_upper.includes('RED WINE')) {
+        if (colB_upper === 'WINE') {
           currentCategory = 'Wine';
           continue;
         }
