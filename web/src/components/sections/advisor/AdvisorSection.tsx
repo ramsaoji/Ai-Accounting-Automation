@@ -84,7 +84,7 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
   const [activePlaybook, setActivePlaybook] = useState<'revenue' | 'recovery' | 'auditing'>('revenue');
 
   // Zustand Store hooks for persistent chat logs
-  const workspaceKey = isStock ? 'godown_stock' : (isDebitors ? 'debitors' : 'sales');
+  const workspaceKey = summary.fileType || (isStock ? 'godown_stock' : (isDebitors ? 'debitors' : 'sales'));
   const messages = useAccountingStore((state) => state.chatHistories[`chat:${workspaceKey}:${summary.fileName}`] || []);
   const loadChatHistory = useAccountingStore((state) => state.loadChatHistory);
   const addChatMessage = useAccountingStore((state) => state.addChatMessage);
@@ -283,7 +283,6 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
   };
 
   const clearChat = () => {
-    const workspaceKey = isDebitors ? 'debitors' : 'sales';
     setChatHistory(workspaceKey, summary.fileName, [
       {
         sender: 'ai',
