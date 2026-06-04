@@ -11,7 +11,7 @@ import { Errors } from '../errors.js';
 
 export const chatSchema = z.object({
   message: z.string().min(1, 'Message is required').max(4000, 'Message must not exceed 4000 characters'),
-  workspace: z.enum(['sales', 'debitors', 'godown_stock']),
+  workspace: z.enum(['sales', 'debitors', 'godown_stock', 'counter_stock']),
   history: z.array(
     z.object({
       sender: z.enum(['user', 'ai']),
@@ -43,9 +43,9 @@ export async function handleAdvisorChat(
     }
 
     // Determine correct summary file based on requested workspace
-    const reportType = workspace === 'godown_stock' ? 'godown_stock' : (workspace === 'debitors' ? 'debitors' : 'sales');
+    const reportType = workspace;
     const isDebitors = workspace === 'debitors';
-    const isGodownStock = workspace === 'godown_stock';
+    const isGodownStock = workspace === 'godown_stock' || workspace === 'counter_stock';
 
     let summaryJson: unknown = null;
 
@@ -100,8 +100,9 @@ export async function handleAdvisorChat(
     let domainContext = '';
 
     if (isGodownStock) {
+      const inventoryName = workspace === 'counter_stock' ? 'counter' : 'godown';
       domainContext = `
-You are helping the owner understand their godown inventory, stock levels, valuations, bottle volumes, and potential audit discrepancies.
+You are helping the owner understand their ${inventoryName} inventory, stock levels, valuations, bottle volumes, and potential audit discrepancies.
 Key metrics available:
 - Total items tracked: ${summary.totalItems} products
 - Valuation at Cost: ₹${Math.round(Number(aggregates?.totalClosingValue ?? 0)).toLocaleString()}

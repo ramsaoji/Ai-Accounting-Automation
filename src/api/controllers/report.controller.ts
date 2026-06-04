@@ -219,6 +219,7 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
   // 7. Structure complete MasterSummary response object
   const summaryPayload = {
     fileName: activeFile.fileName,
+    fileType: activeFile.fileType,
     runTimestamp: activeFile.runTimestamp.toISOString(),
     totalTransactions: activeFile.totalRows,
     totalMonths: months.length,
@@ -307,6 +308,7 @@ export async function buildDebitorsReport(activeFile: any): Promise<any> {
   // 6. Structure complete MasterSummary response object
   const summaryPayload = {
     fileName: activeFile.fileName,
+    fileType: activeFile.fileType,
     runTimestamp: activeFile.runTimestamp.toISOString(),
     isDebitorsList: true,
     totalTransactions: activeFile.totalRows,
@@ -623,6 +625,7 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
 
   const summaryPayload = {
     fileName: fileNameStr,
+    fileType: activeFiles[0]?.fileType,
     runTimestamp: latestRunTimestamp.toISOString(),
     isGodownStockList: true,
     totalItems: latestItems.length,

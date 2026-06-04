@@ -58,6 +58,7 @@ export interface MonthlySummary {
 
 export interface MasterSummary {
   fileName: string;
+  fileType?: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
   runTimestamp: string;
   isDebitorsList?: boolean;
   isGodownStockList?: boolean;

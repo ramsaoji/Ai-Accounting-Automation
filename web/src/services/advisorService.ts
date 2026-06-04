@@ -11,7 +11,7 @@ export async function sendAdvisorChatMessage(
   summary: MasterSummary,
   history: { sender: 'user' | 'ai'; text: string }[]
 ): Promise<string> {
-  const workspace = summary.isGodownStockList ? 'godown_stock' : (isDebitors ? 'debitors' : 'sales');
+  const workspace = summary.fileType || (summary.isGodownStockList ? 'godown_stock' : (isDebitors ? 'debitors' : 'sales'));
   try {
     return await apiSendAdvisorChatMessage(message, workspace, history);
   } catch (err: any) {
