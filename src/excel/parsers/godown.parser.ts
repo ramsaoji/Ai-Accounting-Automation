@@ -339,7 +339,7 @@ export async function parseGodownStockWorkbook(workbook: ExcelJS.Workbook, fileN
   });
 
   // 3. Parse History sheet based on history retention settings table
-  const historyDays = await getHistoryRetentionDays('godown_stock', 90);
+  const historyDays = await getHistoryRetentionDays('godown_stock', 0);
   logger.info({ historyDaysSetting: historyDays }, 'Stock history setting fetched');
 
   if (historySheet && historyDays > 0) {
@@ -389,7 +389,7 @@ export async function parseGodownStockWorkbook(workbook: ExcelJS.Workbook, fileN
 export async function parseGodownStockWorkbookStreaming(buffer: Buffer, fileName: string): Promise<ExcelParsingResult> {
   logger.info({ fileName }, 'Godown Stock streaming parser initiated');
 
-  const historyDays = await getHistoryRetentionDays('godown_stock', 90);
+  const historyDays = await getHistoryRetentionDays('godown_stock', 0);
   logger.info({ historyDaysSetting: historyDays }, 'Stock history setting fetched for streaming');
 
   const priceLookup = new Map<string, { costPrice: number; sellingPrice: number }>();

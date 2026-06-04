@@ -288,7 +288,7 @@ export async function setAuditPolicySetting(
 /**
  * Retrieves history retention days for a specific file type from structured table.
  */
-export async function getHistoryRetentionDays(fileType: string, defaultDays = 90): Promise<number> {
+export async function getHistoryRetentionDays(fileType: string, defaultDays = 0): Promise<number> {
   try {
     const existing = await db
       .select()
@@ -344,7 +344,7 @@ export async function initSystemSettings(): Promise<void> {
   try {
     // 0. Seed default history retention settings and migrate old keys if they exist
     const defaultRetention = [
-      { fileType: 'godown_stock', retentionDays: 90 },
+      { fileType: 'godown_stock', retentionDays: 0 },
       { fileType: 'sales', retentionDays: 0 },
     ];
 

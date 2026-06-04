@@ -591,20 +591,26 @@ export async function sendGodownStockSummary(chatId: string, editMessageId?: num
     const agg = data.aggregates || {};
     const catAggs = data.categoryAggregates || [];
     
-    // Create a beautiful text-based table
-    let table = `\`Category    Closing Val  Selling Val  Items\`\n`;
-    table += `\`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\`\n`;
+    // Create a beautiful text-based bullet list
+    let stockSummary = '';
     catAggs.forEach((c: any) => {
-      const catName = (c.category || 'General').padEnd(11).substring(0, 11);
-      const closing = `₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}`.padEnd(12).substring(0, 12);
-      const selling = `₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}`.padEnd(12).substring(0, 12);
-      const count = String(c.itemsCount || 0).padStart(5);
-      table += `\`${catName} ${closing} ${selling} ${count}\`\n`;
+      let emoji = '📦';
+      const catLower = (c.category || '').toLowerCase();
+      if (catLower.includes('liquor')) emoji = '🍷';
+      else if (catLower.includes('strong beer')) emoji = '🍺';
+      else if (catLower.includes('mild beer')) emoji = '🍻';
+      else if (catLower.includes('wine')) emoji = '🥂';
+
+      const closing = `₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}`;
+      const selling = `₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}`;
+      const count = c.itemsCount || 0;
+      
+      stockSummary += `• ${emoji} *${c.category || 'General'}*: ${closing} (Retail: ${selling}) • _${count} items_\n`;
     });
 
     const summaryText = `🏭 *${config.BUSINESS_NAME} - Let's dive into your Godown Stock summary.*\n\n` +
       `I've reviewed the data, and here are the key highlights:\n\n` +
-      table + `\n` +
+      stockSummary + `\n` +
       `As you can see, your liquor stock has a closing value of *₹${Math.round(catAggs.find((c: any) => c.category === 'Liquor')?.closingValue || 0).toLocaleString('en-IN')}* and a selling value of *₹${Math.round(catAggs.find((c: any) => c.category === 'Liquor')?.sellingValue || 0).toLocaleString('en-IN')}*. You have a total of *${agg.totalItemsCount || 0}* items in stock, with *${catAggs.find((c: any) => c.category === 'Liquor')?.itemsCount || 0}* being liquor items.\n\n` +
       `📊 *Godown Stock Interactive Panel*\n` +
       `Select an option below to view deeper stock insights, top-moving items, inflow logs, and active alerts:`;

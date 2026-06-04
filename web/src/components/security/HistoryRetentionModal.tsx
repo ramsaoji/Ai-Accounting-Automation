@@ -27,8 +27,8 @@ export const HistoryRetentionModal: React.FC<HistoryRetentionModalProps> = ({
 }) => {
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [godownStockHistoryDays, setGodownStockHistoryDays] = useState(90);
-  const [salesHistoryDays, setSalesHistoryDays] = useState(90);
+  const [godownStockHistoryDays, setGodownStockHistoryDays] = useState(0);
+  const [salesHistoryDays, setSalesHistoryDays] = useState(0);
 
   useEffect(() => {
     if (isOpen) {

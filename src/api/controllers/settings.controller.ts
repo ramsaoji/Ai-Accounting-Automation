@@ -74,7 +74,7 @@ export async function getSettings(request: FastifyRequest, reply: FastifyReply):
     const telegramEnabledStr = await getSystemSetting('telegram_chat_enabled', 'true');
     const aiProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
     const aiModel = await getSystemSetting('ai_model', config.AI_MODEL);
-    const godownStockHistoryDays = await getHistoryRetentionDays('godown_stock', 90);
+    const godownStockHistoryDays = await getHistoryRetentionDays('godown_stock', 0);
     const salesHistoryDays = await getHistoryRetentionDays('sales', 0);
 
     const ruleHighExpenseCeilingStr = await getAuditPolicySetting(fileType, fileName, 'ruleHighExpenseCeiling', '50000');
@@ -202,7 +202,7 @@ export async function updateSettings(
 
     const webEnabledStr = await getSystemSetting('web_chat_enabled', 'true');
     const telegramEnabledStr = await getSystemSetting('telegram_chat_enabled', 'true');
-    const updatedGodownStockHistoryDays = await getHistoryRetentionDays('godown_stock', 90);
+    const updatedGodownStockHistoryDays = await getHistoryRetentionDays('godown_stock', 0);
     const updatedSalesHistoryDays = await getHistoryRetentionDays('sales', 0);
     const ruleHighExpenseCeilingStr = await getAuditPolicySetting(fileType, fileName, 'ruleHighExpenseCeiling', '50000');
     const ruleSuspiciousSpikeMultiplierStr = await getAuditPolicySetting(fileType, fileName, 'ruleSuspiciousSpikeMultiplier', '3');
