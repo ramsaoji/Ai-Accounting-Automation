@@ -17,7 +17,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 interface HistoryRetentionModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  activeWorkspace: 'sales' | 'debitors' | 'godown_stock';
+  activeWorkspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
 }
 
 export const HistoryRetentionModal: React.FC<HistoryRetentionModalProps> = ({
@@ -61,7 +61,7 @@ export const HistoryRetentionModal: React.FC<HistoryRetentionModalProps> = ({
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
-    const workspaceName = activeWorkspace === 'sales' ? 'Daily Sales' : 'Godown Stock';
+    const workspaceName = activeWorkspace === 'sales' ? 'Daily Sales' : activeWorkspace === 'counter_stock' ? 'Counter Stock' : 'Godown Stock';
     const days = activeWorkspace === 'sales' ? salesHistoryDays : godownStockHistoryDays;
 
     try {
@@ -109,7 +109,7 @@ export const HistoryRetentionModal: React.FC<HistoryRetentionModalProps> = ({
           <div className="flex flex-col gap-4 px-1 py-1">
             <div className="flex flex-col gap-3">
               <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
-                {activeWorkspace === 'sales' ? 'Daily Sales Import Settings' : 'Inventory Import Settings'}
+                {activeWorkspace === 'sales' ? 'Daily Sales Import Settings' : activeWorkspace === 'counter_stock' ? 'Counter Stock Import Settings' : 'Godown Stock Import Settings'}
               </h3>
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1.5">
@@ -133,6 +133,8 @@ export const HistoryRetentionModal: React.FC<HistoryRetentionModalProps> = ({
                 <p className="text-[11px] text-muted-foreground">
                   {activeWorkspace === 'sales'
                     ? 'Specify how many days of historical Daily Sales transaction runs to retain in the database.'
+                    : activeWorkspace === 'counter_stock'
+                    ? 'Specify how many days of historical Counter Stock snapshots to retain in the database.'
                     : 'Specify how many days of historical Godown Stock snapshots to retain in the database.'}
                 </p>
 

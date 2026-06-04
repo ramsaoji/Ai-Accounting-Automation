@@ -7,7 +7,7 @@ import { GodownStockLedgerTable } from './GodownStockLedgerTable';
 import type { GodownStockTableItem } from './GodownStockLedgerTable';
 
 interface LedgerTableProps {
-  activeTab: 'sales' | 'debitors' | 'godown_stock';
+  activeTab: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
   paginatedDebitors: DebitorSummary[];
   paginatedMonths: MonthlySummary[];
   paginatedStock: GodownStockTableItem[];
@@ -82,7 +82,7 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
     );
   }
 
-  if (activeTab === 'godown_stock') {
+  if (activeTab === 'godown_stock' || activeTab === 'counter_stock') {
     return (
       <GodownStockLedgerTable
         paginatedItems={paginatedStock}

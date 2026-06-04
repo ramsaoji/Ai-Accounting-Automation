@@ -78,7 +78,7 @@ export function getMonthYearDate(label: string): Date {
 /**
  * Loads reports from controller dynamically or statically.
  */
-export async function loadReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'godown_stock'): Promise<any | null> {
+export async function loadReport(reportType: 'sales' | 'debitors' | 'daily-sales' | 'godown_stock' | 'counter_stock'): Promise<any | null> {
   try {
     if (reportType === 'daily-sales') {
       const salesReport = await getReconstructedReport('sales');

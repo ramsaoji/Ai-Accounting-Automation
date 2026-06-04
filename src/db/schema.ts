@@ -76,6 +76,40 @@ export const godownStockItems = pgTable('godown_stock_items', {
   index('godown_stock_items_file_id_item_name_idx').on(table.fileId, table.itemName)
 ]);
 
+// 3b. Counter Stock Items (For counter inventory registers)
+export const counterStockItems = pgTable('counter_stock_items', {
+  id: serial('id').primaryKey(),
+  fileId: uuid('file_id').references(() => files.id, { onDelete: 'cascade' }).notNull(),
+  snapshotDate: date('snapshot_date').notNull(),
+  sheetName: varchar('sheet_name', { length: 100 }).notNull(), // e.g. "Liquor Counter Stock"
+  itemCode: varchar('item_code', { length: 100 }),
+  itemName: varchar('item_name', { length: 255 }).notNull(),
+  category: varchar('category', { length: 100 }),
+  bottleSizeMl: integer('bottle_size_ml').notNull(),
+  openingStock: numeric('opening_stock', { precision: 12, scale: 3 }).default('0').notNull(),
+  stockIn: numeric('stock_in', { precision: 12, scale: 3 }).default('0').notNull(),
+  stockOut: numeric('stock_out', { precision: 12, scale: 3 }).default('0').notNull(),
+  closingStock: numeric('closing_stock', { precision: 12, scale: 3 }).default('0').notNull(),
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(), // kept for backwards compatibility
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(), // kept for backwards compatibility
+  totalValue: numeric('total_value', { precision: 12, scale: 2 }).notNull(), // kept for backwards compatibility
+  costPrice: numeric('cost_price', { precision: 12, scale: 2 }),
+  sellingPrice: numeric('selling_price', { precision: 12, scale: 2 }),
+  totalCostValue: numeric('total_cost_value', { precision: 14, scale: 2 }),
+  totalSellValue: numeric('total_sell_value', { precision: 14, scale: 2 }),
+  location: varchar('location', { length: 100 }).notNull(), // 'godown' | 'counter'
+  metadata: jsonb('metadata'), // Captures custom inventory columns
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('counter_stock_items_file_id_idx').on(table.fileId),
+  index('counter_stock_items_snapshot_date_idx').on(table.snapshotDate),
+  index('counter_stock_items_item_name_idx').on(table.itemName),
+  index('counter_stock_items_category_idx').on(table.category),
+  index('counter_stock_items_file_id_snapshot_date_idx').on(table.fileId, table.snapshotDate),
+  index('counter_stock_items_file_id_item_name_idx').on(table.fileId, table.itemName)
+]);
+
+
 // 4. Party Balances (Outstanding credit balances for debtors and creditors/suppliers)
 export const partyBalances = pgTable('party_balances', {
   id: serial('id').primaryKey(),
@@ -164,6 +198,7 @@ export const historyRetentionSettings = pgTable('history_retention_settings', {
 export const filesRelations = relations(files, ({ many }) => ({
   transactions: many(transactions),
   godownStockItems: many(godownStockItems),
+  counterStockItems: many(counterStockItems),
   partyBalances: many(partyBalances),
   auditAlerts: many(auditAlerts),
   parsingErrors: many(parsingErrors),
@@ -179,6 +214,13 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
 export const godownStockItemsRelations = relations(godownStockItems, ({ one }) => ({
   file: one(files, {
     fields: [godownStockItems.fileId],
+    references: [files.id],
+  }),
+}));
+
+export const counterStockItemsRelations = relations(counterStockItems, ({ one }) => ({
+  file: one(files, {
+    fields: [counterStockItems.fileId],
     references: [files.id],
   }),
 }));

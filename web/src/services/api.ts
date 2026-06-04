@@ -59,6 +59,7 @@ export interface SyncResult {
   sales: MasterSummary | null;
   debitors: MasterSummary | null;
   godownStock: MasterSummary | null;
+  counterStock?: MasterSummary | null;
   mode: 'live' | 'static' | 'empty';
   isDbConnected?: boolean;
   isLocalDb?: boolean;
@@ -98,6 +99,18 @@ export interface PortalSummaryResult {
     sparkline: number[];
   };
   godownStock?: {
+    fileName: string;
+    runTimestamp: string;
+    totalItems: number;
+    alertCount: number;
+    highAlertCount: number;
+    dateRange: { from: string; to: string } | null;
+    totalClosingValue: number;
+    totalSellingValue: number;
+    activeItemsCount: number;
+    sparkline: number[];
+  };
+  counterStock?: {
     fileName: string;
     runTimestamp: string;
     totalItems: number;
@@ -181,7 +194,7 @@ export async function fetchPortalSummary(): Promise<PortalSummaryResult> {
 export async function fetchAccountingData(): Promise<SyncResult> {
   // Concurrent API fetch including system config to dynamically check Google Drive status
   try {
-    const [salesRes, debitorsRes, stockRes, healthRes] = await Promise.all([
+    const [salesRes, debitorsRes, stockRes, counterRes, healthRes] = await Promise.all([
       authFetch(`${apiBaseUrl}/api/v1/data/sales`, {
         headers: getAuthHeaders()
       }),
@@ -189,6 +202,9 @@ export async function fetchAccountingData(): Promise<SyncResult> {
         headers: getAuthHeaders()
       }),
       authFetch(`${apiBaseUrl}/api/v1/data/godown-stock`, {
+        headers: getAuthHeaders()
+      }),
+      authFetch(`${apiBaseUrl}/api/v1/data/counter-stock`, {
         headers: getAuthHeaders()
       }),
       authFetch(`${apiBaseUrl}/api/v1/system/config`, {
@@ -199,6 +215,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
     const sales = salesRes.ok ? mapMasterSummary(await salesRes.json(), false) : null;
     const debitors = debitorsRes.ok ? mapMasterSummary(await debitorsRes.json(), true) : null;
     const godownStock = stockRes.ok ? mapMasterSummary(await stockRes.json(), false) : null;
+    const counterStock = counterRes.ok ? mapMasterSummary(await counterRes.json(), false) : null;
     
     let mode: 'live' | 'static' | 'empty' = 'static';
     let isDbConnected = false;
@@ -222,6 +239,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
       sales,
       debitors,
       godownStock,
+      counterStock,
       mode,
       isDbConnected,
       isLocalDb,
@@ -250,7 +268,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
  */
 export async function sendAdvisorChatMessage(
   message: string,
-  workspace: 'sales' | 'debitors' | 'godown_stock',
+  workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock',
   history: { sender: 'user' | 'ai'; text: string }[]
 ): Promise<string> {
   const res = await authFetch(`${apiBaseUrl}/api/v1/chat`, {

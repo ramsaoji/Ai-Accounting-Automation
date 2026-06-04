@@ -373,10 +373,21 @@ export class OrchestratorService {
           const allGodownStockItems = parseResult.sheets.flatMap(s => s.godownStockItems || []);
 
           const cleanFileName = fileName.replace(/\.[^/.]+$/, ''); // Strip extension
-          const isGodownStock = parseResult.isGodownStockList || cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
-          const fileType = parseResult.isDebitorsList ? 'debitors' : isGodownStock ? 'godown_stock' : 'sales';
+          const isCounter = parseResult.isCounterStockList || cleanFileName.toUpperCase().includes('COUNTER');
+          const isGodownStock = !isCounter && (parseResult.isGodownStockList || (
+            cleanFileName.toUpperCase().includes('GODWON') ||
+            cleanFileName.toUpperCase().includes('GODOWN') ||
+            cleanFileName.toUpperCase() === 'STOCK'
+          ));
+          const fileType = parseResult.isDebitorsList
+            ? 'debitors'
+            : isCounter
+              ? 'counter_stock'
+              : isGodownStock
+                ? 'godown_stock'
+                : 'sales';
 
-          const totalValidRecords = isGodownStock ? allGodownStockItems.length : allTransactions.length;
+          const totalValidRecords = (isGodownStock || isCounter) ? allGodownStockItems.length : allTransactions.length;
           if (totalValidRecords === 0) {
             logger.info(`Workbook "${fileName}" contains zero valid records. Skipping.`);
             continue;
@@ -605,13 +616,18 @@ export class OrchestratorService {
     const allErrors = parseResult.sheets.flatMap(s => s.errors);
     const allGodownStockItems = parseResult.sheets.flatMap(s => s.godownStockItems || []);
 
-    const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
-    const isGodownStock = parseResult.isGodownStockList || cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
-    const fileType = parseResult.isDebitorsList ? 'debitors' : isGodownStock ? 'godown_stock' : 'sales';
+    const cleanFileName = fileName.replace(/\.[^/.]+$/, ''); // Strip extension
+    const isCounter = parseResult.isCounterStockList || cleanFileName.toUpperCase().includes('COUNTER');
+    const isGodownStock = !isCounter && (parseResult.isGodownStockList || (
+      cleanFileName.toUpperCase().includes('GODWON') ||
+      cleanFileName.toUpperCase().includes('GODOWN') ||
+      cleanFileName.toUpperCase() === 'STOCK'
+    ));
+    const fileType = parseResult.isDebitorsList ? 'debitors' : isCounter ? 'counter_stock' : isGodownStock ? 'godown_stock' : 'sales';
 
-    const totalValidRecords = isGodownStock ? allGodownStockItems.length : allTransactions.length;
+    const totalValidRecords = (isGodownStock || isCounter) ? allGodownStockItems.length : allTransactions.length;
     if (totalValidRecords === 0) {
-      throw new Error(`Workbook "${fileName}" contains zero valid ${isGodownStock ? 'stock items' : 'transactions'}.`);
+      throw new Error(`Workbook "${fileName}" contains zero valid ${(isGodownStock || isCounter) ? 'stock items' : 'transactions'}.`);
     }
 
     logger.info(
@@ -636,7 +652,7 @@ export class OrchestratorService {
       parsingErrors: allErrors,
       sheets: parseResult.sheets,
       isDebitorsList: parseResult.isDebitorsList,
-      isGodownStockList: isGodownStock,
+      isGodownStockList: isGodownStock || isCounter,
       debitors: parseResult.sheets.find(s => s.debitors !== undefined)?.debitors,
       debitorsLimit: 10,
     });
@@ -645,7 +661,7 @@ export class OrchestratorService {
 
     // 4. Persist to PostgreSQL DB relationally
     try {
-      const hashItems = isGodownStock
+      const hashItems = (isGodownStock || isCounter)
         ? allGodownStockItems.map(s => ({
             date: s.snapshotDate,
             amount: s.closingStock,
@@ -695,10 +711,11 @@ export class OrchestratorService {
     contentHash?: string
   ): Promise<void> {
     if (!db) return;
-    const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
+    const cleanFileName = fileName.replace(/\.[^/.]+$/, ''); // Strip extension
     const isDebtors = parseResult.isDebitorsList || cleanFileName.toUpperCase().includes('DEBITORS');
-    const isGodownStock = cleanFileName.toUpperCase().includes('STOCK');
-    const fileType = isDebtors ? 'debitors' : isGodownStock ? 'godown_stock' : 'sales';
+    const isCounter = parseResult.isCounterStockList || cleanFileName.toUpperCase().includes('COUNTER');
+    const isGodownStock = !isCounter && (cleanFileName.toUpperCase().includes('STOCK') || parseResult.isGodownStockList);
+    const fileType = isDebtors ? 'debitors' : isCounter ? 'counter_stock' : isGodownStock ? 'godown_stock' : 'sales';
     const summaryObj = JSON.parse(reports.jsonSummary);
 
     await db.transaction(async (tx) => {
@@ -730,7 +747,7 @@ export class OrchestratorService {
         .returning();
 
       // 3. Insert transactions (finance ledgers)
-      if (fileType !== 'godown_stock' && allTransactions.length > 0) {
+      if (fileType !== 'godown_stock' && fileType !== 'counter_stock' && allTransactions.length > 0) {
         const batchSize = 1000;
         for (let i = 0; i < allTransactions.length; i += batchSize) {
           const chunk = allTransactions.slice(i, i + batchSize).map(t => ({
@@ -751,7 +768,7 @@ export class OrchestratorService {
 
       // 4. Insert stock items (inventory)
       const godownStockItemsList = parseResult.sheets.flatMap((s: any) => s.godownStockItems || []);
-      if (fileType === 'godown_stock' && godownStockItemsList.length > 0) {
+      if ((fileType === 'godown_stock' || fileType === 'counter_stock') && godownStockItemsList.length > 0) {
         const batchSize = 1000;
         for (let i = 0; i < godownStockItemsList.length; i += batchSize) {
           const chunk = godownStockItemsList.slice(i, i + batchSize).map((s: any) => ({
@@ -773,10 +790,14 @@ export class OrchestratorService {
             sellingPrice: s.sellingPrice !== null && s.sellingPrice !== undefined ? String(s.sellingPrice) : null,
             totalCostValue: s.totalCostValue !== null && s.totalCostValue !== undefined ? String(s.totalCostValue) : null,
             totalSellValue: s.totalSellValue !== null && s.totalSellValue !== undefined ? String(s.totalSellValue) : null,
-            location: s.location || 'godown',
+            location: s.location || (fileType === 'counter_stock' ? 'counter' : 'godown'),
             metadata: s.metadata || {}
           }));
-          await tx.insert(schema.godownStockItems).values(chunk);
+          if (fileType === 'counter_stock') {
+            await tx.insert(schema.counterStockItems).values(chunk);
+          } else {
+            await tx.insert(schema.godownStockItems).values(chunk);
+          }
         }
       }
 

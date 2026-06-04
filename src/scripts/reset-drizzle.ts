@@ -32,6 +32,7 @@ async function resetDrizzle() {
       DROP TABLE IF EXISTS "audit_alerts" CASCADE;
       DROP TABLE IF EXISTS "party_balances" CASCADE;
       DROP TABLE IF EXISTS "godown_stock_items" CASCADE;
+      DROP TABLE IF EXISTS "counter_stock_items" CASCADE;
       DROP TABLE IF EXISTS "transactions" CASCADE;
       DROP TABLE IF EXISTS "security_config" CASCADE;
       DROP TABLE IF EXISTS "system_settings" CASCADE;

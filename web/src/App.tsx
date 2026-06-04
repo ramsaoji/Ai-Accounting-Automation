@@ -105,7 +105,7 @@ export function App() {
   }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
-  const { salesData, debitorsData, godownStockData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, isWorkspaceLoading, aiProvider, sync: fetchRealData, fetchWorkspaceData } = useAccountingData();
+  const { salesData, debitorsData, godownStockData, counterStockData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, isWorkspaceLoading, aiProvider, sync: fetchRealData, fetchWorkspaceData } = useAccountingData();
 
   const isSyncingDriveRef = useRef(false);
   const isUploadingRef = useRef(false);
@@ -139,8 +139,9 @@ export function App() {
   const relevantFileName = useMemo(() => {
     if (activeWorkspace === 'sales') return salesData?.fileName;
     if (activeWorkspace === 'debitors') return debitorsData?.fileName;
-    return godownStockData?.fileName;
-  }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName, godownStockData?.fileName]);
+    if (activeWorkspace === 'godown_stock') return godownStockData?.fileName;
+    return counterStockData?.fileName;
+  }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName, godownStockData?.fileName, counterStockData?.fileName]);
 
   // Lazy load full reports when user leaves the portal view to enter a specific workspace console
   useEffect(() => {
@@ -148,6 +149,7 @@ export function App() {
       const isSalesFullyLoaded = activeWorkspace === 'sales' && salesData && 'benchmarks' in salesData;
       const isDebitorsFullyLoaded = activeWorkspace === 'debitors' && debitorsData && debitorsData.aggregates && 'totalDebitSum' in debitorsData.aggregates;
       const isGodownStockFullyLoaded = activeWorkspace === 'godown_stock' && godownStockData && 'isGodownStockList' in godownStockData;
+      const isCounterStockFullyLoaded = activeWorkspace === 'counter_stock' && counterStockData && 'isGodownStockList' in counterStockData;
       
       if (activeWorkspace === 'sales' && !isSalesFullyLoaded) {
         fetchWorkspaceData('sales');
@@ -155,41 +157,49 @@ export function App() {
         fetchWorkspaceData('debitors');
       } else if (activeWorkspace === 'godown_stock' && !isGodownStockFullyLoaded) {
         fetchWorkspaceData('godown_stock');
+      } else if (activeWorkspace === 'counter_stock' && !isCounterStockFullyLoaded) {
+        fetchWorkspaceData('counter_stock');
       }
     }
-  }, [appSessionToken, activeWorkspace, activeView, fetchWorkspaceData, salesData, debitorsData, godownStockData]);
+  }, [appSessionToken, activeWorkspace, activeView, fetchWorkspaceData, salesData, debitorsData, godownStockData, counterStockData]);
 
   const businessName = useMemo(() => {
-    return deriveBusinessName(salesData?.fileName ?? debitorsData?.fileName ?? godownStockData?.fileName);
-  }, [salesData?.fileName, debitorsData?.fileName, godownStockData?.fileName]);
+    const activeFile = activeWorkspace === 'sales' ? salesData
+      : activeWorkspace === 'debitors' ? debitorsData
+      : activeWorkspace === 'godown_stock' ? godownStockData
+      : counterStockData;
+    return deriveBusinessName(activeFile?.fileName ?? salesData?.fileName ?? debitorsData?.fileName ?? godownStockData?.fileName ?? counterStockData?.fileName);
+  }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName, godownStockData?.fileName, counterStockData?.fileName]);
 
 
 
   // activeSummary points to the currently active dataset
-  const activeSummary = activeWorkspace === 'sales' ? salesData : activeWorkspace === 'debitors' ? debitorsData : godownStockData;
+  const activeSummary = activeWorkspace === 'sales' ? salesData : activeWorkspace === 'debitors' ? debitorsData : activeWorkspace === 'godown_stock' ? godownStockData : counterStockData;
 
   const activeAlerts = useMemo(() => {
     if (activeWorkspace === 'sales') {
       return salesData?.alerts || [];
     } else if (activeWorkspace === 'debitors') {
       return debitorsData?.alerts || [];
-    } else {
+    } else if (activeWorkspace === 'godown_stock') {
       return godownStockData?.alerts || [];
+    } else {
+      return counterStockData?.alerts || [];
     }
-  }, [activeWorkspace, salesData, debitorsData, godownStockData]);
+  }, [activeWorkspace, salesData, debitorsData, godownStockData, counterStockData]);
 
   const highAlertsCount = useMemo(() => {
-    const activeData = activeWorkspace === 'sales' ? salesData : activeWorkspace === 'debitors' ? debitorsData : godownStockData;
+    const activeData = activeWorkspace === 'sales' ? salesData : activeWorkspace === 'debitors' ? debitorsData : activeWorkspace === 'godown_stock' ? godownStockData : counterStockData;
     if (!activeData) return 0;
     if (activeData.highAlertCount !== undefined) {
       return activeData.highAlertCount;
     }
     const HIGH_SEVERITY = new Set(['high', 'critical']);
     return (activeData.alerts || []).filter((a: any) => HIGH_SEVERITY.has(a.severity)).length;
-  }, [activeWorkspace, salesData, debitorsData, godownStockData]);
+  }, [activeWorkspace, salesData, debitorsData, godownStockData, counterStockData]);
 
   // Launch workspace callback from portal
-  const handleLaunchWorkspace = (workspace: 'sales' | 'debitors' | 'godown_stock', view: 'overview' | 'ledger' | 'auditor' | 'advisor' = 'overview') => {
+  const handleLaunchWorkspace = (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', view: 'overview' | 'ledger' | 'auditor' | 'advisor' = 'overview') => {
     setActiveWorkspace(workspace);
     setActiveView(view);
   };
@@ -214,7 +224,7 @@ export function App() {
   }
 
   // Global Onboarding View: if both datasets are empty on clean prod deployment
-  if (!salesData && !debitorsData && !godownStockData) {
+  if (!salesData && !debitorsData && !godownStockData && !counterStockData) {
     return (
       <TooltipProvider>
         <OnboardingWizard
@@ -259,6 +269,7 @@ export function App() {
             hasSales={!!salesData}
             hasDebitors={!!debitorsData}
             hasStock={!!godownStockData}
+            hasCounterStock={!!counterStockData}
           />
 
           {/* Sidebar Main Content Inset Wrapper */}
@@ -293,6 +304,7 @@ export function App() {
                       salesData={salesData}
                       debitorsData={debitorsData}
                       stockData={godownStockData}
+                      counterStockData={counterStockData}
                       onLaunchWorkspace={handleLaunchWorkspace}
                       cronSchedule={cronSchedule}
                       connectionMode={connectionMode}

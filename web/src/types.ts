@@ -79,6 +79,22 @@ export interface MasterSummary {
     totalItemsCount?: number;
     totalVolumeLiters?: number;
     activeItemsCount?: number;
+    godown?: {
+      totalClosingValue: number;
+      totalSellingValue: number;
+      totalItemsCount: number;
+      totalVolumeLiters: number;
+      stockInCount?: number;
+      stockOutCount?: number;
+    };
+    counter?: {
+      totalClosingValue: number;
+      totalSellingValue: number;
+      totalItemsCount: number;
+      totalVolumeLiters: number;
+      stockInCount?: number;
+      stockOutCount?: number;
+    };
   };
   masterTotals?: {
     liquorSales: number;

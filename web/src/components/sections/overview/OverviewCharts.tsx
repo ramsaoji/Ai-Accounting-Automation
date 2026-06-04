@@ -71,55 +71,91 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
             </Bar>
           </BarChart>
         ) : isStock && summary.historicalTrends ? (
-          <AreaChart data={summary.historicalTrends} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
-            <defs>
-              <linearGradient id="colorCostValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25}/>
-                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.0}/>
-              </linearGradient>
-              <linearGradient id="colorSellValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.15}/>
-                <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0.0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
-            <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={10} />
-            <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
-            <RechartsTooltip 
-              contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
-              itemStyle={{ color: 'var(--foreground)' }}
-              labelStyle={{ color: 'var(--muted-foreground)' }}
-              formatter={(v) => `₹${Number(v).toLocaleString()}`} 
-            />
-            <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-            <Area type="monotone" name="Stock Cost Valuation" dataKey="totalCostValue" stroke="var(--primary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorCostValue)" />
-            <Area type="monotone" name="Stock Sell Valuation" dataKey="totalSellValue" stroke="var(--chart-2)" strokeWidth={1} strokeDasharray="4 4" fillOpacity={1} fill="url(#colorSellValue)" />
-          </AreaChart>
+          summary.historicalTrends.length <= 1 ? (
+            <BarChart data={summary.historicalTrends} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
+              <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={10} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
+              <RechartsTooltip 
+                cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
+                contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
+                itemStyle={{ color: 'var(--foreground)' }}
+                labelStyle={{ color: 'var(--muted-foreground)' }}
+                formatter={(v) => `₹${Number(v).toLocaleString()}`} 
+              />
+              <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+              <Bar dataKey="totalCostValue" name="Stock Cost Valuation" fill="var(--primary)" barSize={isMobile ? 30 : 60} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="totalSellValue" name="Stock Sell Valuation" fill="var(--chart-2)" barSize={isMobile ? 30 : 60} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          ) : (
+            <AreaChart data={summary.historicalTrends} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
+              <defs>
+                <linearGradient id="colorCostValue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25}/>
+                  <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.0}/>
+                </linearGradient>
+                <linearGradient id="colorSellValue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0.0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
+              <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={10} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
+              <RechartsTooltip 
+                contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
+                itemStyle={{ color: 'var(--foreground)' }}
+                labelStyle={{ color: 'var(--muted-foreground)' }}
+                formatter={(v) => `₹${Number(v).toLocaleString()}`} 
+              />
+              <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+              <Area type="monotone" name="Stock Cost Valuation" dataKey="totalCostValue" stroke="var(--primary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorCostValue)" />
+              <Area type="monotone" name="Stock Sell Valuation" dataKey="totalSellValue" stroke="var(--chart-2)" strokeWidth={1} strokeDasharray="4 4" fillOpacity={1} fill="url(#colorSellValue)" />
+            </AreaChart>
+          )
         ) : summary.months ? (
-          <AreaChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
-            <defs>
-              <linearGradient id="colorInflows" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25}/>
-                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.0}/>
-              </linearGradient>
-              <linearGradient id="colorOutflows" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--destructive)" stopOpacity={0.15}/>
-                <stop offset="95%" stopColor="var(--destructive)" stopOpacity={0.0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
-            <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile ? v.split(' ')[0] : v} />
-            <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/100000}L`} />
-            <RechartsTooltip 
-              contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
-              itemStyle={{ color: 'var(--foreground)' }}
-              labelStyle={{ color: 'var(--muted-foreground)' }}
-              formatter={(v) => `₹${Number(v).toLocaleString()}`} 
-            />
-            <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-            <Area type="monotone" name="Inflow Receipts" dataKey="inflows" stroke="var(--primary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorInflows)" />
-            <Area type="monotone" name="Outflow Expenditures" dataKey="outflows" stroke="var(--destructive)" strokeWidth={1} strokeDasharray="4 4" fillOpacity={1} fill="url(#colorOutflows)" />
-          </AreaChart>
+          summary.months.length <= 1 ? (
+            <BarChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
+              <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
+              <RechartsTooltip 
+                cursor={{ fill: 'var(--muted)', opacity: 0.15 }}
+                contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
+                itemStyle={{ color: 'var(--foreground)' }}
+                labelStyle={{ color: 'var(--muted-foreground)' }}
+                formatter={(v) => `₹${Number(v).toLocaleString()}`} 
+              />
+              <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+              <Bar dataKey="inflows" name="Inflow Receipts" fill="var(--primary)" barSize={isMobile ? 30 : 60} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="outflows" name="Outflow Expenditures" fill="var(--destructive)" barSize={isMobile ? 30 : 60} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          ) : (
+            <AreaChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
+              <defs>
+                <linearGradient id="colorInflows" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25}/>
+                  <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.0}/>
+                </linearGradient>
+                <linearGradient id="colorOutflows" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--destructive)" stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor="var(--destructive)" stopOpacity={0.0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
+              <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile ? v.split(' ')[0] : v} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/100000}L`} />
+              <RechartsTooltip 
+                contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
+                itemStyle={{ color: 'var(--foreground)' }}
+                labelStyle={{ color: 'var(--muted-foreground)' }}
+                formatter={(v) => `₹${Number(v).toLocaleString()}`} 
+              />
+              <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+              <Area type="monotone" name="Inflow Receipts" dataKey="inflows" stroke="var(--primary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorInflows)" />
+              <Area type="monotone" name="Outflow Expenditures" dataKey="outflows" stroke="var(--destructive)" strokeWidth={1} strokeDasharray="4 4" fillOpacity={1} fill="url(#colorOutflows)" />
+            </AreaChart>
+          )
         ) : null
       ) : (
         // Secondary Tab: Ageing Splits (Bar) or Stock Category Split (Bar) or Sales Outflow splits (Bar)

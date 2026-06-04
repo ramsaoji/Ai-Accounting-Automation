@@ -16,17 +16,17 @@ import {
   checkSessionStatus,
   logoutUser
 } from './controllers/security.controller.js';
-import { getSalesReport, getDebitorsReport, getGodownStockReport, getPortalSummary, triggerPipeline, handleFileUpload, getSyncStatus, getTransactionsList } from './controllers/report.controller.js';
+import { getSalesReport, getDebitorsReport, getGodownStockReport, getCounterStockReport, getPortalSummary, triggerPipeline, handleFileUpload, getSyncStatus, getTransactionsList } from './controllers/report.controller.js';
 import { handleAdvisorChat, chatSchema } from './controllers/chat.controller.js';
 import { getSettings, updateSettings, updateSettingsSchema } from './controllers/settings.controller.js';
 import { checkFastifyAuth } from './fastify.auth.js';
 import { validateBody } from './middleware/validate.js';
 
 export function createFastifyApp() {
-  // Initialize Fastify with a 10MB request payload limit
+  // Initialize Fastify with a 50MB request payload limit
   const app = fastify({
     logger: false,
-    bodyLimit: 10485760, // 10MB limit to support large base64 spreadsheet uploads
+    bodyLimit: 52428800, // 50MB limit to support large base64 spreadsheet uploads
   });
 
   // Register Cookie support
@@ -35,7 +35,7 @@ export function createFastifyApp() {
   // Register Multipart support
   app.register(FastifyMultipart, {
     limits: {
-      fileSize: 10485760, // 10MB limit
+      fileSize: 52428800, // 50MB limit
     },
   });
 
@@ -108,6 +108,7 @@ export function createFastifyApp() {
     v1Routes.get('/api/v1/data/sales', getSalesReport);
     v1Routes.get('/api/v1/data/debitors', getDebitorsReport);
     v1Routes.get('/api/v1/data/godown-stock', getGodownStockReport);
+    v1Routes.get('/api/v1/data/counter-stock', getCounterStockReport);
     v1Routes.get('/api/v1/transactions', getTransactionsList);
     v1Routes.post('/api/v1/trigger-pipeline', triggerPipeline);
     v1Routes.get('/api/v1/sync-status', getSyncStatus);

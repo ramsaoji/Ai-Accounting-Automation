@@ -26,4 +26,5 @@ export interface ExcelParsingResult {
   sheets: SheetParsingResult[];
   isDebitorsList?: boolean;
   isGodownStockList?: boolean;
+  isCounterStockList?: boolean;
 }

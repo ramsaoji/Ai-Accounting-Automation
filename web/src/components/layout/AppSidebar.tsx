@@ -38,8 +38,8 @@ import {
 
 
 export interface AppSidebarProps {
-  activeWorkspace: 'sales' | 'debitors' | 'godown_stock';
-  setActiveWorkspace: (w: 'sales' | 'debitors' | 'godown_stock') => void;
+  activeWorkspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
+  setActiveWorkspace: (w: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock') => void;
   activeView: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor';
   setActiveView: (v: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
   businessName: string;
@@ -52,6 +52,7 @@ export interface AppSidebarProps {
   hasSales?: boolean;
   hasDebitors?: boolean;
   hasStock?: boolean;
+  hasCounterStock?: boolean;
 }
 
 export function AppSidebar({
@@ -69,6 +70,7 @@ export function AppSidebar({
   hasSales = true,
   hasDebitors = true,
   hasStock = true,
+  hasCounterStock = true,
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -76,7 +78,7 @@ export function AppSidebar({
     ? typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
     : theme === 'dark';
 
-  const handleWorkspaceSelect = (workspace: 'sales' | 'debitors' | 'godown_stock') => {
+  const handleWorkspaceSelect = (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock') => {
     setActiveWorkspace(workspace);
     if (activeView === 'portal') setActiveView('overview');
     if (isMobile) {
@@ -110,12 +112,12 @@ export function AppSidebar({
               >
                 <div className="flex items-center gap-2.5">
                   <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                    {activeWorkspace === 'sales' ? 'SG' : activeWorkspace === 'debitors' ? 'DL' : 'IN'}
+                    {activeWorkspace === 'sales' ? 'SG' : activeWorkspace === 'debitors' ? 'DL' : activeWorkspace === 'godown_stock' ? 'IN' : 'CS'}
                   </div>
                   <div className="flex flex-col text-left group-data-[collapsible=icon]:hidden">
                     <span className="text-xs font-bold leading-none">{businessName}</span>
                     <span className="text-[0.68rem] text-muted-foreground mt-1 leading-none">
-                      {activeWorkspace === 'sales' ? 'Daily Sales Register' : activeWorkspace === 'debitors' ? 'Customer Debitors' : 'Godown Stock Register'}
+                      {activeWorkspace === 'sales' ? 'Daily Sales Register' : activeWorkspace === 'debitors' ? 'Customer Debitors' : activeWorkspace === 'godown_stock' ? 'Godown Stock Register' : 'Counter Stock Register'}
                     </span>
                   </div>
                 </div>
@@ -163,6 +165,19 @@ export function AppSidebar({
                       <span className="font-medium">Godown Stock Register</span>
                     </div>
                     {activeWorkspace === 'godown_stock' && <Check className="size-3.5 text-primary" />}
+                  </DropdownMenuItem>
+                )}
+
+                {hasCounterStock && (
+                  <DropdownMenuItem
+                    onClick={() => handleWorkspaceSelect('counter_stock')}
+                    className="flex items-center justify-between text-xs cursor-pointer py-2"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Grid className="size-4 text-primary" />
+                      <span className="font-medium">Counter Stock Register</span>
+                    </div>
+                    {activeWorkspace === 'counter_stock' && <Check className="size-3.5 text-primary" />}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

@@ -30,18 +30,21 @@ interface PortalItem {
   dataKey: string;
   stroke: string;
   isActive: boolean;
+  latestSummaryLabel?: string;
+  latestSummaryValue?: string;
+  latestSummaryPositive?: boolean;
 }
 
 interface PortalCardProps {
   portal: PortalItem;
-  onLaunchWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
+  onLaunchWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
 }
 
 export const PortalCard: React.FC<PortalCardProps> = ({ portal, onLaunchWorkspace }) => {
   return (
     <Card
       className="border hover:border-primary/50 hover:shadow-sm transition-all duration-300 bg-card/45 overflow-hidden flex flex-col justify-between group cursor-pointer"
-      onClick={() => onLaunchWorkspace(portal.id as 'sales' | 'debitors' | 'godown_stock')}
+      onClick={() => onLaunchWorkspace(portal.id as 'sales' | 'debitors' | 'godown_stock' | 'counter_stock')}
     >
       <div className="p-4 md:p-6 flex flex-col gap-4 md:gap-5">
         {/* Card Title & Icon */}
@@ -126,15 +129,26 @@ export const PortalCard: React.FC<PortalCardProps> = ({ portal, onLaunchWorkspac
             )}
           </div>
 
-          {/* Sparkline Graph */}
-          <div className="w-24 h-8 select-none opacity-80 group-hover:opacity-100 transition-opacity">
-            {portal.sparkline && portal.sparkline.length > 0 ? (
-              <React.Suspense fallback={<div className="w-full h-full border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[0.58rem] text-muted-foreground font-mono bg-muted/5 animate-pulse select-none">Loading…</div>}>
-                <PortalCharts data={portal.sparkline} dataKey={portal.dataKey} stroke={portal.stroke} />
-              </React.Suspense>
+          {/* Sparkline Graph / Status badge */}
+          <div className="w-24 h-10 select-none opacity-90 group-hover:opacity-100 transition-opacity flex flex-col justify-center items-end shrink-0">
+            {portal.sparkline && portal.sparkline.length > 1 ? (
+              <div className="w-full h-8">
+                <React.Suspense fallback={<div className="w-full h-full border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[0.58rem] text-muted-foreground font-mono bg-muted/5 animate-pulse select-none">Loading…</div>}>
+                  <PortalCharts data={portal.sparkline} dataKey={portal.dataKey} stroke={portal.stroke} />
+                </React.Suspense>
+              </div>
+            ) : portal.latestSummaryLabel && portal.latestSummaryValue ? (
+              <div className="flex flex-col items-end leading-none gap-1 bg-muted/20 border border-border/60 px-2.5 py-1.5 rounded-lg select-none">
+                <span className="text-[0.55rem] font-bold text-muted-foreground uppercase tracking-wider text-right">
+                  {portal.latestSummaryLabel}
+                </span>
+                <span className={`text-[0.78rem] font-black font-mono text-right ${portal.latestSummaryPositive ? 'text-success' : 'text-destructive'}`}>
+                  {portal.latestSummaryValue}
+                </span>
+              </div>
             ) : (
-              <div className="w-full h-full border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[0.58rem] text-muted-foreground font-mono bg-muted/5 select-none">
-                No trend data
+              <div className="w-full h-8 border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[0.58rem] text-muted-foreground font-medium bg-muted/15 select-none text-center px-1 font-sans">
+                {portal.sparkline && portal.sparkline.length === 1 ? 'Latest snapshot' : 'No trend data'}
               </div>
             )}
           </div>

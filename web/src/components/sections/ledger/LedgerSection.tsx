@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 
 interface LedgerSectionProps {
   summary: MasterSummary;
-  activeTab: 'sales' | 'debitors' | 'godown_stock';
+  activeTab: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
   relevantFileName: string | undefined;
 }
 
@@ -136,7 +136,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
-    if (activeSubTab !== 'transactions' || activeTab === 'godown_stock') return;
+    if (activeSubTab !== 'transactions' || activeTab === 'godown_stock' || activeTab === 'counter_stock') return;
 
     let isMounted = true;
     const loadTx = async () => {
@@ -413,7 +413,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   // Pagination Logic
   const totalItems = isDebitors
     ? processedDebitors.length
-    : activeTab === 'godown_stock'
+    : (activeTab === 'godown_stock' || activeTab === 'counter_stock')
     ? processedStock.length
     : processedMonths.length;
 
@@ -570,7 +570,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       </div>
 
       {/* Tab Selector */}
-      {activeTab !== 'godown_stock' && (
+      {activeTab !== 'godown_stock' && activeTab !== 'counter_stock' && (
         <div className="flex border bg-muted/20 rounded-lg p-0.5 select-none w-fit shrink-0">
           <button
             type="button"
@@ -663,7 +663,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                 </div>
 
                 {/* Date Filter Widget — only for sales (has month sheets) in ledger view and transactions view */}
-                {!isDebitors && activeTab !== 'godown_stock' && (activeSubTab === 'ledger' || activeSubTab === 'transactions') && (
+                {!isDebitors && activeTab !== 'godown_stock' && activeTab !== 'counter_stock' && (activeSubTab === 'ledger' || activeSubTab === 'transactions') && (
                   <div className="w-full sm:w-auto">
                     <DatePickerWithRange 
                       selectedMonths={activeSubTab === 'transactions' ? txSelectedMonths : selectedMonths} 
@@ -710,6 +710,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                   </div>
                 </div>
               )}
+
 
               {/* Flow filter dropdown for Transactions tab */}
               {activeSubTab === 'transactions' && (

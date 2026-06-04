@@ -187,6 +187,18 @@ export class TelegramBot {
           toastText = "Loading top moving items...";
         } else if (data === 'godown_stock_inflows') {
           toastText = "Loading recent restocks...";
+        } else if (data === 'counter_stock_menu') {
+          toastText = "Loading counter stock portal...";
+        } else if (data === 'counter_stock_metrics') {
+          toastText = "Loading counter valuation metrics...";
+        } else if (data === 'counter_stock_categories') {
+          toastText = "Loading counter category breakdown...";
+        } else if (data === 'counter_stock_alerts') {
+          toastText = "Loading counter stock & audit alerts...";
+        } else if (data === 'counter_stock_top_movers') {
+          toastText = "Loading counter top moving items...";
+        } else if (data === 'counter_stock_inflows') {
+          toastText = "Loading counter recent restocks...";
         }
         
         await axios.post(answerUrl, {
@@ -248,7 +260,7 @@ export class TelegramBot {
       const cleanText = text.toLowerCase();
       const isKnownCommand = 
         text.startsWith('/') || 
-        ['sales summary', 'debitors list', 'godown stock', 'sync ledger', 'service health', 'help', 'start'].some(cmd => cleanText.includes(cmd));
+        ['sales summary', 'debitors list', 'godown stock', 'counter stock', 'sync ledger', 'service health', 'help', 'start'].some(cmd => cleanText.includes(cmd));
 
       if (isKnownCommand) {
         await handleCommand(text, chatId);

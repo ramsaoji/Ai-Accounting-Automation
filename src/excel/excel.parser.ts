@@ -37,7 +37,17 @@ export class ExcelParser {
     logger.info({ fileName, sizeBytes: buffer.length }, 'Parsing Excel buffer');
     
     const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
-    const isGodownStockFile = cleanFileName.toUpperCase().includes('STOCK') || cleanFileName.toUpperCase().includes('GODWON');
+    const isCounterStockFile = cleanFileName.toUpperCase().includes('COUNTER');
+    const isGodownStockFile = !isCounterStockFile && (
+      cleanFileName.toUpperCase().includes('GODWON') ||
+      cleanFileName.toUpperCase().includes('GODOWN') ||
+      cleanFileName.toUpperCase() === 'STOCK'
+    );
+
+    if (isCounterStockFile) {
+      const { parseCounterStockWorkbookStreaming } = await import('./parsers/counter.parser.js');
+      return parseCounterStockWorkbookStreaming(buffer, fileName);
+    }
 
     if (isGodownStockFile) {
       const { parseGodownStockWorkbookStreaming } = await import('./parsers/godown.parser.js');

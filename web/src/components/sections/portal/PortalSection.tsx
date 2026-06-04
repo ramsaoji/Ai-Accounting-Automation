@@ -11,7 +11,8 @@ interface PortalSectionProps {
   salesData: MasterSummary | null;
   debitorsData: MasterSummary | null;
   stockData: MasterSummary | null;
-  onLaunchWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
+  counterStockData: MasterSummary | null;
+  onLaunchWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
   cronSchedule: string;
   connectionMode: 'live' | 'static' | 'empty';
 }
@@ -42,12 +43,16 @@ interface PortalItem {
   dataKey: string;
   stroke: string;
   isActive: boolean;
+  latestSummaryLabel?: string;
+  latestSummaryValue?: string;
+  latestSummaryPositive?: boolean;
 }
 
 export const PortalSection: React.FC<PortalSectionProps> = ({
   salesData,
   debitorsData,
   stockData,
+  counterStockData,
   onLaunchWorkspace,
   cronSchedule,
   connectionMode,
@@ -215,7 +220,12 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
         sparkline: salesData?.months?.map((m: MonthlySummary) => ({ net: m.net })) || [],
         dataKey: 'net',
         stroke: 'var(--primary)',
-        isActive: !!salesData
+        isActive: !!salesData,
+        latestSummaryLabel: salesData?.masterTotals?.totalInflows ? 'Surplus Rate' : undefined,
+        latestSummaryValue: salesData?.masterTotals?.totalInflows && salesData.masterTotals.totalInflows > 0
+          ? `${(salesData.masterTotals.netCashflow >= 0 ? '+' : '')}${((salesData.masterTotals.netCashflow / salesData.masterTotals.totalInflows) * 100).toFixed(1)}%`
+          : undefined,
+        latestSummaryPositive: salesData?.masterTotals?.netCashflow !== undefined ? salesData.masterTotals.netCashflow >= 0 : undefined,
       },
       {
         id: 'debitors',
@@ -248,7 +258,12 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
         sparkline: debitorsData?.topDebitors?.map((d: DebitorSummary) => ({ pending: d.pending })) || [],
         dataKey: 'pending',
         stroke: 'var(--destructive)',
-        isActive: !!debitorsData
+        isActive: !!debitorsData,
+        latestSummaryLabel: debitorsData?.aggregates?.activeDebitorsCount ? 'Avg Owed' : undefined,
+        latestSummaryValue: debitorsData?.aggregates?.averageOutstandingDues
+          ? formatINRValue(debitorsData.aggregates.averageOutstandingDues)
+          : undefined,
+        latestSummaryPositive: false,
       },
       {
         id: 'godown_stock',
@@ -266,14 +281,49 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
           ? ([
               'Inventory Registry',
               buildDurationTag(stockData.dateRange, true),
-              buildStockDateTag(stockData.dateRange) || 'Godown Counter',
+              buildStockDateTag(stockData.dateRange) || 'Godown Stock',
               `${stockData.totalItems ?? stockData.totalTransactions ?? 0} Products`,
             ].filter(Boolean) as string[])
           : ['Inventory Registry', 'Awaiting Ingestion'],
         sparkline: stockData?.historicalTrends?.map((t: any) => ({ net: t.totalCostValue })) || [],
         dataKey: 'net',
         stroke: 'var(--chart-2)',
-        isActive: !!stockData
+        isActive: !!stockData,
+        latestSummaryLabel: stockData?.aggregates?.totalClosingValue ? 'Est. Markup' : undefined,
+        latestSummaryValue: stockData?.aggregates?.totalClosingValue && stockData.aggregates.totalClosingValue > 0 && stockData.aggregates.totalSellingValue
+          ? `+${(((stockData.aggregates.totalSellingValue - stockData.aggregates.totalClosingValue) / stockData.aggregates.totalClosingValue) * 100).toFixed(1)}%`
+          : undefined,
+        latestSummaryPositive: true,
+      },
+      {
+        id: 'counter_stock',
+        title: counterStockData ? counterStockData.fileName.replace(/\.[^/.]+$/, "") : 'Counter Stock Register',
+        type: 'Counter Inventory & Sales',
+        filename: counterStockData ? counterStockData.fileName : 'No spreadsheet uploaded',
+        lastUpdated: counterStockData ? formatTimestamp(counterStockData.runTimestamp) : 'Never',
+        stats: [
+          { label: 'Stock Valuation (Cost)', value: counterStockData ? formatINRValue(counterStockData.aggregates?.totalClosingValue) : '—' },
+          { label: 'Active Items', value: counterStockData ? `${counterStockData.aggregates?.activeItemsCount || counterStockData.aggregates?.totalItemsCount || 0} items` : '—' },
+        ],
+        alertCount: counterStockData?.highAlertCount ?? counterStockData?.alerts?.length ?? 0,
+        totalAlertCount: counterStockData?.alerts?.length ?? 0,
+        tags: counterStockData
+          ? ([
+              'Counter Registry',
+              buildDurationTag(counterStockData.dateRange, true),
+              buildStockDateTag(counterStockData.dateRange) || 'Counter Stock',
+              `${counterStockData.totalItems ?? counterStockData.totalTransactions ?? 0} Products`,
+            ].filter(Boolean) as string[])
+          : ['Counter Registry', 'Awaiting Ingestion'],
+        sparkline: counterStockData?.historicalTrends?.map((t: any) => ({ net: t.totalCostValue })) || [],
+        dataKey: 'net',
+        stroke: 'var(--chart-3)',
+        isActive: !!counterStockData,
+        latestSummaryLabel: counterStockData?.aggregates?.totalClosingValue ? 'Est. Markup' : undefined,
+        latestSummaryValue: counterStockData?.aggregates?.totalClosingValue && counterStockData.aggregates.totalClosingValue > 0 && counterStockData.aggregates.totalSellingValue
+          ? `+${(((counterStockData.aggregates.totalSellingValue - counterStockData.aggregates.totalClosingValue) / counterStockData.aggregates.totalClosingValue) * 100).toFixed(1)}%`
+          : undefined,
+        latestSummaryPositive: true,
       }
     ];
 
@@ -291,7 +341,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
 
       return matchesSearch && matchesFilter;
     });
-  }, [salesData, debitorsData, stockData, searchQuery, activeFilter]);
+  }, [salesData, debitorsData, stockData, counterStockData, searchQuery, activeFilter]);
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 w-full animate-in fade-in duration-300">

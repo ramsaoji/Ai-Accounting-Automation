@@ -184,6 +184,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
       totalSellingValue: summary.aggregates.totalSellingValue ?? 0,
       totalItemsCount: summary.aggregates.totalItemsCount ?? 0,
       totalVolumeLiters: summary.aggregates.totalVolumeLiters ?? 0,
+      godown: summary.aggregates.godown,
+      counter: summary.aggregates.counter
     };
   }, [summary.aggregates, isStock]);
 

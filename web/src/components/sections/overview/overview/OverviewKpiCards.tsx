@@ -32,6 +32,22 @@ interface StockTotals {
   totalSellingValue: number;
   totalItemsCount: number;
   totalVolumeLiters: number;
+  godown?: {
+    totalClosingValue: number;
+    totalSellingValue: number;
+    totalItemsCount: number;
+    totalVolumeLiters: number;
+    stockInCount?: number;
+    stockOutCount?: number;
+  };
+  counter?: {
+    totalClosingValue: number;
+    totalSellingValue: number;
+    totalItemsCount: number;
+    totalVolumeLiters: number;
+    stockInCount?: number;
+    stockOutCount?: number;
+  };
 }
 
 interface OverviewKpiCardsProps {
@@ -87,11 +103,23 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
   }
 
   if (isStock && dynamicStockTotals) {
+    const godownCost = dynamicStockTotals.godown?.totalClosingValue || 0;
+    const counterCost = dynamicStockTotals.counter?.totalClosingValue || 0;
+
+    const godownSell = dynamicStockTotals.godown?.totalSellingValue || 0;
+    const counterSell = dynamicStockTotals.counter?.totalSellingValue || 0;
+
+    const godownLines = dynamicStockTotals.godown?.totalItemsCount || 0;
+    const counterLines = dynamicStockTotals.counter?.totalItemsCount || 0;
+
+    const godownVol = dynamicStockTotals.godown?.totalVolumeLiters || 0;
+    const counterVol = dynamicStockTotals.counter?.totalVolumeLiters || 0;
+
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 select-none">
         <KpiCard
           title="Stock Valuation (Cost)"
-          tooltipText="Total cost valuation of closing stock currently in the godown."
+          tooltipText={`Combined inventory cost valuation. Godown: ${formatINR(godownCost)} | Counter: ${formatINR(counterCost)}`}
           value={formatINR(dynamicStockTotals.totalClosingValue)}
           description="Total cost valuation of inventory."
           icon={<TrendingUp className="text-primary size-4 shrink-0" />}
@@ -99,7 +127,7 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
         />
         <KpiCard
           title="Estimated Sell Value"
-          tooltipText="Total estimated selling valuation of closing stock currently in the godown."
+          tooltipText={`Combined potential retail menu value. Godown: ${formatINR(godownSell)} | Counter: ${formatINR(counterSell)}`}
           value={formatINR(dynamicStockTotals.totalSellingValue)}
           description="Potential inventory sell value."
           icon={<BarChart3 className="text-amber-500 size-4 shrink-0" />}
@@ -107,14 +135,14 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
         />
         <KpiCard
           title="Active Inventory Lines"
-          tooltipText="Total count of active unique products carrying positive stock volumes."
+          tooltipText={`Combined active items in stock. Godown: ${godownLines} lines | Counter: ${counterLines} lines`}
           value={dynamicStockTotals.totalItemsCount}
           description="Active products in stock."
           icon={<Users className="text-primary size-4 shrink-0" />}
         />
         <KpiCard
           title="Total Volume"
-          tooltipText="Consolidated volume of closing stock measured in liters."
+          tooltipText={`Combined volume in liters. Godown: ${Math.round(godownVol).toLocaleString('en-IN')} L | Counter: ${Math.round(counterVol).toLocaleString('en-IN')} L`}
           value={`${Math.round(dynamicStockTotals.totalVolumeLiters).toLocaleString('en-IN')} Liters`}
           description="Consolidated volume in liters."
           icon={<Percent className="text-primary size-4 shrink-0" />}

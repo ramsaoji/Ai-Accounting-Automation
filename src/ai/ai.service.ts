@@ -175,6 +175,21 @@ export class AiService {
         totalStockCostValue += Number(item.totalCostValue || 0);
       }
 
+      const godownItems = todaysItems.filter(i => i.location === 'godown');
+      const counterItems = todaysItems.filter(i => i.location === 'counter');
+
+      let godownVal = 0, godownCost = 0;
+      for (const item of godownItems) {
+        godownVal += Number(item.totalSellValue || 0);
+        godownCost += Number(item.totalCostValue || 0);
+      }
+
+      let counterVal = 0, counterCost = 0;
+      for (const item of counterItems) {
+        counterVal += Number(item.totalSellValue || 0);
+        counterCost += Number(item.totalCostValue || 0);
+      }
+
       // AI calls for strategic intelligence specific to stock
       let aiWeeklyChecklist = '';
       let aiProjections = '';
@@ -192,17 +207,28 @@ Inventory cumulative totals for the snapshot date:
 - Total unique items: ${uniqueItemsCount} products on books
 - Total Stock Value (Retail Selling Price): ₹${Math.round(totalStockValue).toLocaleString()}
 - Total Stock Cost Value (Purchase Price): ₹${Math.round(totalStockCostValue).toLocaleString()}
+- Godown Stock Cost Value: ₹${Math.round(godownCost).toLocaleString()} (Items: ${godownItems.length})
+- Counter Stock Cost Value: ₹${Math.round(counterCost).toLocaleString()} (Items: ${counterItems.length})
 - Active Categories: ${categories.join(', ')}
 `;
 
-      // Get top 15 items sorted by totalCostValue to pass as summary context
-      const topItems = todaysItems
+      // Get top 10 items sorted by totalCostValue for each location to pass as summary context
+      const topGodown = godownItems
         .sort((a, b) => Number(b.totalCostValue || 0) - Number(a.totalCostValue || 0))
-        .slice(0, 15);
+        .slice(0, 10);
+      const topCounter = counterItems
+        .sort((a, b) => Number(b.totalCostValue || 0) - Number(a.totalCostValue || 0))
+        .slice(0, 10);
 
-      const stockSummaryText = topItems.map((item, idx) => {
-        return `${idx + 1}. ${item.itemName} (${item.bottleSizeMl}ml): Closing Stock: ${item.closingStock} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost Price: ₹${item.costPrice ?? 'N/A'}, Selling Price: ₹${item.sellingPrice ?? 'N/A'}`;
+      const godownSummaryText = topGodown.map((item, idx) => {
+        return `${idx + 1}. [Godown] ${item.itemName} (${item.bottleSizeMl}ml): Closing: ${item.closingStock} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
       }).join('\n');
+
+      const counterSummaryText = topCounter.map((item, idx) => {
+        return `${idx + 1}. [Counter] ${item.itemName} (${item.bottleSizeMl}ml): Closing: ${item.closingStock} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
+      }).join('\n');
+
+      const stockSummaryText = `GODOWN INVENTORY:\n${godownSummaryText}\n\nCOUNTER INVENTORY:\n${counterSummaryText}`;
 
       if (!aiGenerated) {
         try {

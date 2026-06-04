@@ -23,6 +23,7 @@ export interface GodownStockTableItem {
   totalCostValue: number | null;
   totalSellValue: number | null;
   packaging: string;
+  location?: string;
 }
 
 interface GodownStockLedgerTableProps {
@@ -58,7 +59,7 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
         <TooltipProvider>
           <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
             <TableHead 
-              className="pl-6 h-10 w-[260px] cursor-pointer hover:bg-muted/20 select-none transition-colors"
+              className="pl-6 h-10 w-[240px] cursor-pointer hover:bg-muted/20 select-none transition-colors"
               onClick={() => onStockSort('itemName')}
             >
               Item Name {renderSortIcon('itemName')}
@@ -69,6 +70,7 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
             >
               Category {renderSortIcon('category')}
             </TableHead>
+
             <TableHead 
               className="h-10 text-center cursor-pointer hover:bg-muted/20 select-none transition-colors"
               onClick={() => onStockSort('bottleSizeMl')}
@@ -123,6 +125,8 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
             statusIcon = <AlertTriangle className="size-3 text-warning" />;
           }
 
+          const loc = item.location || 'godown';
+
           return (
             <TableRow 
               key={`${item.itemName}-${item.bottleSizeMl}-${idx}`}
@@ -138,6 +142,9 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
               </TableCell>
               
               <TableCell className="text-muted-foreground font-medium">{item.category}</TableCell>
+              
+
+
               <TableCell className="text-center font-mono text-muted-foreground font-semibold">{item.bottleSizeMl}ml</TableCell>
               
               <TableCell className="text-right font-mono font-medium text-muted-foreground">{item.openingStock}</TableCell>

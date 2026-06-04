@@ -6,7 +6,7 @@ import { getSystemSetting } from '../db/db.client.js';
 import { formatCronExpression } from '../utils/cron.js';
 import { formatTimestampToDual } from './bot.utils.js';
 import { getMainMenuKeyboard } from './bot.keyboards.js';
-import { sendSalesSummaryOptions, sendDebitorsSummary, sendGodownStockSummary } from './bot.callbacks.js';
+import { sendSalesSummaryOptions, sendDebitorsSummary, sendGodownStockSummary, sendCounterStockSummary } from './bot.callbacks.js';
 
 export async function handleCommand(command: string, chatId: string): Promise<void> {
   const cmdClean = command.toLowerCase();
@@ -23,6 +23,8 @@ export async function handleCommand(command: string, chatId: string): Promise<vo
     await sendDebitorsSummary(chatId);
   } else if (cmdClean === '/stock' || cmdClean === '/godownstock' || cmdClean.includes('godown stock')) {
     await sendGodownStockSummary(chatId);
+  } else if (cmdClean === '/counterstock' || cmdClean === '/counter_stock' || cmdClean.includes('counter stock')) {
+    await sendCounterStockSummary(chatId);
   } else {
     await telegramClient.sendMessage(
       `❓ *Unknown Command*\n\nI didn't recognize that command. Tap the keyboard buttons or type /help to see the available command panel.`,
@@ -39,7 +41,8 @@ export async function sendHelp(chatId: string): Promise<void> {
     `*Available Command Panel:*\n` +
     `📊 *Sales Summary* - View interactive timeframe summaries for Daily Sales.\n` +
     `👥 *Debitors List* - Inspect Top Outstanding Customer Debts & Collection Risk.\n` +
-    `🏭 *Godown Stock* - Inspect liquor/beer/wine inventory, valuations, and low-stock alerts.\n` +
+    `🏭 *Godown Stock* - Inspect godown inventory, valuations, and low-stock alerts.\n` +
+    `🏪 *Counter Stock* - Inspect counter bar inventory, valuations, and sales movement.\n` +
     `🔄 *Sync Ledger* - Manually trigger Google Drive sync & ingestion pipeline.\n` +
     `🩺 *Service Health* - Check accounting service health & active AI engine.\n\n` +
     `💬 *Or just text me any question!* (e.g., 'Compare food vs liquor sales' or 'Show current valuation of Liquor stock')`;

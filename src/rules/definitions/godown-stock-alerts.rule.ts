@@ -13,7 +13,7 @@ export class GodownStockAlertsRule implements Rule {
   async evaluate(transactions: any[], context?: RuleContext): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
 
-    if (!context || context.fileType !== 'godown_stock' || !context.godownStockItems) {
+    if (!context || (context.fileType !== 'godown_stock' && context.fileType !== 'counter_stock') || !context.godownStockItems) {
       return alerts;
     }
 

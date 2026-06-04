@@ -7,6 +7,7 @@ export function useAccountingData() {
   const [salesData, setSalesData] = useState<MasterSummary | null>(null);
   const [debitorsData, setDebitorsData] = useState<MasterSummary | null>(null);
   const [godownStockData, setGodownStockData] = useState<MasterSummary | null>(null);
+  const [counterStockData, setCounterStockData] = useState<MasterSummary | null>(null);
   const [connectionMode, setConnectionMode] = useState<'live' | 'static' | 'empty'>('empty');
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [isLocalDb, setIsLocalDb] = useState<boolean>(false);
@@ -20,6 +21,7 @@ export function useAccountingData() {
   const lastSalesTimestamp = useRef<string | undefined>(undefined);
   const lastDebitorsTimestamp = useRef<string | undefined>(undefined);
   const lastGodownStockTimestamp = useRef<string | undefined>(undefined);
+  const lastCounterStockTimestamp = useRef<string | undefined>(undefined);
   const hasInitiallySynced = useRef<boolean>(false);
   const syncRequestId = useRef<number>(0);
 
@@ -142,6 +144,36 @@ export function useAccountingData() {
         lastGodownStockTimestamp.current = undefined;
       }
 
+      if (result.counterStock) {
+        const isNewFile = lastCounterStockTimestamp.current !== result.counterStock.runTimestamp;
+        setCounterStockData((prev) => {
+          if (prev && prev.aggregates?.totalClosingValue !== undefined && !isNewFile) return prev;
+          
+          return {
+            fileName: result.counterStock!.fileName,
+            runTimestamp: result.counterStock!.runTimestamp,
+            totalTransactions: result.counterStock!.totalItems,
+            aggregates: {
+              totalClosingValue: result.counterStock!.totalClosingValue,
+              totalSellingValue: result.counterStock!.totalSellingValue,
+              activeItemsCount: result.counterStock!.activeItemsCount,
+            },
+            historicalTrends: result.counterStock!.sparkline.map((val: number) => ({ totalCostValue: val })),
+            alerts: Array(result.counterStock!.alertCount).fill({}),
+            highAlertCount: result.counterStock!.highAlertCount ?? result.counterStock!.alertCount,
+            dateRange: result.counterStock!.dateRange ?? null,
+            items: [],
+            errors: [],
+            intelligence: [],
+            aiGenerated: false
+          } as any;
+        });
+        lastCounterStockTimestamp.current = result.counterStock.runTimestamp;
+      } else {
+        setCounterStockData(null);
+        lastCounterStockTimestamp.current = undefined;
+      }
+
       hasInitiallySynced.current = true;
     } catch (error) {
       console.error("Critical error in accounting sync hook:", error);
@@ -158,7 +190,7 @@ export function useAccountingData() {
   /**
    * Lazy load the complete transactions and analytics report for a specific workspace console view.
    */
-  const fetchWorkspaceData = useCallback(async (workspace: 'sales' | 'debitors' | 'godown_stock') => {
+  const fetchWorkspaceData = useCallback(async (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock') => {
     setIsWorkspaceLoading(true);
     try {
       if (workspace === 'sales') {
@@ -185,6 +217,14 @@ export function useAccountingData() {
           const data = mapMasterSummary(await res.json(), false);
           setGodownStockData(data);
         }
+      } else if (workspace === 'counter_stock') {
+        const res = await authFetch(`${apiBaseUrl}/api/v1/data/counter-stock`, {
+          headers: getAuthHeaders(),
+        });
+        if (res.ok) {
+          const data = mapMasterSummary(await res.json(), false);
+          setCounterStockData(data);
+        }
       }
     } catch (error) {
       console.error(`Failed to load full workspace data for ${workspace}:`, error);
@@ -198,6 +238,7 @@ export function useAccountingData() {
     salesData,
     debitorsData,
     godownStockData,
+    counterStockData,
     connectionMode,
     isDbConnected,
     isLocalDb,

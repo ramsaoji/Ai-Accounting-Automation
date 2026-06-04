@@ -12,7 +12,7 @@ export const GodownStockItemSchema = z.object({
   itemName: z.string().min(1).trim(),
   itemCode: z.string().nullable().optional(),
   category: z.string().min(1).trim(),
-  bottleSizeMl: z.number().int().positive(),
+  bottleSizeMl: z.number().int().nonnegative(),
   openingStock: z.coerce.number().default(0),
   stockIn: z.coerce.number().default(0),
   stockOut: z.coerce.number().default(0),
