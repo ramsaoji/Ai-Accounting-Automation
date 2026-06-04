@@ -8,6 +8,13 @@
       "when": 1780501684490,
       "tag": "0000_pink_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780542418394,
+      "tag": "0001_fast_timeslip",
+      "breakpoints": true
     }
   ]
 }

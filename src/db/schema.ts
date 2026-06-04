@@ -38,7 +38,9 @@ export const transactions = pgTable('transactions', {
 }, (table) => [
   index('transactions_file_id_idx').on(table.fileId),
   index('transactions_date_idx').on(table.date),
-  index('transactions_category_idx').on(table.category)
+  index('transactions_category_idx').on(table.category),
+  index('transactions_file_id_category_idx').on(table.fileId, table.category),
+  index('transactions_file_id_date_idx').on(table.fileId, table.date)
 ]);
 
 // 3. Godown Stock Items (For godown inventory registers)
@@ -69,7 +71,9 @@ export const godownStockItems = pgTable('godown_stock_items', {
   index('godown_stock_items_file_id_idx').on(table.fileId),
   index('godown_stock_items_snapshot_date_idx').on(table.snapshotDate),
   index('godown_stock_items_item_name_idx').on(table.itemName),
-  index('godown_stock_items_category_idx').on(table.category)
+  index('godown_stock_items_category_idx').on(table.category),
+  index('godown_stock_items_file_id_snapshot_date_idx').on(table.fileId, table.snapshotDate),
+  index('godown_stock_items_file_id_item_name_idx').on(table.fileId, table.itemName)
 ]);
 
 // 4. Party Balances (Outstanding credit balances for debtors and creditors/suppliers)
@@ -84,7 +88,8 @@ export const partyBalances = pgTable('party_balances', {
   metadata: jsonb('metadata'), // Credit rating, contact number, etc.
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('party_balances_file_id_idx').on(table.fileId)
+  index('party_balances_file_id_idx').on(table.fileId),
+  index('party_balances_file_id_party_name_idx').on(table.fileId, table.partyName)
 ]);
 
 // 5. Audit Exception Alerts
