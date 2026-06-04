@@ -143,7 +143,7 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} />
-              <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile ? v.split(' ')[0] : v} />
+              <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile && typeof v === 'string' ? v.split(' ')[0] : (v ?? '')} />
               <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/100000}L`} />
               <RechartsTooltip 
                 contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius)', fontSize: '11px', color: 'var(--foreground)' }} 
@@ -196,7 +196,7 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
         ) : summary.months ? (
           <BarChart data={summary.months} margin={{ left: isMobile ? 0 : 5, right: 5, top: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
-            <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile ? v.split(' ')[0] : v} />
+            <XAxis dataKey="sheetName" stroke="var(--muted-foreground)" fontSize={10} tickFormatter={(v) => isMobile && typeof v === 'string' ? v.split(' ')[0] : (v ?? '')} />
             <YAxis stroke="var(--muted-foreground)" fontSize={10} width={isMobile ? 36 : 45} tickFormatter={(v) => `₹${v/1000}K`} />
             <RechartsTooltip 
               cursor={{ fill: 'var(--muted)', opacity: 0.15 }}

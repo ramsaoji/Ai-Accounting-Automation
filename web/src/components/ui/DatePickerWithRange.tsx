@@ -69,6 +69,7 @@ export function DatePickerWithRange({
 
   const parsedMonths = useMemo(() => {
     return availableMonths
+      .filter((m): m is string => typeof m === 'string' && !!m.trim())
       .map((m) => {
         const clean = m.trim().toLowerCase();
         const yr = clean.match(/\b(20\d{2})\b/);
