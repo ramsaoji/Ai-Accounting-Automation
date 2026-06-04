@@ -163,7 +163,7 @@ export class AiService {
       logger.info({ fileName }, `Generating specialized report for Godown Stock (${businessName})`);
 
       const godownStockItemsList = data.sheets.flatMap(s => s.godownStockItems || []);
-      const todaysItems = godownStockItemsList.filter(s => s.sheetName === 'Todays');
+      const todaysItems = godownStockItemsList.filter(s => s.sheetName === 'Todays' || s.sheetName === 'Current');
       
       const uniqueItemsCount = new Set(todaysItems.map(i => i.itemName)).size;
       const categories = Array.from(new Set(todaysItems.filter(i => i.category).map(i => i.category as string)));

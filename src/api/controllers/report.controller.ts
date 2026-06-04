@@ -363,7 +363,7 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
     const locItems = dbStockItems.filter(item => item.location === loc);
     if (locItems.length === 0) continue;
 
-    const todaysLocItems = locItems.filter(item => item.sheetName === 'Todays');
+    const todaysLocItems = locItems.filter(item => item.sheetName === 'Todays' || item.sheetName === 'Current');
     if (todaysLocItems.length > 0) {
       latestItems.push(...todaysLocItems);
     } else {

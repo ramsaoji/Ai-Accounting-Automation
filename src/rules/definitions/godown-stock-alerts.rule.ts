@@ -51,7 +51,7 @@ export class GodownStockAlertsRule implements Rule {
       }
 
       // 3. Only evaluate stock alerts on the active "Todays" snapshot, not historical history snapshots
-      if (item.sheetName === 'Todays') {
+      if (item.sheetName === 'Todays' || item.sheetName === 'Current') {
         // Out of Stock
         if (closing === 0 && (opening > 0 || stockOut > 0)) {
           alerts.push({
