@@ -125,8 +125,6 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
             statusIcon = <AlertTriangle className="size-3 text-warning" />;
           }
 
-          const loc = item.location || 'godown';
-
           return (
             <TableRow 
               key={`${item.itemName}-${item.bottleSizeMl}-${idx}`}
