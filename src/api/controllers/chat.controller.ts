@@ -68,6 +68,18 @@ export async function handleAdvisorChat(
     const masterTotals = summary.masterTotals as Record<string, unknown> | undefined;
     const benchmarks = summary.benchmarks as Record<string, unknown> | undefined;
 
+    const rawItems = Array.isArray(summary.items) ? (summary.items as any[]) : [];
+    const sortedItems = [...rawItems].sort((a, b) => Number(b.stockOut || 0) - Number(a.stockOut || 0));
+    const minimalItems = sortedItems.slice(0, 60).map(item => ({
+      name: item.itemName,
+      category: item.category,
+      stockIn: Number(item.stockIn || 0),
+      stockOut: Number(item.stockOut || 0),
+      closingStock: Number(item.closingStock || 0),
+      costPrice: item.costPrice ? Number(item.costPrice) : null,
+      sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : null,
+    }));
+
     // Prune the summary JSON to be token-efficient (eliminating duplicate alert details)
     const prunedSummary = {
       fileName: summary.fileName,
@@ -77,8 +89,8 @@ export async function handleAdvisorChat(
       aggregates,
       categoryAggregates: summary.categoryAggregates,
       historicalTrends: summary.historicalTrends,
-      itemsSample: Array.isArray(summary.items) ? (summary.items as any[]).slice(0, 15) : [],
-      allItems: Array.isArray(summary.items) ? (summary.items as any[]).slice(0, 100) : [],
+      itemsSample: minimalItems.slice(0, 15),
+      allItems: minimalItems,
       topDebitors: Array.isArray(summary.topDebitors) ? (summary.topDebitors as any[]).slice(0, 10) : [],
       allDebitors: Array.isArray(summary.topDebitors) ? (summary.topDebitors as any[]).slice(0, 50) : [],
       totalMonths: summary.totalMonths,
