@@ -218,11 +218,17 @@ Inventory cumulative totals for the snapshot date:
         .slice(0, 10);
 
       const godownSummaryText = topGodown.map((item, idx) => {
-        return `${idx + 1}. [Godown] ${item.itemName} (${item.bottleSizeMl}ml): Closing: ${item.closingStock} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
+        const isLoose = item.bottleSizeMl === 0;
+        const sizeText = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
+        const unitText = isLoose ? 'ml' : 'units';
+        return `${idx + 1}. [Godown] ${item.itemName} (${sizeText}): Closing: ${item.closingStock} ${unitText} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
       }).join('\n');
 
       const counterSummaryText = topCounter.map((item, idx) => {
-        return `${idx + 1}. [Counter] ${item.itemName} (${item.bottleSizeMl}ml): Closing: ${item.closingStock} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
+        const isLoose = item.bottleSizeMl === 0;
+        const sizeText = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
+        const unitText = isLoose ? 'ml' : 'units';
+        return `${idx + 1}. [Counter] ${item.itemName} (${sizeText}): Closing: ${item.closingStock} ${unitText} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
       }).join('\n');
 
       const stockSummaryText = `GODOWN INVENTORY:\n${godownSummaryText}\n\nCOUNTER INVENTORY:\n${counterSummaryText}`;

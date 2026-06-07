@@ -105,7 +105,7 @@ export function App() {
   }, [activeView, activeWorkspace]);
 
   // Load real database data with modular 3-tier cascading fallback hook
-  const { salesData, debitorsData, godownStockData, counterStockData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, isWorkspaceLoading, aiProvider, sync: fetchRealData, fetchWorkspaceData } = useAccountingData();
+  const { salesData, debitorsData, godownStockData, counterStockData, connectionMode, isDbConnected, isLocalDb, hasSyncedBefore, cronSchedule, isLoading, isWorkspaceLoading, aiProvider, webChatEnabled, sync: fetchRealData, fetchWorkspaceData } = useAccountingData();
 
   const isSyncingDriveRef = useRef(false);
   const isUploadingRef = useRef(false);
@@ -134,10 +134,10 @@ export function App() {
 
   // Redirect to portal if advisor view is active but AI is disabled
   useEffect(() => {
-    if (aiProvider === 'none' && activeView === 'advisor') {
+    if ((aiProvider === 'none' || !webChatEnabled) && activeView === 'advisor') {
       setActiveView('portal');
     }
-  }, [aiProvider, activeView, setActiveView]);
+  }, [aiProvider, webChatEnabled, activeView, setActiveView]);
 
   // Custom Drive Sync hook to isolate background polling/interval logic
   const { isSyncingDrive, syncProgress, handleDriveSync, resetDriveSync } = useDriveSync({
@@ -305,6 +305,7 @@ export function App() {
             hasStock={!!godownStockData}
             hasCounterStock={!!counterStockData}
             aiProvider={aiProvider}
+            webChatEnabled={webChatEnabled}
           />
 
           {/* Sidebar Main Content Inset Wrapper */}
@@ -344,6 +345,7 @@ export function App() {
                       cronSchedule={cronSchedule}
                       connectionMode={connectionMode}
                       aiProvider={aiProvider}
+                      webChatEnabled={webChatEnabled}
                     />
                   ) : !activeSummary ? (
                     <EmptyWorkspaceState

@@ -25,13 +25,17 @@ export class GodownStockAlertsRule implements Rule {
       const stockIn = Number(item.stockIn || 0);
       const stockOut = Number(item.stockOut || 0);
 
+      const isLoose = item.bottleSizeMl === 0;
+      const sizeText = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
+      const unitText = isLoose ? 'ml' : 'units';
+
       // 1. Check for erroneous negative stock values
       if (closing < 0 || opening < 0 || stockIn < 0 || stockOut < 0) {
         alerts.push({
           ruleId: this.id,
           ruleName: this.name,
           severity: 'critical',
-          message: `Erronious negative stock detected for "${item.itemName}" (${item.bottleSizeMl}ml). Values: Opening: ${opening}, In: ${stockIn}, Out: ${stockOut}, Closing: ${closing}.`
+          message: `Erronious negative stock detected for "${item.itemName}" (${sizeText}). Values: Opening: ${opening}, In: ${stockIn}, Out: ${stockOut}, Closing: ${closing}.`
         });
         continue; // skip other warnings if it's already negative/erroneous
       }
@@ -45,7 +49,7 @@ export class GodownStockAlertsRule implements Rule {
             ruleId: this.id,
             ruleName: this.name,
             severity: 'high',
-            message: `Negative margin warning: "${item.itemName}" (${item.bottleSizeMl}ml) cost price (₹${cost}) is greater than or equal to its selling price (₹${sell}).`
+            message: `Negative margin warning: "${item.itemName}" (${sizeText}) cost price (₹${cost}) is greater than or equal to its selling price (₹${sell}).`
           });
         }
       }
@@ -58,7 +62,7 @@ export class GodownStockAlertsRule implements Rule {
             ruleId: this.id,
             ruleName: this.name,
             severity: 'high',
-            message: `Out of Stock warning: "${item.itemName}" (${item.bottleSizeMl}ml) is completely depleted (Closing Stock: 0).`
+            message: `Out of Stock warning: "${item.itemName}" (${sizeText}) is completely depleted (Closing Stock: 0).`
           });
         }
         // Low Stock
@@ -67,7 +71,7 @@ export class GodownStockAlertsRule implements Rule {
             ruleId: this.id,
             ruleName: this.name,
             severity: 'medium',
-            message: `Low Stock warning: "${item.itemName}" (${item.bottleSizeMl}ml) is running thin (Closing Stock: ${closing} units).`
+            message: `Low Stock warning: "${item.itemName}" (${sizeText}) is running thin (Closing Stock: ${closing} ${unitText}).`
           });
         }
       }

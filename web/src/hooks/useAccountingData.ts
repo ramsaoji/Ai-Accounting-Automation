@@ -17,12 +17,18 @@ export function useAccountingData() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState<boolean>(false);
   const [aiProvider, setAiProvider] = useState<string>('none');
+  const [webChatEnabled, setWebChatEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     const handleSettingsUpdated = (e: Event) => {
       const customEvent = e as CustomEvent;
-      if (customEvent.detail && customEvent.detail.aiProvider) {
-        setAiProvider(customEvent.detail.aiProvider);
+      if (customEvent.detail) {
+        if (customEvent.detail.aiProvider !== undefined) {
+          setAiProvider(customEvent.detail.aiProvider);
+        }
+        if (customEvent.detail.webChatEnabled !== undefined) {
+          setWebChatEnabled(customEvent.detail.webChatEnabled);
+        }
       }
     };
     window.addEventListener('system-settings-updated', handleSettingsUpdated);
@@ -59,6 +65,7 @@ export function useAccountingData() {
       setIsDevMode(!!result.isDevMode);
       setHasSyncedBefore(!!result.hasSyncedBefore);
       setAiProvider(result.aiProvider || 'none');
+      setWebChatEnabled(result.webChatEnabled !== false);
 
       if (result.cronSchedule) {
         setCronSchedule(result.cronSchedule);
@@ -261,6 +268,7 @@ export function useAccountingData() {
     isLoading,
     isWorkspaceLoading,
     aiProvider,
+    webChatEnabled,
     sync,
     fetchWorkspaceData
   };

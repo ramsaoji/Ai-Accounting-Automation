@@ -17,6 +17,7 @@ interface PortalSectionProps {
   cronSchedule: string;
   connectionMode: 'live' | 'static' | 'empty';
   aiProvider: string;
+  webChatEnabled: boolean;
 }
 
 interface PortalStat {
@@ -391,6 +392,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
   cronSchedule,
   connectionMode,
   aiProvider,
+  webChatEnabled,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'flagged' | 'audited'>('all');
@@ -767,7 +769,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
       </div>
 
       {/* Proactive AI Insights Hub */}
-      {aiProvider !== 'none' && (
+      {aiProvider !== 'none' && webChatEnabled && (
         <ProactiveInsightsHub
           salesData={salesData}
           debitorsData={debitorsData}

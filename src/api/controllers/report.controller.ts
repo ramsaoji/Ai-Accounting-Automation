@@ -532,11 +532,14 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
       if (gOut !== cIn) {
         const rawDate = new Date(dateStr);
         const formattedDate = rawDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const isLoose = gItem.bottleSizeMl === 0;
+        const sizeText = isLoose ? 'Loose' : `${gItem.bottleSizeMl}ml`;
+        const unitText = isLoose ? 'ml' : 'units';
         transitDiscrepancyAlerts.push({
           ruleId: 'RULE_STOCK_RECON',
           ruleName: 'Transit Discrepancy Alert',
           severity: 'high',
-          message: `Transit Discrepancy on ${formattedDate}: "${gItem.itemName}" (${gItem.bottleSizeMl}ml) dispatched ${gOut} from Godown but received ${cIn} at Counter (Variance: ${gOut - cIn} units).`
+          message: `Transit Discrepancy on ${formattedDate}: "${gItem.itemName}" (${sizeText}) dispatched ${gOut} ${unitText} from Godown but received ${cIn} ${unitText} at Counter (Variance: ${gOut - cIn} ${unitText}).`
         });
       }
     }

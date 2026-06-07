@@ -34,16 +34,20 @@ export async function getSystemConfig(_request: FastifyRequest, reply: FastifyRe
 
   const aiProvider = await getSystemSetting('ai_provider', config.AI_PROVIDER);
   const aiModel = await getSystemSetting('ai_model', config.AI_MODEL);
+  const webChatEnabled = (await getSystemSetting('web_chat_enabled', 'true')) === 'true';
 
   reply.code(200).send({
     service: 'AI Accounting Automation Service',
     provider: aiProvider,
+    aiProvider,
     model: aiModel,
+    aiModel,
     cron: config.CRON_SCHEDULE,
     connectionMode: isMockDrive ? 'static' : 'live',
     isDbConnected: !!db,
     isLocalDb,
     isDevMode: config.NODE_ENV === 'development',
     hasSyncedBefore,
+    webChatEnabled,
   });
 }

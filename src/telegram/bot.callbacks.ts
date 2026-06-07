@@ -857,10 +857,14 @@ export async function sendStockTopMovers(chatId: string, reportType: 'godown_sto
       topMovers.forEach((item: any, i: number) => {
         const qty = item.stockOut;
         const retailValue = qty * (item.sellingPrice || 0);
-        text += `${i + 1}. *${item.itemName}* (${item.bottleSizeMl}ml):\n` +
-          `   • Outflow: *${qty} units* (${item.packaging || 'bottle'})\n` +
+        const isLoose = item.bottleSizeMl === 0;
+        const sizeLabel = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
+        const unitLabel = isLoose ? 'ml' : 'units';
+        const pkgText = isLoose ? '' : ` (${item.packaging || 'bottle'})`;
+        text += `${i + 1}. *${item.itemName}* (${sizeLabel}):\n` +
+          `   • Outflow: *${qty} ${unitLabel}*${pkgText}\n` +
           `   • Retail Value: *₹${Math.round(retailValue).toLocaleString('en-IN')}*\n` +
-          `   • Current Stock: *${item.closingStock} left*\n\n`;
+          `   • Current Stock: *${item.closingStock} ${unitLabel} left*\n\n`;
       });
     } else {
       text += `_No items have been registered as stock-out in the current ledger._\n`;
@@ -915,10 +919,14 @@ export async function sendStockInflows(chatId: string, reportType: 'godown_stock
       topInflows.forEach((item: any, i: number) => {
         const qty = item.stockIn;
         const costValue = qty * (item.costPrice || 0);
-        text += `${i + 1}. *${item.itemName}* (${item.bottleSizeMl}ml):\n` +
-          `   • Restocked: *${qty} units* (${item.packaging || 'bottle'})\n` +
+        const isLoose = item.bottleSizeMl === 0;
+        const sizeLabel = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
+        const unitLabel = isLoose ? 'ml' : 'units';
+        const pkgText = isLoose ? '' : ` (${item.packaging || 'bottle'})`;
+        text += `${i + 1}. *${item.itemName}* (${sizeLabel}):\n` +
+          `   • Restocked: *${qty} ${unitLabel}*${pkgText}\n` +
           `   • Cost Value: *₹${Math.round(costValue).toLocaleString('en-IN')}*\n` +
-          `   • Current Stock: *${item.closingStock} total*\n\n`;
+          `   • Current Stock: *${item.closingStock} ${unitLabel} total*\n\n`;
       });
     } else {
       text += `_No items have been registered as stock-in in the current ledger._\n`;

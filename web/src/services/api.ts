@@ -69,6 +69,7 @@ export interface SyncResult {
   hasSyncedBefore?: boolean;
   aiProvider?: string;
   cronSchedule?: string;
+  webChatEnabled?: boolean;
 }
 
 /**
@@ -135,6 +136,7 @@ export interface PortalSummaryResult {
   hasSyncedBefore?: boolean;
   aiProvider?: string;
   cronSchedule?: string;
+  webChatEnabled?: boolean;
 }
 
 /**
@@ -160,6 +162,7 @@ export async function fetchPortalSummary(): Promise<PortalSummaryResult> {
     let hasSyncedBefore = false;
     let aiProvider = 'none';
     let cronSchedule = undefined;
+    let webChatEnabled = true;
     if (healthRes.ok) {
       const healthData = await healthRes.json();
       mode = healthData.connectionMode || 'static';
@@ -167,8 +170,9 @@ export async function fetchPortalSummary(): Promise<PortalSummaryResult> {
       isLocalDb = !!healthData.isLocalDb;
       isDevMode = !!healthData.isDevMode;
       hasSyncedBefore = !!healthData.hasSyncedBefore;
-      aiProvider = healthData.aiProvider || 'none';
+      aiProvider = healthData.aiProvider || healthData.provider || 'none';
       cronSchedule = healthData.cronSchedule;
+      webChatEnabled = healthData.webChatEnabled !== false;
     }
 
     return {
@@ -179,7 +183,8 @@ export async function fetchPortalSummary(): Promise<PortalSummaryResult> {
       isDevMode,
       hasSyncedBefore,
       aiProvider,
-      cronSchedule
+      cronSchedule,
+      webChatEnabled
     };
   } catch (error) {
     console.warn('Failed to fetch portal summary from backend.', error);
@@ -230,6 +235,7 @@ export async function fetchAccountingData(): Promise<SyncResult> {
     let hasSyncedBefore = false;
     let aiProvider = 'none';
     let cronSchedule = undefined;
+    let webChatEnabled = true;
     if (healthRes.ok) {
       const healthData = await healthRes.json();
       mode = healthData.connectionMode || 'static';
@@ -237,8 +243,9 @@ export async function fetchAccountingData(): Promise<SyncResult> {
       isLocalDb = !!healthData.isLocalDb;
       isDevMode = !!healthData.isDevMode;
       hasSyncedBefore = !!healthData.hasSyncedBefore;
-      aiProvider = healthData.aiProvider || 'none';
+      aiProvider = healthData.aiProvider || healthData.provider || 'none';
       cronSchedule = healthData.cronSchedule;
+      webChatEnabled = healthData.webChatEnabled !== false;
     }
 
     return {
@@ -252,7 +259,8 @@ export async function fetchAccountingData(): Promise<SyncResult> {
       isDevMode,
       hasSyncedBefore,
       aiProvider,
-      cronSchedule
+      cronSchedule,
+      webChatEnabled
     };
   } catch (err) {
     console.warn('Backend API connection failed.', err);

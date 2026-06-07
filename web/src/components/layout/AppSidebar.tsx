@@ -54,6 +54,7 @@ export interface AppSidebarProps {
   hasStock?: boolean;
   hasCounterStock?: boolean;
   aiProvider?: string;
+  webChatEnabled?: boolean;
 }
 
 export function AppSidebar({
@@ -73,6 +74,7 @@ export function AppSidebar({
   hasStock = true,
   hasCounterStock = true,
   aiProvider = 'none',
+  webChatEnabled = true,
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -254,7 +256,7 @@ export function AppSidebar({
               </SidebarMenuItem>
 
               {/* AI Advisor Chat Nav Button */}
-              {aiProvider !== 'none' && (
+              {aiProvider !== 'none' && webChatEnabled && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={activeView === 'advisor'}
