@@ -39,7 +39,9 @@ export function mapMasterSummary(data: any, isDebitors: boolean): MasterSummary 
     ruleId: a.ruleId,
     ruleName: a.ruleName,
     severity: a.severity,
-    message: isDebitors ? a.message : (a.example || a.message)
+    message: isDebitors ? a.message : (a.example || a.message),
+    transaction: a.transaction,
+    metadata: a.metadata,
   })) : [];
   
   const HIGH_SEVERITY = new Set(['high', 'critical']);
@@ -85,6 +87,7 @@ export interface PortalSummaryResult {
     totalInflows: number;
     netCashflow: number;
     sparkline: number[];
+    intelligence?: string[];
   };
   debitors?: {
     fileName: string;
@@ -97,6 +100,7 @@ export interface PortalSummaryResult {
     collectionSuccessRate: string;
     activeDebitorsCount: number;
     sparkline: number[];
+    intelligence?: string[];
   };
   godownStock?: {
     fileName: string;
@@ -109,6 +113,7 @@ export interface PortalSummaryResult {
     totalSellingValue: number;
     activeItemsCount: number;
     sparkline: number[];
+    intelligence?: string[];
   };
   counterStock?: {
     fileName: string;
@@ -121,6 +126,7 @@ export interface PortalSummaryResult {
     totalSellingValue: number;
     activeItemsCount: number;
     sparkline: number[];
+    intelligence?: string[];
   };
   mode: 'live' | 'static' | 'empty';
   isDbConnected?: boolean;

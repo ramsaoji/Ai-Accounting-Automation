@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import type { MasterSummary, DebitorSummary, Transaction, MonthlySummary } from '@/types';
 import { deriveBusinessName } from '@/utils/business';
@@ -6,10 +6,22 @@ import { DatePickerWithRange } from '@/components/ui/DatePickerWithRange';
 import { RecoveryBoard } from './overview/RecoveryBoard';
 import { OverviewKpiCards } from './overview/OverviewKpiCards';
 import { AiRecommendationsQueue } from './overview/AiRecommendationsQueue';
+import { Input } from '@/components/ui/input';
 import {
   ShieldCheck,
   LineChart as LineIcon,
-  Info
+  Info,
+  Copy,
+  ShoppingCart,
+  ArrowRight,
+  TrendingUp,
+  TrendingDown,
+  Search,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 const OverviewCharts = React.lazy(() => import('./OverviewCharts'));
@@ -17,6 +29,707 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatINR, formatTimestamp, getSheetDate } from '@/utils/format';
+
+interface StockDepletionPanelProps {
+  items: any[];
+  businessName: string;
+}
+
+const StockDepletionPanel: React.FC<StockDepletionPanelProps> = ({ items, businessName }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const stockoutRisks = useMemo(() => {
+    if (!items) return [];
+    
+    return items
+      .map(item => {
+        const closing = Number(item.closingStock || 0);
+        const velocity = Number(item.stockOut || 0);
+        
+        let daysRemaining = Infinity;
+        let riskLevel: 'out' | 'negative' | 'critical' | 'warning' | 'healthy' = 'healthy';
+        
+        if (closing < 0) {
+          riskLevel = 'negative';
+          daysRemaining = 0;
+        } else if (closing === 0) {
+          riskLevel = 'out';
+          daysRemaining = 0;
+        } else if (velocity > 0) {
+          daysRemaining = closing / velocity;
+          if (daysRemaining < 3) {
+            riskLevel = 'critical';
+          } else if (daysRemaining <= 5) {
+            riskLevel = 'warning';
+          }
+        }
+        
+        const recommendedOrder = velocity > 0 
+          ? Math.max(0, Math.ceil(velocity * 14 - closing))
+          : (closing === 0 ? 12 : 0);
+          
+        return {
+          ...item,
+          daysRemaining,
+          riskLevel,
+          recommendedOrder,
+          velocity
+        };
+      })
+      .filter(item => item.riskLevel !== 'healthy' && (item.riskLevel === 'negative' || item.riskLevel === 'out' || item.velocity > 0))
+      .sort((a, b) => {
+        const severityMap: Record<string, number> = { negative: 0, out: 1, critical: 2, warning: 3, healthy: 4 };
+        const aRisk = a.riskLevel as string;
+        const bRisk = b.riskLevel as string;
+        if (severityMap[aRisk] !== severityMap[bRisk]) {
+          return severityMap[aRisk] - severityMap[bRisk];
+        }
+        return a.daysRemaining - b.daysRemaining;
+      });
+  }, [items]);
+
+  const filteredRisks = useMemo(() => {
+    if (!searchTerm.trim()) return stockoutRisks;
+    const term = searchTerm.toLowerCase();
+    return stockoutRisks.filter(item => 
+      item.itemName.toLowerCase().includes(term)
+    );
+  }, [stockoutRisks, searchTerm]);
+
+  // Reset page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const copyPoDraft = (item: any) => {
+    const isLoose = item.bottleSizeMl === 0;
+    const unitText = isLoose ? 'ml' : 'units';
+    const sizeText = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
+    const qtyText = item.recommendedOrder > 0 ? `${item.recommendedOrder} ${unitText}` : (isLoose ? '0 ml' : `1 case`);
+    const draftText = `PURCHASE ORDER\nBusiness: ${businessName}\nItem: ${item.itemName} (${sizeText})\nRequested Qty: ${qtyText}\n\n[System Ledger Context]\n- Closing Stock: ${item.closingStock} ${unitText}\n- Daily Sales Velocity: ${item.velocity} ${unitText}/day\n- Est. Remaining Days: ${item.daysRemaining === Infinity ? 'N/A' : Math.round(item.daysRemaining) + ' days'}`;
+    navigator.clipboard.writeText(draftText);
+    toast.success(`PO Draft for ${item.itemName} copied to clipboard!`);
+  };
+
+  if (stockoutRisks.length === 0) {
+    return (
+      <Card className="border bg-card/45 shadow-xs">
+        <CardHeader className="p-4 sm:p-5 pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <ShoppingCart className="size-4 text-emerald-500" />
+            Stockout & Reorder Recommendations
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Predictive demand forecasting based on daily sales velocity.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5 pt-2 text-center text-xs text-muted-foreground py-6">
+          ✨ All stock levels are healthy! No imminent stockouts projected.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const itemsPerPage = 6;
+  const totalPages = Math.max(1, Math.ceil(filteredRisks.length / itemsPerPage));
+  const activePage = Math.min(currentPage, totalPages);
+  
+  const paginatedRisks = filteredRisks.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
+
+  const rangeStart = (activePage - 1) * itemsPerPage + 1;
+  const rangeEnd = Math.min(activePage * itemsPerPage, filteredRisks.length);
+
+  return (
+    <Card className="border bg-card/45 shadow-xs flex flex-col">
+      <CardHeader className="p-4 sm:p-5 pb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+          <div>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <ShoppingCart className="size-4 text-warning" />
+              Stockout & Reorder Recommendations
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Imminent inventory depletion warnings and suggested purchase quantities.
+            </CardDescription>
+          </div>
+
+          {stockoutRisks.length > 3 && (
+            <div className="relative w-full sm:max-w-xs shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search stockout items..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-8 h-9 text-xs w-full"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-0.5 rounded-full hover:bg-muted"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      
+      <CardContent className="p-4 sm:p-5 pt-1.5 flex flex-col gap-3.5">
+        {stockoutRisks.length > 3 && (
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground border-b border-border/40 pb-1.5 select-none">
+            <span>
+              {filteredRisks.length === 0 
+                ? "No matching items" 
+                : `Showing ${rangeStart}–${rangeEnd} of ${filteredRisks.length} recommendations`}
+              {searchTerm && ` (filtered from ${stockoutRisks.length})`}
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {paginatedRisks.length === 0 ? (
+            <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-8 text-xs text-muted-foreground select-none">
+              No matching stockout items found.
+            </div>
+          ) : (
+            paginatedRisks.map((item, idx) => {
+              const isLoose = item.bottleSizeMl === 0;
+              const sizeText = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
+              const unitText = isLoose ? 'ml' : 'units';
+              
+              let riskBadgeStyle = '';
+              let riskLabel = '';
+              if (item.riskLevel === 'negative') {
+                riskBadgeStyle = 'bg-destructive/10 text-destructive border-destructive/20';
+                riskLabel = 'Negative Stock';
+              } else if (item.riskLevel === 'out') {
+                riskBadgeStyle = 'bg-destructive/10 text-destructive border-destructive/20';
+                riskLabel = 'Out of Stock';
+              } else if (item.riskLevel === 'critical') {
+                riskBadgeStyle = 'bg-red-500/10 text-red-500 border-red-500/20';
+                riskLabel = `${Math.round(item.daysRemaining)} Days Left`;
+              } else if (item.riskLevel === 'warning') {
+                riskBadgeStyle = 'bg-warning/10 text-warning border-warning/20';
+                riskLabel = `${Math.round(item.daysRemaining)} Days Left`;
+              }
+
+              return (
+                <div 
+                  key={`${item.itemName}-${item.bottleSizeMl}-${idx}`}
+                  className="border border-border/80 bg-muted/10 p-3 rounded-lg flex flex-col justify-between gap-2.5 transition-all hover:bg-muted/15"
+                >
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-start gap-1">
+                      <span className="font-semibold text-xs text-foreground truncate max-w-[150px]" title={item.itemName}>
+                        {item.itemName}
+                      </span>
+                      <span className={`text-[9px] font-bold border rounded-full px-2 py-0.2 uppercase tracking-wide shrink-0 ${riskBadgeStyle}`}>
+                        {riskLabel}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                      Size: {sizeText} • Closing: <strong className="text-foreground">{item.closingStock}</strong> {unitText}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-dashed border-border/70 pt-2 flex flex-col gap-1.5">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Daily Sales:</span>
+                      <span className="font-semibold text-foreground">{item.velocity} {unitText}/day</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground items-center">
+                      <span>Reorder Qty:</span>
+                      <span className="font-bold text-primary text-xs bg-primary/10 px-1.5 py-0.2 rounded">
+                        +{item.recommendedOrder} {unitText}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => copyPoDraft(item)}
+                    className="w-full flex items-center justify-center gap-1.5 text-[9px] font-bold border border-input bg-background hover:bg-muted rounded-md py-1.5 cursor-pointer text-muted-foreground hover:text-foreground transition-all shadow-2xs"
+                  >
+                    <Copy className="size-3" />
+                    <span>Draft Purchase Order</span>
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+        
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-border/40 pt-3.5 select-none">
+            <span className="text-xs text-muted-foreground">
+              Page {activePage} of {totalPages}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={activePage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="p-1.5 rounded-lg border border-border/80 bg-background hover:bg-muted disabled:opacity-40 disabled:hover:bg-background cursor-pointer disabled:cursor-not-allowed transition-colors"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={activePage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="p-1.5 rounded-lg border border-border/80 bg-background hover:bg-muted disabled:opacity-40 disabled:hover:bg-background cursor-pointer disabled:cursor-not-allowed transition-colors"
+                aria-label="Next page"
+              >
+                <ChevronRight className="size-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+interface SalesExceptionsPanelProps {
+  alerts: any[];
+  businessName: string;
+}
+
+const SalesExceptionsPanel: React.FC<SalesExceptionsPanelProps> = ({ alerts, businessName }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Filter out alerts that don't have a message or are from irrelevant rules
+  const exceptionAlerts = useMemo(() => {
+    if (!alerts) return [];
+    return alerts
+      .filter((a) => a && a.message)
+      .sort((a, b) => {
+        const severityMap: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+        const aSeverity = a.severity || 'info';
+        const bSeverity = b.severity || 'info';
+        return (severityMap[aSeverity] ?? 4) - (severityMap[bSeverity] ?? 4);
+      });
+  }, [alerts]);
+
+  const filteredAlerts = useMemo(() => {
+    if (!searchTerm.trim()) return exceptionAlerts;
+    const term = searchTerm.toLowerCase();
+    return exceptionAlerts.filter(a => 
+      a.message.toLowerCase().includes(term) || 
+      (a.ruleName && a.ruleName.toLowerCase().includes(term))
+    );
+  }, [exceptionAlerts, searchTerm]);
+
+  // Reset page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const itemsPerPage = 6;
+  const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / itemsPerPage));
+  const activePage = Math.min(currentPage, totalPages);
+  
+  const paginatedAlerts = filteredAlerts.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
+
+  const rangeStart = (activePage - 1) * itemsPerPage + 1;
+  const rangeEnd = Math.min(activePage * itemsPerPage, filteredAlerts.length);
+
+  const copyAuditMemo = (alert: any) => {
+    const tx = alert.transaction || {};
+    const invoiceText = tx.invoice ? `Invoice: ${tx.invoice}` : 'Invoice: N/A';
+    const amountText = tx.amount ? `Amount: ₹${tx.amount.toLocaleString('en-IN')}` : 'Amount: N/A';
+    const vendorText = tx.vendor ? `Vendor/Customer: ${tx.vendor}` : 'Vendor/Customer: N/A';
+    const catText = tx.category ? `Category: ${tx.category}` : 'Category: N/A';
+    const dateText = tx.date ? `Date: ${new Date(tx.date).toLocaleDateString('en-IN')}` : 'Date: N/A';
+    
+    const draftText = `AUDIT INVESTIGATION MEMO\nBusiness: ${businessName}\nIssue: ${alert.ruleName || 'Anomalous Entry'}\nSeverity: ${alert.severity ? alert.severity.toUpperCase() : 'HIGH'}\n\n[Transaction Details]\n- ${dateText}\n- ${invoiceText}\n- ${amountText}\n- ${catText}\n- ${vendorText}\n\n[Exception Context]\n${alert.message || 'Audited transaction rule violation.'}\n\nAction Required: Verify ledger records, crosscheck physical receipts, and log justification.`;
+    
+    navigator.clipboard.writeText(draftText);
+    toast.success(`Audit Investigation Memo copied to clipboard!`);
+  };
+
+  if (exceptionAlerts.length === 0) {
+    return (
+      <Card className="border bg-card/45 shadow-xs">
+        <CardHeader className="p-4 sm:p-5 pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <AlertTriangle className="size-4 text-emerald-500 animate-pulse" />
+            Sales Exceptions & Integrity Warnings
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Exception tracking compiled by our automated ledger audit rules engine.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5 pt-2 text-center text-xs text-muted-foreground py-6">
+          ✨ All audited sales invoices and ledger postings are consistent! No critical anomalies detected.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border bg-card/45 shadow-xs flex flex-col">
+      <CardHeader className="p-4 sm:p-5 pb-2 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
+        <div className="flex items-center gap-3">
+          <div className="size-10 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive border border-destructive/20 shrink-0">
+            <AlertTriangle className="size-5 text-destructive" />
+          </div>
+          <div>
+            <CardTitle className="text-sm font-semibold">Sales Integrity & Exception Warnings</CardTitle>
+            <CardDescription className="text-xs">
+              Audit flags detected by the compliance integrity scanner for {businessName}.
+            </CardDescription>
+          </div>
+        </div>
+
+        {exceptionAlerts.length > 3 && (
+          <div className="relative w-full sm:max-w-xs shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search exceptions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 pr-8 h-9 text-xs w-full"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-0.5 rounded-full hover:bg-muted"
+                aria-label="Clear search"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        )}
+      </CardHeader>
+      
+      <CardContent className="p-4 sm:p-5 pt-4 flex flex-col gap-4">
+        {exceptionAlerts.length > 3 && (
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground border-b border-border/40 pb-1.5 select-none">
+            <span>
+              {filteredAlerts.length === 0 
+                ? "No matching exceptions" 
+                : `Showing ${rangeStart}–${rangeEnd} of ${filteredAlerts.length} exceptions`}
+              {searchTerm && ` (filtered from ${exceptionAlerts.length})`}
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {paginatedAlerts.length === 0 ? (
+            <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-8 text-xs text-muted-foreground select-none">
+              No matching exceptions found.
+            </div>
+          ) : (
+            paginatedAlerts.map((alert, idx) => {
+              const severity = alert.severity || 'high';
+              const isCritical = severity === 'critical';
+              const Icon = isCritical ? AlertCircle : AlertTriangle;
+              
+              let glowColor = '';
+              let hoverShadow = '';
+              let severityBadgeStyle = '';
+              
+              if (isCritical) {
+                glowColor = 'bg-rose-500';
+                hoverShadow = 'hover:shadow-[0_8px_30px_rgba(244,63,94,0.08)] hover:border-rose-500/30';
+                severityBadgeStyle = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+              } else {
+                glowColor = 'bg-amber-500';
+                hoverShadow = 'hover:shadow-[0_8px_30px_rgba(245,158,11,0.08)] hover:border-amber-500/30';
+                severityBadgeStyle = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+              }
+
+              const tx = alert.transaction || {};
+
+              return (
+                <div 
+                  key={`${alert.ruleId || 'rule'}-${idx}`}
+                  className={`relative flex flex-col justify-between gap-4 p-4 pt-5 rounded-xl bg-card/25 backdrop-blur-xs border border-border/40 hover:-translate-y-0.5 transition-all duration-300 group/card shadow-sm hover:shadow-md ${hoverShadow}`}
+                >
+                  {/* Glowing edge indicator: soft pill design */}
+                  <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[70%] h-[2px] rounded-full ${glowColor} blur-[0.3px] opacity-60 group-hover/card:opacity-95 transition-all duration-300`} />
+                  
+                  <div className="flex flex-col gap-2.5">
+                    {/* Header: Title and Severity Badge */}
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="font-semibold text-xs text-foreground truncate max-w-[150px]" title={alert.ruleName || 'Auditor Exception'}>
+                        {alert.ruleName || 'Auditor Exception'}
+                      </span>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide shrink-0 flex items-center gap-1 ${severityBadgeStyle}`}>
+                        <Icon className="size-3" />
+                        {severity === 'critical' ? 'Critical' : 'High Risk'}
+                      </span>
+                    </div>
+
+                    {/* Alert Description message */}
+                    <p className="text-[11px] text-foreground/80 leading-relaxed font-medium mt-1 pl-2 border-l-2 border-border/20 group-hover/card:border-primary/30 transition-colors">
+                      {alert.message}
+                    </p>
+
+                    {/* Transaction Metadata */}
+                    {tx.invoice || tx.category || tx.vendor ? (
+                      <div className="text-[9px] text-muted-foreground mt-1 bg-muted/20 p-2 rounded border border-border/60 flex flex-col gap-0.5 font-mono">
+                        {tx.invoice && <div>Invoice: <span className="text-foreground/90 font-semibold">{tx.invoice}</span></div>}
+                        {tx.category && <div>Category: <span className="text-foreground/90 font-semibold">{tx.category}</span></div>}
+                        {tx.vendor && <div>Vendor: <span className="text-foreground/90 font-semibold truncate block max-w-full">{tx.vendor}</span></div>}
+                        {tx.date && <div>Date: <span>{new Date(tx.date).toLocaleDateString('en-IN')}</span></div>}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Footer: Transaction Value & Draft Audit Memo Button */}
+                  <div className="border-t border-dashed border-border/70 pt-3 flex flex-col gap-2.5">
+                    {tx.amount ? (
+                      <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                        <span>Transaction Value:</span>
+                        <span className={`font-extrabold text-xs px-2 py-0.5 rounded ${
+                          isCritical ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'
+                        }`}>
+                          ₹{tx.amount.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => copyAuditMemo(alert)}
+                      className="w-full flex items-center justify-center gap-1.5 text-[9px] font-bold border border-primary/15 bg-primary/5 hover:bg-primary text-primary hover:text-primary-foreground rounded-lg py-1.5 cursor-pointer transition-all duration-200 shadow-2xs active:scale-95"
+                    >
+                      <Copy className="size-3 shrink-0" />
+                      <span>Draft Audit Memo</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-border/40 pt-3.5 select-none">
+            <span className="text-xs text-muted-foreground">
+              Page {activePage} of {totalPages}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={activePage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="p-1.5 rounded-lg border border-border/80 bg-background hover:bg-muted disabled:opacity-40 disabled:hover:bg-background cursor-pointer disabled:cursor-not-allowed transition-colors"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={activePage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="p-1.5 rounded-lg border border-border/80 bg-background hover:bg-muted disabled:opacity-40 disabled:hover:bg-background cursor-pointer disabled:cursor-not-allowed transition-colors"
+                aria-label="Next page"
+              >
+                <ChevronRight className="size-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+interface PeriodComparisonPanelProps {
+  months: MonthlySummary[];
+}
+
+const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months }) => {
+  const availableMonths = useMemo(() => {
+    if (!months) return [];
+    return months.filter(m => m.sheetName && (m.inflows !== undefined || m.outflows !== undefined));
+  }, [months]);
+
+  const [baseMonthName, setBaseMonthName] = useState<string>('');
+  const [compareMonthName, setCompareMonthName] = useState<string>('');
+
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      setBaseMonthName(availableMonths[0].sheetName);
+      if (availableMonths.length > 1) {
+        setCompareMonthName(availableMonths[1].sheetName);
+      } else {
+        setCompareMonthName(availableMonths[0].sheetName);
+      }
+    }
+  }, [availableMonths]);
+
+  const baseMonth = useMemo(() => {
+    return availableMonths.find(m => m.sheetName === baseMonthName);
+  }, [availableMonths, baseMonthName]);
+
+  const compareMonth = useMemo(() => {
+    return availableMonths.find(m => m.sheetName === compareMonthName);
+  }, [availableMonths, compareMonthName]);
+
+  const metrics = useMemo(() => {
+    if (!baseMonth || !compareMonth) return [];
+
+    const calculateVariance = (baseVal: number, compareVal: number) => {
+      const abs = compareVal - baseVal;
+      const pct = baseVal !== 0 ? (abs / baseVal) * 100 : 0;
+      return { abs, pct };
+    };
+
+    const getMetricData = (name: string, key: keyof MonthlySummary, isNegativeOutflow = false) => {
+      const baseVal = Number(baseMonth[key] || 0);
+      const compareVal = Number(compareMonth[key] || 0);
+      const { abs, pct } = calculateVariance(baseVal, compareVal);
+      const positiveGood = !isNegativeOutflow;
+
+      return {
+        name,
+        baseVal,
+        compareVal,
+        abs,
+        pct,
+        positiveGood
+      };
+    };
+
+    return [
+      getMetricData('Total Inflows (Revenue)', 'inflows'),
+      getMetricData('Liquor Revenue Split', 'liquor'),
+      getMetricData('Food Revenue Split', 'food'),
+      getMetricData('Operational Expenses', 'expenses', true),
+      getMetricData('Credit Extended (Udhari)', 'creditExtended', true),
+      getMetricData('Net Position (Surplus)', 'net'),
+    ];
+  }, [baseMonth, compareMonth]);
+
+  if (availableMonths.length < 2) {
+    return null;
+  }
+
+  const formatCurrency = (val: number) => {
+    return '₹' + Math.round(val).toLocaleString('en-IN');
+  };
+
+  return (
+    <Card className="border bg-card/45 shadow-xs flex flex-col">
+      <CardHeader className="p-4 sm:p-5 pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <TrendingUp className="size-4 text-primary" />
+          Period-over-Period Performance Compare
+        </CardTitle>
+        <CardDescription className="text-xs">
+          Select any two monthly statements to analyze cashflow shifts and margin variance.
+        </CardDescription>
+      </CardHeader>
+      
+      <CardContent className="p-4 sm:p-5 pt-1.5 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 p-3 bg-muted/20 border border-border/75 rounded-lg select-none">
+          <div className="flex flex-col gap-1 w-full sm:w-auto">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase">Base Period</label>
+            <select
+              value={baseMonthName}
+              onChange={(e) => setBaseMonthName(e.target.value)}
+              className="bg-background text-foreground border border-input text-xs font-semibold px-2 py-1.5 rounded-lg w-full sm:w-48 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-primary"
+            >
+              {availableMonths.map(m => (
+                <option key={`base-${m.sheetName}`} value={m.sheetName}>{m.sheetName}</option>
+              ))}
+            </select>
+          </div>
+
+          <ArrowRight className="size-4 text-muted-foreground hidden sm:block mt-4 shrink-0" />
+
+          <div className="flex flex-col gap-1 w-full sm:w-auto">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase">Comparison Period</label>
+            <select
+              value={compareMonthName}
+              onChange={(e) => setCompareMonthName(e.target.value)}
+              className="bg-background text-foreground border border-input text-xs font-semibold px-2 py-1.5 rounded-lg w-full sm:w-48 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-primary"
+            >
+              {availableMonths.map(m => (
+                <option key={`compare-${m.sheetName}`} value={m.sheetName}>{m.sheetName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {baseMonth && compareMonth && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {metrics.map((m) => {
+              const isPositive = m.abs >= 0;
+              const isHealthy = (isPositive && m.positiveGood) || (!isPositive && !m.positiveGood);
+              const isZero = m.abs === 0;
+
+              let deltaBadgeClass = 'bg-muted text-muted-foreground border-border';
+              let deltaLabel = 'No change';
+              let deltaIcon = null;
+
+              if (!isZero) {
+                if (isHealthy) {
+                  deltaBadgeClass = 'bg-success/10 text-success border-success/20';
+                  deltaLabel = `${isPositive ? '+' : ''}${m.pct.toFixed(1)}%`;
+                  deltaIcon = <TrendingUp className="size-3" />;
+                } else {
+                  deltaBadgeClass = 'bg-destructive/10 text-destructive border-destructive/20';
+                  deltaLabel = `${isPositive ? '+' : ''}${m.pct.toFixed(1)}%`;
+                  deltaIcon = <TrendingDown className="size-3" />;
+                }
+              }
+
+              return (
+                <div 
+                  key={m.name}
+                  className="border border-border/80 bg-muted/10 p-3.5 rounded-lg flex flex-col justify-between gap-1.5 transition-all hover:bg-muted/15"
+                >
+                  <div className="flex justify-between items-start gap-1.5">
+                    <span className="font-semibold text-xs text-foreground">{m.name}</span>
+                    <span className={`text-[9px] font-bold border rounded-full px-2 py-0.5 inline-flex items-center gap-1 ${deltaBadgeClass}`}>
+                      {deltaIcon}
+                      {deltaLabel}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-1 pt-1.5 border-t border-dashed border-border/80">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider truncate">Base ({baseMonthName.split(' ')[0]})</span>
+                      <span className="font-mono text-xs font-semibold text-foreground/80 mt-0.5">{formatCurrency(m.baseVal)}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider truncate">Compare ({compareMonthName.split(' ')[0]})</span>
+                      <span className="font-mono text-xs font-bold text-foreground mt-0.5">{formatCurrency(m.compareVal)}</span>
+                    </div>
+                  </div>
+
+                  {!isZero && (
+                    <div className="text-[10px] text-muted-foreground mt-1 flex justify-between">
+                      <span>Variance:</span>
+                      <span className={`font-mono font-semibold ${isHealthy ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                        {m.abs >= 0 ? '+' : ''}{formatCurrency(m.abs)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 interface OverviewSectionProps {
   summary: MasterSummary;
@@ -191,17 +904,84 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
 
   const debitorsAgeingData = useMemo(() => {
     const list = dynamicDebitorTotals?.topDebitorsList ?? [];
-    const high = list.filter((d: DebitorSummary) => (d.pending ?? 0) > 20000).reduce((s: number, d: DebitorSummary) => s + (d.pending ?? 0), 0);
-    const medium = list.filter((d: DebitorSummary) => (d.pending ?? 0) > 10000 && (d.pending ?? 0) <= 20000).reduce((s: number, d: DebitorSummary) => s + (d.pending ?? 0), 0);
-    const low = list.filter((d: DebitorSummary) => (d.pending ?? 0) > 3000 && (d.pending ?? 0) <= 10000).reduce((s: number, d: DebitorSummary) => s + (d.pending ?? 0), 0);
-    const minimal = list.filter((d: DebitorSummary) => (d.pending ?? 0) <= 3000).reduce((s: number, d: DebitorSummary) => s + (d.pending ?? 0), 0);
+    const txs = summary.transactions || [];
+    
+    // Find reference date (maximum date in transaction logs, or runTimestamp, or today)
+    let referenceDate = new Date();
+    if (txs.length > 0) {
+      let maxTime = 0;
+      txs.forEach((t) => {
+        const d = new Date(t.date).getTime();
+        if (!isNaN(d) && d > maxTime) {
+          maxTime = d;
+        }
+      });
+      if (maxTime > 0) {
+        referenceDate = new Date(maxTime);
+      }
+    } else if (summary.runTimestamp) {
+      const parsed = new Date(summary.runTimestamp);
+      if (!isNaN(parsed.getTime())) {
+        referenceDate = parsed;
+      }
+    }
+
+    let bucket0to30 = 0;
+    let bucket31to60 = 0;
+    let bucket61to90 = 0;
+    let bucket90plus = 0;
+
+    // For each debtor, calculate aging of their pending balance
+    list.forEach((debtor) => {
+      const pendingBalance = debtor.pending;
+      if (pendingBalance <= 0) return;
+
+      // Get all debit (credit extended) transactions for this debtor
+      const debtorDebits = txs
+        .filter((t) => t.vendor === debtor.name && t.type === 'debit')
+        .map((t) => ({
+          amount: t.amount,
+          date: new Date(t.date)
+        }))
+        .filter((t) => !isNaN(t.date.getTime()))
+        // Sort descending (newest first)
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+      let allocatedPending = 0;
+
+      for (const tx of debtorDebits) {
+        if (allocatedPending >= pendingBalance) break;
+        const remainingToAllocate = pendingBalance - allocatedPending;
+        const allocAmount = Math.min(tx.amount, remainingToAllocate);
+
+        const ageInDays = Math.max(0, Math.floor((referenceDate.getTime() - tx.date.getTime()) / (1000 * 60 * 60 * 24)));
+
+        if (ageInDays <= 30) {
+          bucket0to30 += allocAmount;
+        } else if (ageInDays <= 60) {
+          bucket31to60 += allocAmount;
+        } else if (ageInDays <= 90) {
+          bucket61to90 += allocAmount;
+        } else {
+          bucket90plus += allocAmount;
+        }
+
+        allocatedPending += allocAmount;
+      }
+
+      // If there's still unallocated pending balance (e.g. older balance forward), put it in the oldest bucket
+      if (allocatedPending < pendingBalance) {
+        bucket90plus += (pendingBalance - allocatedPending);
+      }
+    });
+
     return [
-      { range: 'High Risk (>₹20K)', amount: high, color: 'var(--destructive)' },
-      { range: 'Medium (₹10K-₹20K)', amount: medium, color: 'var(--chart-2)' },
-      { range: 'Low (₹3K-₹10K)', amount: low, color: 'var(--chart-3)' },
-      { range: 'Minimal (<₹3K)', amount: minimal, color: 'var(--primary)' },
+      { range: '0-30 Days', amount: Math.round(bucket0to30), color: 'var(--primary)' },
+      { range: '31-60 Days', amount: Math.round(bucket31to60), color: 'var(--chart-2)' },
+      { range: '61-90 Days', amount: Math.round(bucket61to90), color: 'var(--chart-3)' },
+      { range: '90+ Days', amount: Math.round(bucket90plus), color: 'var(--destructive)' },
     ];
-  }, [dynamicDebitorTotals?.topDebitorsList]);
+  }, [dynamicDebitorTotals?.topDebitorsList, summary.transactions, summary.runTimestamp]);
 
   // Structured summary mock payload to feed to OverviewCharts
   const chartSummaryMock = useMemo(() => {
@@ -357,6 +1137,26 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
           businessName={businessName}
           triggerReminderCopy={triggerReminderCopy}
           formatINR={formatINR}
+        />
+      )}
+
+      {isStock && summary.items && (
+        <StockDepletionPanel
+          items={summary.items}
+          businessName={businessName}
+        />
+      )}
+
+      {!isDebitors && !isStock && summary.alerts && (
+        <SalesExceptionsPanel
+          alerts={summary.alerts}
+          businessName={businessName}
+        />
+      )}
+
+      {!isDebitors && !isStock && summary.months && (
+        <PeriodComparisonPanel
+          months={summary.months}
         />
       )}
 

@@ -53,6 +53,7 @@ export interface AppSidebarProps {
   hasDebitors?: boolean;
   hasStock?: boolean;
   hasCounterStock?: boolean;
+  aiProvider?: string;
 }
 
 export function AppSidebar({
@@ -71,6 +72,7 @@ export function AppSidebar({
   hasDebitors = true,
   hasStock = true,
   hasCounterStock = true,
+  aiProvider = 'none',
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -252,17 +254,19 @@ export function AppSidebar({
               </SidebarMenuItem>
 
               {/* AI Advisor Chat Nav Button */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeView === 'advisor'}
-                  onClick={() => handleViewSelect('advisor')}
-                  className="text-xs font-semibold"
-                  tooltip="AI Strategic Chat"
-                >
-                  <MessageSquare className="size-4" />
-                  <span>AI Strategic Chat</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {aiProvider !== 'none' && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={activeView === 'advisor'}
+                    onClick={() => handleViewSelect('advisor')}
+                    className="text-xs font-semibold"
+                    tooltip="AI Strategic Chat"
+                  >
+                    <MessageSquare className="size-4" />
+                    <span>AI Strategic Chat</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
               {/* History Retention Nav Button */}
               {activeWorkspace !== 'debitors' && (

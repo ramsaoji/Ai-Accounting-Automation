@@ -109,42 +109,35 @@ export function App() {
 
   const isSyncingDriveRef = useRef(false);
   const isUploadingRef = useRef(false);
-  const hasInitializedWorkspaceRef = useRef(false);
-
-  // Reset initialization flag when user locks/logs out of the console
-  useEffect(() => {
-    if (!appSessionToken) {
-      hasInitializedWorkspaceRef.current = false;
-    }
-  }, [appSessionToken]);
-
   // Dynamically set default active workspace to the first one that has data on initial load
   useEffect(() => {
-    if (!isLoading && !hasInitializedWorkspaceRef.current) {
-      const activeData = activeWorkspace === 'sales' ? salesData
-        : activeWorkspace === 'debitors' ? debitorsData
-        : activeWorkspace === 'godown_stock' ? godownStockData
-        : counterStockData;
+    if (isLoading) return;
 
-      if (!activeData) {
-        if (salesData) {
-          setActiveWorkspace('sales');
-          hasInitializedWorkspaceRef.current = true;
-        } else if (debitorsData) {
-          setActiveWorkspace('debitors');
-          hasInitializedWorkspaceRef.current = true;
-        } else if (godownStockData) {
-          setActiveWorkspace('godown_stock');
-          hasInitializedWorkspaceRef.current = true;
-        } else if (counterStockData) {
-          setActiveWorkspace('counter_stock');
-          hasInitializedWorkspaceRef.current = true;
-        }
-      } else {
-        hasInitializedWorkspaceRef.current = true;
+    const activeData = activeWorkspace === 'sales' ? salesData
+      : activeWorkspace === 'debitors' ? debitorsData
+      : activeWorkspace === 'godown_stock' ? godownStockData
+      : counterStockData;
+
+    // If the currently selected workspace has no data, find the first one that does
+    if (!activeData) {
+      if (salesData) {
+        setActiveWorkspace('sales');
+      } else if (debitorsData) {
+        setActiveWorkspace('debitors');
+      } else if (godownStockData) {
+        setActiveWorkspace('godown_stock');
+      } else if (counterStockData) {
+        setActiveWorkspace('counter_stock');
       }
     }
   }, [isLoading, salesData, debitorsData, godownStockData, counterStockData, activeWorkspace, setActiveWorkspace]);
+
+  // Redirect to portal if advisor view is active but AI is disabled
+  useEffect(() => {
+    if (aiProvider === 'none' && activeView === 'advisor') {
+      setActiveView('portal');
+    }
+  }, [aiProvider, activeView, setActiveView]);
 
   // Custom Drive Sync hook to isolate background polling/interval logic
   const { isSyncingDrive, syncProgress, handleDriveSync, resetDriveSync } = useDriveSync({
@@ -311,6 +304,7 @@ export function App() {
             hasDebitors={!!debitorsData}
             hasStock={!!godownStockData}
             hasCounterStock={!!counterStockData}
+            aiProvider={aiProvider}
           />
 
           {/* Sidebar Main Content Inset Wrapper */}
@@ -349,6 +343,7 @@ export function App() {
                       onLaunchWorkspace={handleLaunchWorkspace}
                       cronSchedule={cronSchedule}
                       connectionMode={connectionMode}
+                      aiProvider={aiProvider}
                     />
                   ) : !activeSummary ? (
                     <EmptyWorkspaceState

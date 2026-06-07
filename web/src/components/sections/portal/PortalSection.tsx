@@ -2,10 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { MasterSummary, MonthlySummary, DebitorSummary } from '@/types';
-import { Search, X } from 'lucide-react';
+import { Search, X, Brain, Sparkles, ArrowRight, AlertCircle, AlertTriangle, Info, ChevronLeft, ChevronRight, Package, TrendingUp, Users, Filter } from 'lucide-react';
 import { formatINRValue, formatTimestamp, formatCronExpression } from '@/utils/format';
 import { PortalCard } from './portal/PortalCard';
 import { SafetyChecksGuide } from './portal/SafetyChecksGuide';
+import { useAccountingStore } from '@/store/useAccountingStore';
 
 interface PortalSectionProps {
   salesData: MasterSummary | null;
@@ -15,6 +16,7 @@ interface PortalSectionProps {
   onLaunchWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
   cronSchedule: string;
   connectionMode: 'live' | 'static' | 'empty';
+  aiProvider: string;
 }
 
 interface PortalStat {
@@ -48,6 +50,338 @@ interface PortalItem {
   latestSummaryPositive?: boolean;
 }
 
+interface ProactiveInsightsHubProps {
+  salesData: MasterSummary | null;
+  debitorsData: MasterSummary | null;
+  stockData: MasterSummary | null;
+  counterStockData: MasterSummary | null;
+  onLaunchWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', view?: 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
+}
+
+const ProactiveInsightsHub: React.FC<ProactiveInsightsHubProps> = ({
+  salesData,
+  debitorsData,
+  stockData,
+  counterStockData,
+  onLaunchWorkspace,
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const setPendingAdvisorPrompt = useAccountingStore((state) => state.setPendingAdvisorPrompt);
+
+  const suggestedSearches = [
+    { label: '🔥 Critical Risks', query: 'critical' },
+    { label: '⚠️ High Risks', query: 'high risk' },
+    { label: '📦 Stock levels', query: 'inventory' },
+    { label: '📊 Valuations', query: 'valuation' },
+    { label: '💵 Sales', query: 'sales' },
+  ];
+
+  const handleFilterClick = (query: string) => {
+    if (searchTerm.toLowerCase() === query.toLowerCase()) {
+      setSearchTerm('');
+    } else {
+      setSearchTerm(query);
+    }
+  };
+
+  const insights = useMemo(() => {
+    const list: {
+      text: string;
+      source: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
+      sourceLabel: string;
+      severity: 'critical' | 'high' | 'info';
+      score: number;
+    }[] = [];
+
+    const getSeverityInfo = (text: string) => {
+      const t = text.toLowerCase();
+      if (t.includes('critical') || t.includes('urgent') || t.includes('danger') || t.includes('immediate') || t.includes('overdue')) {
+        return { severity: 'critical' as const, score: 3 };
+      }
+      if (t.includes('warning') || t.includes('risk') || t.includes('depletion') || t.includes('loss') || t.includes('leak') || t.includes('deficit')) {
+        return { severity: 'high' as const, score: 2 };
+      }
+      return { severity: 'info' as const, score: 1 };
+    };
+
+    if (salesData?.intelligence && Array.isArray(salesData.intelligence)) {
+      salesData.intelligence.forEach(text => {
+        if (!text) return;
+        const { severity, score } = getSeverityInfo(text);
+        list.push({ text, source: 'sales', sourceLabel: 'Sales Register', severity, score });
+      });
+    }
+
+    if (debitorsData?.intelligence && Array.isArray(debitorsData.intelligence)) {
+      debitorsData.intelligence.forEach(text => {
+        if (!text) return;
+        const { severity, score } = getSeverityInfo(text);
+        list.push({ text, source: 'debitors', sourceLabel: 'Debitors Ledger', severity, score });
+      });
+    }
+
+    if (stockData?.intelligence && Array.isArray(stockData.intelligence)) {
+      stockData.intelligence.forEach(text => {
+        if (!text) return;
+        const { severity, score } = getSeverityInfo(text);
+        list.push({ text, source: 'godown_stock', sourceLabel: 'Godown Inventory', severity, score });
+      });
+    }
+
+    if (counterStockData?.intelligence && Array.isArray(counterStockData.intelligence)) {
+      counterStockData.intelligence.forEach(text => {
+        if (!text) return;
+        const { severity, score } = getSeverityInfo(text);
+        list.push({ text, source: 'counter_stock', sourceLabel: 'Counter Inventory', severity, score });
+      });
+    }
+
+    return list.sort((a, b) => b.score - a.score);
+  }, [salesData, debitorsData, stockData, counterStockData]);
+
+  const filteredInsights = useMemo(() => {
+    if (!searchTerm.trim()) return insights;
+    const term = searchTerm.toLowerCase();
+    return insights.filter(item => {
+      const severityLabel = item.severity === 'critical' 
+        ? 'critical' 
+        : item.severity === 'high' 
+          ? 'high risk' 
+          : 'strategic';
+      return (
+        item.text.toLowerCase().includes(term) || 
+        item.sourceLabel.toLowerCase().includes(term) ||
+        severityLabel.includes(term)
+      );
+    });
+  }, [insights, searchTerm]);
+
+  // Reset page when search term changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  if (insights.length === 0) return null;
+
+  const itemsPerPage = 3;
+  const totalPages = Math.max(1, Math.ceil(filteredInsights.length / itemsPerPage));
+  const activePage = Math.min(currentPage, totalPages);
+
+  const paginatedInsights = filteredInsights.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
+
+  const rangeStart = (activePage - 1) * itemsPerPage + 1;
+  const rangeEnd = Math.min(activePage * itemsPerPage, filteredInsights.length);
+
+  return (
+    <div className="w-full bg-card/10 backdrop-blur-md border border-border/40 rounded-2xl p-5 mb-2 relative overflow-hidden group animate-in fade-in duration-300">
+      {/* Decorative background glow */}
+      <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none transition-all duration-700 group-hover:bg-primary/8" />
+      
+      {/* Header Row */}
+      <div className="flex items-center justify-between gap-4 border-b border-border/20 pb-4 mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0">
+            <Brain className="size-4.5 animate-pulse" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              Proactive AI Strategic Insights
+              <Sparkles className="size-3.5 text-amber-500 fill-amber-500/20" />
+            </h2>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Live intelligence aggregated across active ledgers and stock profiles.
+            </p>
+          </div>
+        </div>
+
+        <div className="text-[10px] px-2.5 py-1 rounded-full bg-muted border border-border/80 text-muted-foreground font-semibold flex items-center gap-1 select-none shrink-0 h-7 self-center">
+          <span className="size-1.5 rounded-full bg-emerald-500 animate-ping" />
+          {insights.length} active findings
+        </div>
+      </div>
+
+      {/* Toolbar Row (Search + Suggested Filters) */}
+      {insights.length > 3 && (
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3 bg-muted/10 p-3 rounded-xl border border-border/30">
+          <div className="relative w-full lg:w-80 shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search by topic, source, or risk..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 pr-8 h-9 text-xs w-full bg-background/50 border-border/40 focus-visible:ring-primary/30"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-0.5 rounded-full hover:bg-muted"
+                aria-label="Clear search"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground/85 mr-1 flex items-center gap-1">
+              <Filter className="size-3 text-muted-foreground/60" /> Filter by:
+            </span>
+            {suggestedSearches.map((item) => {
+              const active = searchTerm.toLowerCase() === item.query.toLowerCase();
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => handleFilterClick(item.query)}
+                  className={`text-[9px] px-2.5 py-1 rounded-lg border font-medium transition-all duration-200 cursor-pointer select-none active:scale-95 flex items-center gap-1 ${
+                    active
+                      ? 'bg-primary/10 border-primary/30 text-primary shadow-xs'
+                      : 'bg-background hover:bg-muted text-muted-foreground border-border/80 hover:text-foreground'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Range Indicator Row */}
+      {insights.length > 3 && (
+        <div className="text-[10px] text-muted-foreground mb-3.5 select-none pl-0.5">
+          {filteredInsights.length === 0 
+            ? "No matching insights found" 
+            : `Showing ${rangeStart}–${rangeEnd} of ${filteredInsights.length} insights`}
+          {searchTerm && ` (filtered from ${insights.length})`}
+        </div>
+      )}
+
+      {/* Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {paginatedInsights.length === 0 ? (
+          <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-8 text-xs text-muted-foreground select-none">
+            No matching insights found.
+          </div>
+        ) : (
+          paginatedInsights.map((insight, idx) => {
+            let badgeColor = '';
+            let Icon = Info;
+            let glowColor = '';
+            let hoverShadow = '';
+            
+            if (insight.severity === 'critical') {
+              badgeColor = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+              Icon = AlertCircle;
+              glowColor = 'bg-rose-500';
+              hoverShadow = 'hover:shadow-[0_8px_30px_rgba(244,63,94,0.08)] hover:border-rose-500/30';
+            } else if (insight.severity === 'high') {
+              badgeColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+              Icon = AlertTriangle;
+              glowColor = 'bg-amber-500';
+              hoverShadow = 'hover:shadow-[0_8px_30px_rgba(245,158,11,0.08)] hover:border-amber-500/30';
+            } else {
+              badgeColor = 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20';
+              Icon = Info;
+              glowColor = 'bg-indigo-500';
+              hoverShadow = 'hover:shadow-[0_8px_30px_rgba(99,102,241,0.08)] hover:border-indigo-500/30';
+            }
+
+            let sourceColor = '';
+            let SourceIcon = Package;
+            if (insight.source === 'sales') {
+              sourceColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+              SourceIcon = TrendingUp;
+            } else if (insight.source === 'debitors') {
+              sourceColor = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+              SourceIcon = Users;
+            } else if (insight.source === 'godown_stock') {
+              sourceColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+              SourceIcon = Package;
+            } else {
+              sourceColor = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+              SourceIcon = Package;
+            }
+
+            return (
+              <div 
+                key={idx}
+                className={`relative flex flex-col justify-between gap-4 p-4 pt-5 rounded-xl bg-card/25 backdrop-blur-xs border border-border/40 hover:-translate-y-0.5 transition-all duration-300 group/card shadow-sm hover:shadow-md ${hoverShadow}`}
+              >
+                {/* Glowing edge indicator: soft pill design */}
+                <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[70%] h-[2px] rounded-full ${glowColor} blur-[0.3px] opacity-60 group-hover/card:opacity-95 transition-all duration-300`} />
+                
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold border flex items-center gap-1 ${sourceColor} select-none`}>
+                      <SourceIcon className="size-2.5" />
+                      {insight.sourceLabel}
+                    </span>
+                    
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold flex items-center gap-1 ${badgeColor} select-none`}>
+                      <Icon className="size-3" />
+                      {insight.severity === 'critical' ? 'Critical' : insight.severity === 'high' ? 'High Risk' : 'Strategic'}
+                    </span>
+                  </div>
+                  
+                  <p className="text-xs text-foreground/85 font-medium leading-relaxed mt-1 tracking-wide pl-2 border-l-2 border-border/20 group-hover/card:border-primary/30 transition-colors">
+                    {insight.text}
+                  </p>
+                </div>
+
+                <div className="flex justify-end pt-2 border-t border-border/20">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingAdvisorPrompt(`Regarding the insight: "${insight.text}". Can you elaborate on this and explain what actions I should take?`);
+                      onLaunchWorkspace(insight.source, 'advisor');
+                    }}
+                    className="text-[10px] text-primary hover:text-primary-foreground font-semibold flex items-center gap-1 group/btn cursor-pointer transition-all duration-200 bg-primary/5 hover:bg-primary border border-primary/15 hover:border-primary px-3 py-1.5 rounded-lg shadow-xs active:scale-95"
+                  >
+                    Consult AI Advisor
+                    <ArrowRight className="size-3 transition-transform duration-200 group-hover/btn:translate-x-0.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-border/40 pt-3.5 mt-4 select-none">
+          <span className="text-xs text-muted-foreground">
+            Page {activePage} of {totalPages}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={activePage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              className="p-1.5 rounded-lg border border-border/80 bg-background hover:bg-muted disabled:opacity-40 disabled:hover:bg-background cursor-pointer disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={activePage === totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              className="p-1.5 rounded-lg border border-border/80 bg-background hover:bg-muted disabled:opacity-40 disabled:hover:bg-background cursor-pointer disabled:cursor-not-allowed transition-colors"
+              aria-label="Next page"
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const PortalSection: React.FC<PortalSectionProps> = ({
   salesData,
   debitorsData,
@@ -56,6 +390,7 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
   onLaunchWorkspace,
   cronSchedule,
   connectionMode,
+  aiProvider,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'flagged' | 'audited'>('all');
@@ -430,6 +765,17 @@ export const PortalSection: React.FC<PortalSectionProps> = ({
           ))
         )}
       </div>
+
+      {/* Proactive AI Insights Hub */}
+      {aiProvider !== 'none' && (
+        <ProactiveInsightsHub
+          salesData={salesData}
+          debitorsData={debitorsData}
+          stockData={stockData}
+          counterStockData={counterStockData}
+          onLaunchWorkspace={onLaunchWorkspace}
+        />
+      )}
 
       {/* Bookkeeping Safety Checks */}
       <SafetyChecksGuide scanScheduleLabel={scanScheduleLabel} />

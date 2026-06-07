@@ -6,12 +6,14 @@ interface AccountingState {
   activeWorkspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
   activeView: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor';
   chatHistories: Record<string, ChatMessage[]>;
+  pendingAdvisorPrompt?: string;
 
   // Mutators
   setToken: (token: string, remember?: boolean) => void;
   clearToken: () => void;
   setActiveWorkspace: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock') => void;
   setActiveView: (view: 'portal' | 'overview' | 'ledger' | 'auditor' | 'advisor') => void;
+  setPendingAdvisorPrompt: (prompt?: string) => void;
   getChatHistory: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', fileName: string) => ChatMessage[];
   loadChatHistory: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', fileName: string, businessName: string) => void;
   addChatMessage: (workspace: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', fileName: string, message: ChatMessage) => void;
@@ -33,6 +35,7 @@ export const useAccountingStore = create<AccountingState>((set, get) => {
     activeWorkspace: 'sales',
     activeView: 'portal',
     chatHistories: {},
+    pendingAdvisorPrompt: '',
 
     setToken: (token, remember) => {
       set({ appSessionToken: token });
@@ -66,6 +69,9 @@ export const useAccountingStore = create<AccountingState>((set, get) => {
     },
     setActiveView: (view) => {
       set({ activeView: view });
+    },
+    setPendingAdvisorPrompt: (prompt) => {
+      set({ pendingAdvisorPrompt: prompt });
     },
     getChatHistory: (workspace, fileName) => {
       const state = get();

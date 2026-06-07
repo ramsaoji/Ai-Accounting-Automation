@@ -98,6 +98,8 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
             >
               Total Cost {renderSortIcon('totalCostValue')}
             </TableHead>
+            <TableHead className="text-right h-10">Daily Velocity</TableHead>
+            <TableHead className="text-center h-10">Days Remaining</TableHead>
             <TableHead className="text-center pr-6 h-10">Status</TableHead>
           </TableRow>
         </TooltipProvider>
@@ -125,6 +127,27 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
             statusIcon = <AlertTriangle className="size-3 text-warning" />;
           }
 
+          const velocity = item.stockOut;
+          const closing = item.closingStock;
+          
+          let daysRemainingNode: React.ReactNode = '—';
+          if (closing < 0) {
+            daysRemainingNode = <span className="text-destructive font-bold text-[10px]">Negative</span>;
+          } else if (closing === 0) {
+            daysRemainingNode = <span className="text-destructive font-bold text-[10px] bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/25">0 Days</span>;
+          } else if (velocity === 0) {
+            daysRemainingNode = <span className="text-muted-foreground font-medium text-[10px]">No Movement</span>;
+          } else {
+            const days = Math.round(closing / velocity);
+            if (days < 3) {
+              daysRemainingNode = <span className="text-destructive font-bold text-[10px] bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/25">{days} Days</span>;
+            } else if (days <= 5) {
+              daysRemainingNode = <span className="text-warning font-bold text-[10px] bg-warning/10 px-2 py-0.5 rounded-full border border-warning/25">{days} Days</span>;
+            } else {
+              daysRemainingNode = <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">{days} Days</span>;
+            }
+          }
+
           return (
             <TableRow 
               key={`${item.itemName}-${item.bottleSizeMl}-${idx}`}
@@ -143,7 +166,9 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
               
 
 
-              <TableCell className="text-center font-mono text-muted-foreground font-semibold">{item.bottleSizeMl}ml</TableCell>
+              <TableCell className="text-center font-mono text-muted-foreground font-semibold">
+                {item.bottleSizeMl === 0 ? 'Loose' : `${item.bottleSizeMl}ml`}
+              </TableCell>
               
               <TableCell className="text-right font-mono font-medium text-muted-foreground">{item.openingStock}</TableCell>
               <TableCell className="text-right font-mono font-medium text-emerald-600 dark:text-emerald-400 font-semibold">+{item.stockIn}</TableCell>
@@ -154,6 +179,11 @@ export const GodownStockLedgerTable: React.FC<GodownStockLedgerTableProps> = ({
               
               <TableCell className="text-right font-mono text-muted-foreground">{formatINR(item.costPrice)}</TableCell>
               <TableCell className="text-right font-mono font-semibold text-foreground">{formatINR(item.totalCostValue)}</TableCell>
+
+              <TableCell className="text-right font-mono text-muted-foreground">
+                {velocity} {item.bottleSizeMl === 0 ? 'ml' : 'units'}
+              </TableCell>
+              <TableCell className="text-center font-mono">{daysRemainingNode}</TableCell>
 
               <TableCell className="text-center pr-6 select-none">
                 <span className={`text-[0.62rem] font-bold border rounded-full px-2.5 py-0.8 uppercase tracking-wider inline-flex items-center gap-1.5 ${badgeStyles}`}>

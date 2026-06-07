@@ -94,7 +94,18 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
     loadChatHistory(workspaceKey, summary.fileName, businessName);
   }, [workspaceKey, summary.fileName, businessName, loadChatHistory]);
 
+  const pendingAdvisorPrompt = useAccountingStore((state) => state.pendingAdvisorPrompt);
+  const setPendingAdvisorPrompt = useAccountingStore((state) => state.setPendingAdvisorPrompt);
+
   const [input, setInput] = useState('');
+
+  useEffect(() => {
+    if (pendingAdvisorPrompt) {
+      setInput(pendingAdvisorPrompt);
+      setPendingAdvisorPrompt('');
+    }
+  }, [pendingAdvisorPrompt, setPendingAdvisorPrompt]);
+
   const [isTyping, setIsTyping] = useState(false);
   const isInitialMount = useRef(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { MasterSummary } from '@/types';
 import { fetchPortalSummary, authFetch, apiBaseUrl, getAuthHeaders, mapMasterSummary } from '@/services/api';
 import { toast } from 'sonner';
@@ -17,6 +17,19 @@ export function useAccountingData() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState<boolean>(false);
   const [aiProvider, setAiProvider] = useState<string>('none');
+
+  useEffect(() => {
+    const handleSettingsUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.aiProvider) {
+        setAiProvider(customEvent.detail.aiProvider);
+      }
+    };
+    window.addEventListener('system-settings-updated', handleSettingsUpdated);
+    return () => {
+      window.removeEventListener('system-settings-updated', handleSettingsUpdated);
+    };
+  }, []);
 
   const lastSalesTimestamp = useRef<string | undefined>(undefined);
   const lastDebitorsTimestamp = useRef<string | undefined>(undefined);
@@ -73,7 +86,7 @@ export function useAccountingData() {
             dateRange: result.sales!.dateRange ?? null,
             transactions: [],
             errors: [],
-            intelligence: [],
+            intelligence: result.sales!.intelligence ?? [],
             aiGenerated: false
           } as any;
         });
@@ -104,7 +117,7 @@ export function useAccountingData() {
             dateRange: result.debitors!.dateRange ?? null,
             transactions: [],
             errors: [],
-            intelligence: [],
+            intelligence: result.debitors!.intelligence ?? [],
             aiGenerated: false
           } as any;
         });
@@ -134,7 +147,7 @@ export function useAccountingData() {
             dateRange: result.godownStock!.dateRange ?? null,
             items: [],
             errors: [],
-            intelligence: [],
+            intelligence: result.godownStock!.intelligence ?? [],
             aiGenerated: false
           } as any;
         });
@@ -164,7 +177,7 @@ export function useAccountingData() {
             dateRange: result.counterStock!.dateRange ?? null,
             items: [],
             errors: [],
-            intelligence: [],
+            intelligence: result.counterStock!.intelligence ?? [],
             aiGenerated: false
           } as any;
         });

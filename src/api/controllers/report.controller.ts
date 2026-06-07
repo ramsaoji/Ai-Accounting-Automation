@@ -754,7 +754,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         dateRange: salesReport.dateRange,
         totalInflows: salesReport.masterTotals.totalInflows,
         netCashflow: salesReport.masterTotals.netCashflow,
-        sparkline: salesReport.months.map((m: any) => m.net)
+        sparkline: salesReport.months.map((m: any) => m.net),
+        intelligence: salesReport.intelligence || []
       };
     }
 
@@ -769,7 +770,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         totalPendingSum: debitorsReport.aggregates.totalPendingSum,
         collectionSuccessRate: debitorsReport.aggregates.collectionSuccessRate,
         activeDebitorsCount: debitorsReport.aggregates.activeDebitorsCount,
-        sparkline: debitorsReport.topDebitors.slice(0, 15).map((d: any) => d.pending)
+        sparkline: debitorsReport.topDebitors.slice(0, 15).map((d: any) => d.pending),
+        intelligence: debitorsReport.intelligence || []
       };
     }
 
@@ -784,7 +786,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         totalClosingValue: godownStockReport.aggregates.totalClosingValue,
         totalSellingValue: godownStockReport.aggregates.totalSellingValue,
         activeItemsCount: godownStockReport.aggregates.totalItemsCount,
-        sparkline: godownStockReport.historicalTrends.slice(-15).map((t: any) => t.totalCostValue)
+        sparkline: godownStockReport.historicalTrends.slice(-15).map((t: any) => t.totalCostValue),
+        intelligence: godownStockReport.intelligence || []
       };
     }
 
@@ -799,7 +802,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         totalClosingValue: counterStockReport.aggregates.totalClosingValue,
         totalSellingValue: counterStockReport.aggregates.totalSellingValue,
         activeItemsCount: counterStockReport.aggregates.totalItemsCount,
-        sparkline: counterStockReport.historicalTrends.slice(-15).map((t: any) => t.totalCostValue)
+        sparkline: counterStockReport.historicalTrends.slice(-15).map((t: any) => t.totalCostValue),
+        intelligence: counterStockReport.intelligence || []
       };
     }
 
