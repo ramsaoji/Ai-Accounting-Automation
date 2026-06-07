@@ -1024,6 +1024,14 @@ export async function sendSalesChart(chatId: string, editMessageId?: number): Pr
         ]
       },
       options: {
+        layout: {
+          padding: {
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: 20
+          }
+        },
         title: {
           display: true,
           text: 'Monthly Inflows vs Net Surplus',
@@ -1107,6 +1115,14 @@ export async function sendDebitorsChart(chatId: string, editMessageId?: number):
         ]
       },
       options: {
+        layout: {
+          padding: {
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: 20
+          }
+        },
         title: {
           display: true,
           text: 'Top Outstanding Customer Balances',
@@ -1202,6 +1218,14 @@ export async function sendStockChart(chatId: string, reportType: 'godown_stock' 
         }]
       },
       options: {
+        layout: {
+          padding: {
+            left: 20,
+            right: 40,
+            top: 20,
+            bottom: 20
+          }
+        },
         title: {
           display: true,
           text: `${titleLabel} Valuation by Category (Cost)`,
@@ -1209,8 +1233,30 @@ export async function sendStockChart(chatId: string, reportType: 'godown_stock' 
           fontSize: 16
         },
         legend: {
-          position: 'bottom',
-          labels: { fontColor: '#ffffff', fontSize: 10 }
+          position: 'right',
+          labels: { fontColor: '#ffffff', fontSize: 11 }
+        },
+        plugins: {
+          datalabels: {
+            display: true,
+            color: '#ffffff',
+            borderRadius: 4,
+            backgroundColor: 'rgba(12, 12, 14, 0.75)',
+            padding: 5,
+            font: {
+              weight: 'bold',
+              size: 11
+            },
+            formatter: (value: any, ctx: any) => {
+              let sum = 0;
+              const dataArr = ctx.chart.data.datasets[0].data;
+              dataArr.forEach((val: number) => { sum += val; });
+              if (sum === 0) return '';
+              const percentage = (value * 100) / sum;
+              // Only display label if it represents 5% or more to prevent overlap
+              return percentage >= 5 ? percentage.toFixed(0) + '%' : '';
+            }
+          }
         }
       }
     };

@@ -38,16 +38,16 @@ export function getMainMenuKeyboard(): Record<string, any> {
   const buttons: { text: string }[] = [];
 
   if (activeFileTypes.has('sales')) {
-    buttons.push({ text: '✦ Sales Summary' });
+    buttons.push({ text: '📊 Sales Summary' });
   }
   if (activeFileTypes.has('debitors')) {
-    buttons.push({ text: '◈ Debitors List' });
+    buttons.push({ text: '👥 Debitors List' });
   }
   if (activeFileTypes.has('godown_stock')) {
-    buttons.push({ text: '⬡ Godown Stock' });
+    buttons.push({ text: '🏭 Godown Stock' });
   }
   if (activeFileTypes.has('counter_stock')) {
-    buttons.push({ text: '⬢ Counter Stock' });
+    buttons.push({ text: '🏪 Counter Stock' });
   }
 
   // Chunk buttons into rows of 2
@@ -56,7 +56,7 @@ export function getMainMenuKeyboard(): Record<string, any> {
   }
 
   // Always append the Sync and Health options
-  keyboard.push([{ text: '↻ Sync Ledger' }, { text: '⚙ Service Health' }]);
+  keyboard.push([{ text: '🔄 Sync Ledger' }, { text: '🩺 Service Health' }]);
 
   return {
     keyboard,
