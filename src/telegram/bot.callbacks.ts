@@ -979,6 +979,23 @@ export async function sendStockInflows(chatId: string, reportType: 'godown_stock
   }
 }
 
+function stringifyChartConfig(config: any): string {
+  const json = JSON.stringify(config);
+  // Remove quotes around stringified function representations so QuickChart evaluates them as raw JS functions
+  return json.replace(/"(function\b(?:[^"\\]|\\.)*)"/gs, (match, p1) => {
+    try {
+      return JSON.parse('"' + p1 + '"');
+    } catch {
+      return p1
+        .replace(/\\"/g, '"')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\\\/g, '\\');
+    }
+  });
+}
+
 export async function sendSalesChart(chatId: string, editMessageId?: number): Promise<void> {
   const data = await loadReport('sales');
   if (!data) {
@@ -1054,7 +1071,7 @@ export async function sendSalesChart(chatId: string, editMessageId?: number): Pr
       }
     };
 
-    const configStr = encodeURIComponent(JSON.stringify(chartConfig));
+    const configStr = encodeURIComponent(stringifyChartConfig(chartConfig));
     const quickchartUrl = `https://quickchart.io/chart?c=${configStr}&bkg=%230c0c0e&w=800&h=450`;
 
     const caption = `📊 *${config.BUSINESS_NAME} — Cashflow Trend Chart*\n\n` +
@@ -1143,7 +1160,7 @@ export async function sendDebitorsChart(chatId: string, editMessageId?: number):
       }
     };
 
-    const configStr = encodeURIComponent(JSON.stringify(chartConfig));
+    const configStr = encodeURIComponent(stringifyChartConfig(chartConfig));
     const quickchartUrl = `https://quickchart.io/chart?c=${configStr}&bkg=%230c0c0e&w=800&h=450`;
 
     const caption = `👥 *${config.BUSINESS_NAME} — A/R Outstanding Chart*\n\n` +
@@ -1262,7 +1279,7 @@ export async function sendStockChart(chatId: string, reportType: 'godown_stock' 
       }
     };
 
-    const configStr = encodeURIComponent(JSON.stringify(chartConfig));
+    const configStr = encodeURIComponent(stringifyChartConfig(chartConfig));
     const quickchartUrl = `https://quickchart.io/chart?c=${configStr}&bkg=%230c0c0e&w=800&h=450`;
 
     const caption = `🏭 *${config.BUSINESS_NAME} — ${titleLabel} Category Chart*\n\n` +
