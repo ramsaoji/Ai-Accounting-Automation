@@ -21,7 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 
 const OverviewCharts = React.lazy(() => import('./OverviewCharts'));
@@ -124,8 +125,9 @@ const StockDepletionPanel: React.FC<StockDepletionPanelProps> = ({ items, busine
             Predictive demand forecasting based on daily sales velocity.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 sm:p-5 pt-2 text-center text-xs text-muted-foreground py-6">
-          ✨ All stock levels are healthy! No imminent stockouts projected.
+        <CardContent className="p-4 sm:p-5 pt-2 text-center text-xs text-muted-foreground py-6 flex items-center justify-center gap-1.5 select-none">
+          <Sparkles className="size-3.5 text-amber-500 fill-amber-500/10 shrink-0" />
+          <span>All stock levels are healthy! No imminent stockouts projected.</span>
         </CardContent>
       </Card>
     );
@@ -139,6 +141,22 @@ const StockDepletionPanel: React.FC<StockDepletionPanelProps> = ({ items, busine
 
   const rangeStart = (activePage - 1) * itemsPerPage + 1;
   const rangeEnd = Math.min(activePage * itemsPerPage, filteredRisks.length);
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (activePage > 3) pages.push('...');
+      const start = Math.max(2, activePage - 1);
+      const end = Math.min(totalPages - 1, activePage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (activePage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
 
   return (
     <Card className="border bg-card/45 shadow-xs flex flex-col">
@@ -262,6 +280,27 @@ const StockDepletionPanel: React.FC<StockDepletionPanelProps> = ({ items, busine
               );
             })
           )}
+          
+          {/* Symmetrical invisible placeholder cards to prevent height shifting */}
+          {totalPages > 1 && paginatedRisks.length > 0 && Array.from({ length: 6 - paginatedRisks.length }).map((_, idx) => (
+            <div 
+              key={`placeholder-${idx}`} 
+              className="opacity-0 pointer-events-none border border-transparent p-3 rounded-lg flex flex-col justify-between gap-2.5 select-none" 
+              aria-hidden="true"
+            >
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-start gap-1">
+                  <span className="font-semibold text-xs truncate">&nbsp;</span>
+                </div>
+                <span className="text-[10px]">&nbsp;</span>
+              </div>
+              <div className="pt-2 flex flex-col gap-1.5">
+                <div className="flex justify-between text-[10px]"><span>&nbsp;</span><span>&nbsp;</span></div>
+                <div className="flex justify-between text-[10px]"><span>&nbsp;</span><span>&nbsp;</span></div>
+                <div className="w-full mt-2.5 py-1.5 px-3 rounded-md border text-[10px]">&nbsp;</div>
+              </div>
+            </div>
+          ))}
         </div>
         
         {totalPages > 1 && (
@@ -279,6 +318,34 @@ const StockDepletionPanel: React.FC<StockDepletionPanelProps> = ({ items, busine
               >
                 <ChevronLeft className="size-3.5" />
               </button>
+
+              {/* Direct Page Numbers */}
+              {getPageNumbers().map((pNum, i) => {
+                if (pNum === '...') {
+                  return (
+                    <span key={`dots-${i}`} className="h-7 w-7 text-xs font-bold text-muted-foreground/60 flex items-center justify-center select-none">
+                      ...
+                    </span>
+                  );
+                }
+                const pageNum = pNum as number;
+                const isSelected = activePage === pageNum;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`h-7 w-7 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center justify-center select-none active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary border-primary text-primary-foreground shadow-xs'
+                        : 'bg-background hover:bg-muted text-muted-foreground border-border/80 hover:text-foreground'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
               <button
                 type="button"
                 disabled={activePage === totalPages}
@@ -341,6 +408,22 @@ const SalesExceptionsPanel: React.FC<SalesExceptionsPanelProps> = ({ alerts, bus
   const rangeStart = (activePage - 1) * itemsPerPage + 1;
   const rangeEnd = Math.min(activePage * itemsPerPage, filteredAlerts.length);
 
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (activePage > 3) pages.push('...');
+      const start = Math.max(2, activePage - 1);
+      const end = Math.min(totalPages - 1, activePage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (activePage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   const copyAuditMemo = (alert: any) => {
     const tx = alert.transaction || {};
     const invoiceText = tx.invoice ? `Invoice: ${tx.invoice}` : 'Invoice: N/A';
@@ -367,8 +450,9 @@ const SalesExceptionsPanel: React.FC<SalesExceptionsPanelProps> = ({ alerts, bus
             Exception tracking compiled by our automated ledger audit rules engine.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 sm:p-5 pt-2 text-center text-xs text-muted-foreground py-6">
-          ✨ All audited sales invoices and ledger postings are consistent! No critical anomalies detected.
+        <CardContent className="p-4 sm:p-5 pt-2 text-center text-xs text-muted-foreground py-6 flex items-center justify-center gap-1.5 select-none">
+          <ShieldCheck className="size-3.5 text-emerald-500 shrink-0" />
+          <span>All audited sales invoices and ledger postings are consistent! No critical anomalies detected.</span>
         </CardContent>
       </Card>
     );
@@ -514,6 +598,29 @@ const SalesExceptionsPanel: React.FC<SalesExceptionsPanelProps> = ({ alerts, bus
               );
             })
           )}
+          
+          {/* Symmetrical invisible placeholder cards to prevent height shifting */}
+          {totalPages > 1 && paginatedAlerts.length > 0 && Array.from({ length: 6 - paginatedAlerts.length }).map((_, idx) => (
+            <div 
+              key={`placeholder-${idx}`} 
+              className="opacity-0 pointer-events-none border border-transparent p-4 pt-5 rounded-xl flex flex-col justify-between gap-4 select-none" 
+              aria-hidden="true"
+            >
+              <div className="flex flex-col gap-2.5">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="font-semibold text-xs truncate">&nbsp;</span>
+                  <span className="text-[9px] px-2 py-0.5 rounded-md">&nbsp;</span>
+                </div>
+                <p className="text-[11px] leading-relaxed mt-1 pl-2 border-l-2 border-transparent">
+                  &nbsp;
+                </p>
+              </div>
+              <div className="pt-3 flex flex-col gap-2.5">
+                <div className="h-4">&nbsp;</div>
+                <div className="w-full py-1.5 rounded-lg border text-[9px]">&nbsp;</div>
+              </div>
+            </div>
+          ))}
         </div>
 
         {totalPages > 1 && (
@@ -531,6 +638,34 @@ const SalesExceptionsPanel: React.FC<SalesExceptionsPanelProps> = ({ alerts, bus
               >
                 <ChevronLeft className="size-3.5" />
               </button>
+
+              {/* Direct Page Numbers */}
+              {getPageNumbers().map((pNum, i) => {
+                if (pNum === '...') {
+                  return (
+                    <span key={`dots-${i}`} className="h-7 w-7 text-xs font-bold text-muted-foreground/60 flex items-center justify-center select-none">
+                      ...
+                    </span>
+                  );
+                }
+                const pageNum = pNum as number;
+                const isSelected = activePage === pageNum;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`h-7 w-7 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center justify-center select-none active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary border-primary text-primary-foreground shadow-xs'
+                        : 'bg-background hover:bg-muted text-muted-foreground border-border/80 hover:text-foreground'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
               <button
                 type="button"
                 disabled={activePage === totalPages}

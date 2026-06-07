@@ -42,6 +42,22 @@ export const RecoveryBoard: React.FC<RecoveryBoardProps> = ({
   const rangeStart = (activePage - 1) * itemsPerPage + 1;
   const rangeEnd = Math.min(activePage * itemsPerPage, filteredDebitors.length);
 
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (activePage > 3) pages.push('...');
+      const start = Math.max(2, activePage - 1);
+      const end = Math.min(totalPages - 1, activePage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (activePage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   return (
     <Card className="border bg-card/45 shadow-xs overflow-hidden flex flex-col">
       <CardHeader className="p-4 sm:p-5 pb-2 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
@@ -195,6 +211,33 @@ export const RecoveryBoard: React.FC<RecoveryBoardProps> = ({
               );
             })
           )}
+          
+          {/* Symmetrical invisible placeholder cards to prevent height shifting */}
+          {totalPages > 1 && paginatedDebitors.length > 0 && Array.from({ length: 6 - paginatedDebitors.length }).map((_, idx) => (
+            <div 
+              key={`placeholder-${idx}`} 
+              className="opacity-0 pointer-events-none border border-transparent p-4 pt-5 rounded-xl flex flex-col justify-between gap-4 select-none" 
+              aria-hidden="true"
+            >
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="size-8 rounded-lg border">&nbsp;</div>
+                    <span className="font-semibold text-xs truncate">&nbsp;</span>
+                  </div>
+                  <span className="text-[9px] px-2 py-0.5 rounded-md font-bold">&nbsp;</span>
+                </div>
+                <div className="text-[10px] mt-1 flex flex-col gap-1 pl-2 border-l-2 border-transparent">
+                  <div className="flex justify-between"><span>&nbsp;</span><span>&nbsp;</span></div>
+                  <div className="flex justify-between"><span>&nbsp;</span><span>&nbsp;</span></div>
+                </div>
+              </div>
+              <div className="pt-3 flex flex-col gap-2.5">
+                <div className="h-4">&nbsp;</div>
+                <div className="w-full py-1.5 rounded-lg border text-[9px]">&nbsp;</div>
+              </div>
+            </div>
+          ))}
         </div>
 
         {totalPages > 1 && (
@@ -212,6 +255,34 @@ export const RecoveryBoard: React.FC<RecoveryBoardProps> = ({
               >
                 <ChevronLeft className="size-3.5" />
               </button>
+
+              {/* Direct Page Numbers */}
+              {getPageNumbers().map((pNum, i) => {
+                if (pNum === '...') {
+                  return (
+                    <span key={`dots-${i}`} className="h-7 w-7 text-xs font-bold text-muted-foreground/60 flex items-center justify-center select-none">
+                      ...
+                    </span>
+                  );
+                }
+                const pageNum = pNum as number;
+                const isSelected = activePage === pageNum;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`h-7 w-7 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center justify-center select-none active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary border-primary text-primary-foreground shadow-xs'
+                        : 'bg-background hover:bg-muted text-muted-foreground border-border/80 hover:text-foreground'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
               <button
                 type="button"
                 disabled={activePage === totalPages}

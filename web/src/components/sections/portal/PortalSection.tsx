@@ -71,11 +71,11 @@ const ProactiveInsightsHub: React.FC<ProactiveInsightsHubProps> = ({
   const setPendingAdvisorPrompt = useAccountingStore((state) => state.setPendingAdvisorPrompt);
 
   const suggestedSearches = [
-    { label: '🔥 Critical Risks', query: 'critical' },
-    { label: '⚠️ High Risks', query: 'high risk' },
-    { label: '📦 Stock levels', query: 'inventory' },
-    { label: '📊 Valuations', query: 'valuation' },
-    { label: '💵 Sales', query: 'sales' },
+    { label: 'Critical Risks', query: 'critical', icon: <AlertCircle className="size-3 text-rose-500 shrink-0" /> },
+    { label: 'High Risks', query: 'high risk', icon: <AlertTriangle className="size-3 text-amber-500 shrink-0" /> },
+    { label: 'Stock levels', query: 'inventory', icon: <Package className="size-3 text-sky-400 shrink-0" /> },
+    { label: 'Valuations', query: 'valuation', icon: <TrendingUp className="size-3 text-indigo-400 shrink-0" /> },
+    { label: 'Sales', query: 'sales', icon: <TrendingUp className="size-3 text-emerald-500 shrink-0" /> },
   ];
 
   const handleFilterClick = (query: string) => {
@@ -174,6 +174,22 @@ const ProactiveInsightsHub: React.FC<ProactiveInsightsHubProps> = ({
   const rangeStart = (activePage - 1) * itemsPerPage + 1;
   const rangeEnd = Math.min(activePage * itemsPerPage, filteredInsights.length);
 
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (activePage > 3) pages.push('...');
+      const start = Math.max(2, activePage - 1);
+      const end = Math.min(totalPages - 1, activePage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (activePage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   return (
     <div className="w-full bg-card/10 backdrop-blur-md border border-border/40 rounded-2xl p-5 mb-2 relative overflow-hidden group animate-in fade-in duration-300">
       {/* Decorative background glow */}
@@ -237,13 +253,14 @@ const ProactiveInsightsHub: React.FC<ProactiveInsightsHubProps> = ({
                   key={item.label}
                   type="button"
                   onClick={() => handleFilterClick(item.query)}
-                  className={`text-[9px] px-2.5 py-1 rounded-lg border font-medium transition-all duration-200 cursor-pointer select-none active:scale-95 flex items-center gap-1 ${
+                  className={`text-[9px] px-2.5 py-1.5 rounded-lg border font-medium transition-all duration-200 cursor-pointer select-none active:scale-95 flex items-center gap-1.5 ${
                     active
                       ? 'bg-primary/10 border-primary/30 text-primary shadow-xs'
                       : 'bg-background hover:bg-muted text-muted-foreground border-border/80 hover:text-foreground'
                   }`}
                 >
-                  {item.label}
+                  {item.icon}
+                  <span>{item.label}</span>
                 </button>
               );
             })}
@@ -350,6 +367,28 @@ const ProactiveInsightsHub: React.FC<ProactiveInsightsHubProps> = ({
             );
           })
         )}
+        
+        {/* Symmetrical invisible placeholder cards to prevent height shifting */}
+        {totalPages > 1 && paginatedInsights.length > 0 && Array.from({ length: 3 - paginatedInsights.length }).map((_, idx) => (
+          <div 
+            key={`placeholder-${idx}`}
+            className="opacity-0 pointer-events-none border border-transparent p-4 pt-5 rounded-xl flex flex-col justify-between gap-4 select-none"
+            aria-hidden="true"
+          >
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] px-2 py-0.5">&nbsp;</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-md">&nbsp;</span>
+              </div>
+              <p className="text-xs font-medium leading-relaxed mt-1 pl-2 border-l-2 border-transparent">
+                &nbsp;
+              </p>
+            </div>
+            <div className="flex justify-end pt-2 border-t border-transparent">
+              <div className="text-[10px] px-3 py-1.5 rounded-lg">&nbsp;</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {totalPages > 1 && (
@@ -367,6 +406,34 @@ const ProactiveInsightsHub: React.FC<ProactiveInsightsHubProps> = ({
             >
               <ChevronLeft className="size-3.5" />
             </button>
+
+            {/* Direct Page Numbers */}
+            {getPageNumbers().map((pNum, i) => {
+              if (pNum === '...') {
+                return (
+                  <span key={`dots-${i}`} className="h-7 w-7 text-xs font-bold text-muted-foreground/60 flex items-center justify-center select-none">
+                    ...
+                  </span>
+                );
+              }
+              const pageNum = pNum as number;
+              const isSelected = activePage === pageNum;
+              return (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`h-7 w-7 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center justify-center select-none active:scale-95 ${
+                    isSelected
+                      ? 'bg-primary border-primary text-primary-foreground shadow-xs'
+                      : 'bg-background hover:bg-muted text-muted-foreground border-border/80 hover:text-foreground'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
             <button
               type="button"
               disabled={activePage === totalPages}
