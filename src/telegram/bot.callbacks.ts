@@ -1043,7 +1043,7 @@ export async function sendSalesChart(chatId: string, editMessageId?: number): Pr
         },
         scales: {
           yAxes: [{
-            ticks: { fontColor: '#ffffff', callback: (value: any) => '₹' + Number(value).toLocaleString() },
+            ticks: { fontColor: '#ffffff', callback: `function(value) { return '₹' + Number(value).toLocaleString('en-IN'); }` },
             gridLines: { color: 'rgba(255, 255, 255, 0.08)' }
           }],
           xAxes: [{
@@ -1136,7 +1136,7 @@ export async function sendDebitorsChart(chatId: string, editMessageId?: number):
             gridLines: { color: 'rgba(255, 255, 255, 0.08)' }
           }],
           xAxes: [{
-            ticks: { fontColor: '#ffffff', callback: (value: any) => '₹' + Number(value).toLocaleString() },
+            ticks: { fontColor: '#ffffff', callback: `function(value) { return '₹' + Number(value).toLocaleString('en-IN'); }` },
             gridLines: { color: 'rgba(255, 255, 255, 0.08)' }
           }]
         }
@@ -1247,15 +1247,16 @@ export async function sendStockChart(chatId: string, reportType: 'godown_stock' 
               weight: 'bold',
               size: 11
             },
-            formatter: (value: any, ctx: any) => {
-              let sum = 0;
-              const dataArr = ctx.chart.data.datasets[0].data;
-              dataArr.forEach((val: number) => { sum += val; });
+            formatter: `function(value, ctx) {
+              var sum = 0;
+              var dataArr = ctx.chart.data.datasets[0].data;
+              for (var i = 0; i < dataArr.length; i++) {
+                sum += dataArr[i];
+              }
               if (sum === 0) return '';
-              const percentage = (value * 100) / sum;
-              // Only display label if it represents 5% or more to prevent overlap
+              var percentage = (value * 100) / sum;
               return percentage >= 5 ? percentage.toFixed(0) + '%' : '';
-            }
+            }`
           }
         }
       }
