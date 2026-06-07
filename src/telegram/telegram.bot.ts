@@ -5,7 +5,7 @@ import { telegramClient } from './telegram.client.js';
 import { formatCronExpression } from '../utils/cron.js';
 import { getSystemSetting } from '../db/db.client.js';
 import { formatTimestampToDual, formatBotError } from './bot.utils.js';
-import { getMainMenuKeyboard } from './bot.keyboards.js';
+import { getMainMenuKeyboard, refreshActiveFileTypesCache } from './bot.keyboards.js';
 import { handleCommand } from './bot.commands.js';
 import { handleCallbackData } from './bot.callbacks.js';
 import { handleAiQuery } from './bot.ai.js';
@@ -47,6 +47,7 @@ export class TelegramBot {
   private offset: number = 0;
   private polling: boolean = false;
   private authorizedChatIds: string[];
+  private cacheRefreshInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     const token = config.TELEGRAM_BOT_TOKEN;
@@ -81,16 +82,29 @@ export class TelegramBot {
       logger.error({ err }, 'Critical error in Telegram Bot loop initiation');
     });
 
-    // Send startup online notification to all authorized users
-    const startupMsg =
-      `🟢 *${config.BUSINESS_NAME} AI — Accounting Service Online*\n\n` +
-      `🤖 *AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\` (${config.AI_MODEL})\n` +
-      `📅 *Auto-Sync Schedule*: \`${formatCronExpression(config.CRON_SCHEDULE)}\`\n` +
-      `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n\n` +
-      `_Tap any button below to get started!_`;
-    telegramClient.sendMessage(startupMsg, 'Markdown', getMainMenuKeyboard()).catch((err) => {
-      logger.warn({ err }, 'Failed to send startup notification to Telegram');
-    });
+    // Populate active files cache and start polling interval
+    refreshActiveFileTypesCache()
+      .then(() => {
+        // Send startup online notification to all authorized users
+        const startupMsg =
+          `🟢 *${config.BUSINESS_NAME} AI — Accounting Service Online*\n\n` +
+          `🤖 *AI Engine*: \`${config.AI_PROVIDER.toUpperCase()}\` (${config.AI_MODEL})\n` +
+          `📅 *Auto-Sync Schedule*: \`${formatCronExpression(config.CRON_SCHEDULE)}\`\n` +
+          `👥 *Authorized Users*: ${this.authorizedChatIds.length}\n\n` +
+          `_Tap any button below to get started!_`;
+        telegramClient.sendMessage(startupMsg, 'Markdown', getMainMenuKeyboard()).catch((err) => {
+          logger.warn({ err }, 'Failed to send startup notification to Telegram');
+        });
+      })
+      .catch((err) => {
+        logger.error({ err }, 'Failed to initialize bot active file types cache on startup');
+      });
+
+    this.cacheRefreshInterval = setInterval(() => {
+      refreshActiveFileTypesCache().catch((err) => {
+        logger.error({ err }, 'Error in periodic active files cache refresh');
+      });
+    }, 10000);
   }
 
   /**
@@ -98,6 +112,10 @@ export class TelegramBot {
    */
   stop(): void {
     this.polling = false;
+    if (this.cacheRefreshInterval) {
+      clearInterval(this.cacheRefreshInterval);
+      this.cacheRefreshInterval = null;
+    }
     logger.info('[Telegram Bot] Interactive bot listener loop stopped.');
   }
 

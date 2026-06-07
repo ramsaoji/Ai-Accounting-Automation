@@ -59,6 +59,14 @@ export async function handleCallbackData(data: string, chatId: string, messageId
     await sendCounterStockTopMovers(chatId, messageId);
   } else if (data === 'counter_stock_inflows') {
     await sendCounterStockInflows(chatId, messageId);
+  } else if (data === 'sales_chart') {
+    await sendSalesChart(chatId);
+  } else if (data === 'debitors_chart') {
+    await sendDebitorsChart(chatId);
+  } else if (data === 'godown_stock_chart') {
+    await sendStockChart(chatId, 'godown_stock');
+  } else if (data === 'counter_stock_chart') {
+    await sendStockChart(chatId, 'counter_stock');
   }
 }
 
@@ -73,6 +81,9 @@ export async function sendSalesSummaryOptions(chatId: string, editMessageId?: nu
       ],
       [
         { text: "📊 Master Cumulative Summary", callback_data: "sales_master" }
+      ],
+      [
+        { text: "📈 View Cashflow Trend Chart", callback_data: "sales_chart" }
       ],
       [
         { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
@@ -116,17 +127,20 @@ export async function sendTodaySales(chatId: string): Promise<void> {
     const net = inflow - outflow;
     const statusLabel = net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
-    const summaryText = `📅 *${config.BUSINESS_NAME} - Daily Sales Summary*\n` +
-       `📆 *Date*: *${formattedDate}*\n\n` +
-       `• 🍷 *Liquor Counter*: ₹${Math.round(latestDay.liquor || 0).toLocaleString()}\n` +
-       `• 🍲 *Food Counter*: ₹${Math.round(latestDay.food || 0).toLocaleString()}\n` +
-       `• 📥 *Credit Recovery (Udhari Jama)*: ₹${Math.round(latestDay.creditRecovery || 0).toLocaleString()}\n` +
-       `• 🛠️ *Daily Expenses*: ₹${Math.round(latestDay.expenses || 0).toLocaleString()}\n` +
-       `• 📤 *Credit Extended (Udhari)*: ₹${Math.round(latestDay.creditExtended || 0).toLocaleString()}\n` +
+    const summaryText = `📅 *${config.BUSINESS_NAME} — Daily Sales Report*\n` +
+       `📆 *Reconciled Date*: \`${formattedDate}\`\n\n` +
+       `🔹 *Revenue Registers*\n` +
+       `• 🍷 Liquor Counter:      \`₹${Math.round(latestDay.liquor || 0).toLocaleString('en-IN')}\`\n` +
+       `• 🍲 Food Counter:        \`₹${Math.round(latestDay.food || 0).toLocaleString('en-IN')}\`\n` +
+       `• 📥 Credit Recovery:     \`₹${Math.round(latestDay.creditRecovery || 0).toLocaleString('en-IN')}\`\n\n` +
+       `🔹 *Expense & Credit*\n` +
+       `• 🛠️ Daily Expenses:      \`₹${Math.round(latestDay.expenses || 0).toLocaleString('en-IN')}\`\n` +
+       `• 📤 Credit Extended:     \`₹${Math.round(latestDay.creditExtended || 0).toLocaleString('en-IN')}\`\n` +
        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-       `• 📥 *Total Inflow*: ₹${Math.round(inflow).toLocaleString()}\n` +
-       `• 📤 *Total Outflow*: ₹${Math.round(outflow).toLocaleString()}\n` +
-       `• 💵 *Net Balance*: *₹${Math.round(net).toLocaleString()}* (${statusLabel})\n\n` +
+       `• 📥 *Total Inflow*:       \`₹${Math.round(inflow).toLocaleString('en-IN')}\`\n` +
+       `• 📤 *Total Outflow*:      \`₹${Math.round(outflow).toLocaleString('en-IN')}\`\n` +
+       `• 💵 *Net Cash Balance*:   *\`₹${Math.round(net).toLocaleString('en-IN')}\`* (${statusLabel})\n` +
+       `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
        `💡 _Note: This represents the latest fully reconciled business day on record._`;
 
     await telegramClient.sendMessage(summaryText, 'Markdown', getMainMenuKeyboard(), chatId);
@@ -328,17 +342,20 @@ export async function sendSpecificMonthSales(chatId: string, targetMonth: string
     const net = inflows - outflows;
     const statusLabel = net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
-    const summaryText = `📅 *${config.BUSINESS_NAME} - ${mData.sheetName} Sales Summary*\n\n` +
-      `• 🍷 *Liquor Sales*: ₹${Math.round(mData.liquor || 0).toLocaleString()}\n` +
-      `• 🍲 *Food Sales*: ₹${Math.round(mData.food || 0).toLocaleString()}\n` +
-      `• 📥 *Credit Recovery (Udhari Jama)*: ₹${Math.round(mData.creditRecovery || 0).toLocaleString()}\n` +
-      `• 🛠️ *Operating Expenses*: ₹${Math.round(mData.expenses || 0).toLocaleString()}\n` +
-      `• 📤 *Credit Extended (Udhari)*: ₹${Math.round(mData.creditExtended || 0).toLocaleString()}\n` +
+    const summaryText = `📅 *${config.BUSINESS_NAME} — ${mData.sheetName} Sales Summary*\n\n` +
+      `🔹 *Revenue Registers*\n` +
+      `• 🍷 Liquor Sales:        \`₹${Math.round(mData.liquor || 0).toLocaleString('en-IN')}\`\n` +
+      `• 🍲 Food Sales:          \`₹${Math.round(mData.food || 0).toLocaleString('en-IN')}\`\n` +
+      `• 📥 Credit Recovery:     \`₹${Math.round(mData.creditRecovery || 0).toLocaleString('en-IN')}\`\n\n` +
+      `🔹 *Expense & Credit*\n` +
+      `• 🛠️ Operating Expenses:  \`₹${Math.round(mData.expenses || 0).toLocaleString('en-IN')}\`\n` +
+      `• 📤 Credit Extended:     \`₹${Math.round(mData.creditExtended || 0).toLocaleString('en-IN')}\`\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `• 📥 *Total Inflow*: ₹${Math.round(inflows || 0).toLocaleString()}\n` +
-      `• 📤 *Total Outflow*: ₹${Math.round(outflows || 0).toLocaleString()}\n` +
-      `• 💵 *Net Cashflow*: *₹${Math.round(net || 0).toLocaleString()}* (${statusLabel})\n\n` +
-      `💬 _Tip: Tap 'Select Another Month' to compare different periods!_`;
+      `• 📥 *Total Inflow*:       \`₹${Math.round(inflows || 0).toLocaleString('en-IN')}\`\n` +
+      `• 📤 *Total Outflow*:      \`₹${Math.round(outflows || 0).toLocaleString('en-IN')}\`\n` +
+      `• 💵 *Net Cashflow*:       *\`₹${Math.round(net || 0).toLocaleString('en-IN')}\`* (${statusLabel})\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `💬 _Tip: Select another month below to compare periods!_`;
 
     const match = mData.sheetName.match(/\b(20\d{2})\b/);
     const year = match ? parseInt(match[1], 10) : 0;
@@ -382,15 +399,16 @@ export async function sendSalesSummary(chatId: string, editMessageId?: number): 
   }
 
   try {
-    const summaryText = `📊 *${config.BUSINESS_NAME} - Daily Sales Summary*\n` +
-      `📅 *Audited Months*: ${data.totalMonths ?? data.months?.length ?? 0} months (${data.totalTransactions} transactions)\n` +
+    const summaryText = `📊 *${config.BUSINESS_NAME} — Master Sales Performance*\n` +
+      `📅 *Audited Scope*: \`${data.totalMonths ?? data.months?.length ?? 0} months\` (${data.totalTransactions.toLocaleString()} transactions)\n` +
       `🕒 *Last Ingested*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
-      `*Key Financial Metrics:*\n` +
-      `• 🍷 *Liquor Sales*: ₹${Math.round(data.masterTotals?.liquorSales || 0).toLocaleString()} (${data.benchmarks?.liquorPercentage || 0}% of sales)\n` +
-      `• 🍲 *Food Sales*: ₹${Math.round(data.masterTotals?.foodSales || 0).toLocaleString()} (${data.benchmarks?.foodPercentage || 0}% of sales)\n` +
-      `• 💵 *Net Cashflow*: ₹${Math.round(data.masterTotals?.netCashflow || 0).toLocaleString()} (${data.masterTotals?.surplusStatus || 'N/A'})\n` +
-      `• 🔄 *Credit Recovery Rate*: ${data.benchmarks?.creditRecoveryRate || 0}%\n` +
-      `• 🌟 *Best Month*: ${data.benchmarks?.bestRevenueMonth} (₹${Math.round(data.benchmarks?.bestRevenueValue || 0).toLocaleString()})\n\n` +
+      `🔹 *Financial Metrics*\n` +
+      `• 🍷 Liquor Total:     \`₹${Math.round(data.masterTotals?.liquorSales || 0).toLocaleString('en-IN')}\` (${data.benchmarks?.liquorPercentage || 0}% share)\n` +
+      `• 🍲 Food Total:       \`₹${Math.round(data.masterTotals?.foodSales || 0).toLocaleString('en-IN')}\` (${data.benchmarks?.foodPercentage || 0}% share)\n` +
+      `• 💵 Net Cashflow:      \`₹${Math.round(data.masterTotals?.netCashflow || 0).toLocaleString('en-IN')}\` (${data.masterTotals?.surplusStatus || 'N/A'})\n` +
+      `• 🔄 Recovery Rate:     \`${data.benchmarks?.creditRecoveryRate || 0}%\` collection\n` +
+      `• 🌟 Peak Performance:  \`${data.benchmarks?.bestRevenueMonth}\` (\`₹${Math.round(data.benchmarks?.bestRevenueValue || 0).toLocaleString('en-IN')}\`)\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
       `💬 _Tip: Ask me 'Compare sales across months' or 'Explain cashflow surplus' for an AI breakdown!_`;
 
     const inlineKeyboard = {
@@ -426,6 +444,9 @@ export async function sendDebitorsSummary(chatId: string, editMessageId?: number
         { text: "🚨 High Risk Accounts (>₹20k)", callback_data: "debitors_high_risk" }
       ],
       [
+        { text: "📈 View Debits Bar Chart", callback_data: "debitors_chart" }
+      ],
+      [
         { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
       ]
     ]
@@ -455,13 +476,15 @@ export async function sendDebitorsMetrics(chatId: string, editMessageId?: number
 
   try {
     const agg = data.aggregates || {};
-    const metricsText = `📊 *${config.BUSINESS_NAME} - Credit & Collection Metrics*\n` +
+    const metricsText = `📊 *${config.BUSINESS_NAME} — Credit & Collection Metrics*\n` +
       `🕒 *Last Ingested*: \`${formatTimestampToDual(data.timestamp || data.runTimestamp)}\`\n\n` +
-      `• 📖 *Active Credit Accounts*: ${agg.activeDebitorsCount || 0} customers\n` +
-      `• 📉 *Total Credit Extended*: ₹${Math.round(agg.totalDebitSum || 0).toLocaleString()}\n` +
-      `• 📈 *Total Credit Recovered*: ₹${Math.round(agg.totalCreditSum || 0).toLocaleString()}\n` +
-      `• 💰 *Net Balance Outstanding*: *₹${Math.round(agg.totalPendingSum || 0).toLocaleString()}*\n` +
-      `• ✅ *Collection Success Rate*: *${agg.collectionSuccessRate || 0}%*\n\n` +
+      `🔹 *A/R Ledger Summaries*\n` +
+      `• 📖 Active Debtors:      \`${agg.activeDebitorsCount || 0} accounts\`\n` +
+      `• 📈 Total Debits Issued:  \`₹${Math.round(agg.totalDebitSum || 0).toLocaleString('en-IN')}\`\n` +
+      `• 📥 Total Recovered:     \`₹${Math.round(agg.totalCreditSum || 0).toLocaleString('en-IN')}\`\n` +
+      `• 💰 Outstanding Balance:  *\`₹${Math.round(agg.totalPendingSum || 0).toLocaleString('en-IN')}\`*\n` +
+      `• ✅ Collection Success:   *\`${agg.collectionSuccessRate || 0}%\`*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
       `💡 _Collection rate measures the percentage of total credit extended that has been successfully recovered._`;
 
     const inlineKeyboard = {
@@ -499,13 +522,14 @@ export async function sendDebitorsTop5(chatId: string, editMessageId?: number): 
 
   try {
     const top = data.topDebitors || [];
-    let text = `🔥 *${config.BUSINESS_NAME} - Top 5 Outstanding Customer Debits*\n\n`;
+    let text = `🔥 *${config.BUSINESS_NAME} — Top Outstanding Customer Debits*\n\n`;
 
     if (top.length > 0) {
-       top.slice(0, 5).forEach((d: { name: string; pending?: number; pendingBalance?: number }, i: number) => {
+       top.slice(0, 10).forEach((d: { name: string; pending?: number; pendingBalance?: number }, i: number) => {
          const pendingVal = d.pending ?? d.pendingBalance ?? 0;
-         const riskLevel = pendingVal > 20000 ? 'High Risk 🚨' : pendingVal > 5000 ? 'Medium Alert ⚠️' : 'Healthy ✅';
-         text += `${i + 1}. *${d.name}*: *₹${Math.round(pendingVal).toLocaleString()}* (Risk: _${riskLevel}_)\n`;
+         const riskLevel = pendingVal > 20000 ? '🚨 High' : pendingVal > 5000 ? '⚠️ Medium' : '✅ Low';
+         text += `\`${i + 1}.\` *${d.name}*\n` +
+                 `   • Balance: \`₹${Math.round(pendingVal).toLocaleString('en-IN')}\` • Risk: _${riskLevel}_\n`;
        });
     } else {
       text += `_No pending debtor accounts found!_\n`;
@@ -553,12 +577,12 @@ export async function sendDebitorsHighRisk(chatId: string, editMessageId?: numbe
       return pendingVal > 20000;
     });
 
-    let text = `🚨 *${config.BUSINESS_NAME} - High Risk Customer Debits (>₹20,000)*\n\n`;
+    let text = `🚨 *${config.BUSINESS_NAME} — High Risk Customer Debits (>₹20,000)*\n\n`;
 
     if (highRisk.length > 0) {
        highRisk.forEach((d: { name: string; pending?: number; pendingBalance?: number }, i: number) => {
          const pendingVal = d.pending ?? d.pendingBalance ?? 0;
-         text += `${i + 1}. *${d.name}*: *₹${Math.round(pendingVal).toLocaleString()}*\n`;
+         text += `\`${i + 1}.\` *${d.name}* — \`₹${Math.round(pendingVal).toLocaleString('en-IN')}\`\n`;
        });
     } else {
       text += `_No high risk debtor accounts found with outstanding balances exceeding ₹20,000!_\n`;
@@ -617,17 +641,17 @@ export async function sendStockSummary(chatId: string, reportType: 'godown_stock
       else if (catLower.includes('mild beer')) catEmoji = '🍻';
       else if (catLower.includes('wine')) catEmoji = '🥂';
 
-      const closing = `₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}`;
-      const selling = `₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}`;
-      const count = c.itemsCount || 0;
+      const closing = `\`₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}\``;
+      const count = `\`${c.itemsCount || 0} items\``;
       
-      stockSummary += `• ${catEmoji} *${c.category || 'General'}*: ${closing} (Retail: ${selling}) • _${count} items_\n`;
+      stockSummary += `• ${catEmoji} *${c.category || 'General'}*: ${closing} • ${count}\n`;
     });
 
-    const summaryText = `${emoji} *${config.BUSINESS_NAME} - ${titleLabel} Summary*\n\n` +
-      `*Inventory Valuation:*\n` +
-      `• ${emoji} *Valuation (Cost)*: *₹${Math.round(agg.totalClosingValue || 0).toLocaleString('en-IN')}* (Retail: ₹${Math.round(agg.totalSellingValue || 0).toLocaleString('en-IN')})\n\n` +
-      `*Category Breakdowns:*\n` +
+    const summaryText = `${emoji} *${config.BUSINESS_NAME} — ${titleLabel} Summary*\n\n` +
+      `*Inventory Valuation (Total):*\n` +
+      `• Valuation (Cost):   \`₹${Math.round(agg.totalClosingValue || 0).toLocaleString('en-IN')}\`\n` +
+      `• Valuation (Retail): \`₹${Math.round(agg.totalSellingValue || 0).toLocaleString('en-IN')}\`\n\n` +
+      `*Category Valuations (Cost):*\n` +
       stockSummary + `\n` +
       `📊 *${titleLabel} Interactive Panel*\n` +
       `Select an option below to view deeper stock insights, top-moving items, inflow logs, and active alerts:`;
@@ -644,6 +668,9 @@ export async function sendStockSummary(chatId: string, reportType: 'godown_stock
         [
           { text: "🔥 Top Moving Items", callback_data: `${reportType}_top_movers` },
           { text: "📥 Recent Inflows", callback_data: `${reportType}_inflows` }
+        ],
+        [
+          { text: "📈 View Valuation Pie Chart", callback_data: `${reportType}_chart` }
         ],
         [
           { text: "📂 View Google Drive Folder", url: `https://drive.google.com/drive/folders/${config.GOOGLE_DRIVE_FOLDER_ID}` }
@@ -692,15 +719,15 @@ export async function sendStockMetrics(chatId: string, reportType: 'godown_stock
     const agg = data.aggregates || {};
     const stock = agg[locKey] || {};
 
-    const metricsText = `📊 *${config.BUSINESS_NAME} - ${titleLabel} Valuation Metrics*\n` +
+    const metricsText = `📊 *${config.BUSINESS_NAME} — ${titleLabel} Valuation Metrics*\n` +
       `🕒 *Last Reconciled*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
-      `${emoji} *${titleLabel} Stock Details*:\n` +
-      `• Products carrying stock: ${stock.totalItemsCount || 0} lines\n` +
-      `• Valuation (Cost): *₹${Math.round(stock.totalClosingValue || 0).toLocaleString('en-IN')}*\n` +
-      `• Valuation (Retail): *₹${Math.round(stock.totalSellingValue || 0).toLocaleString('en-IN')}*\n` +
-      `• Volume: *${Math.round(stock.totalVolumeLiters || 0).toLocaleString('en-IN')} Liters*\n` +
-      `• ${isCounter ? 'Sales (Stock-Out)' : 'Dispatched (Stock-Out)'}: *${stock.stockOutCount || 0} units*\n` +
-      `• Restocked (Stock-In): *${stock.stockInCount || 0} units*\n\n` +
+      `${emoji} *${titleLabel} Stock Details*\n` +
+      `• Active Products:        \`${stock.totalItemsCount || 0} lines\`\n` +
+      `• Valuation (Cost):       \`₹${Math.round(stock.totalClosingValue || 0).toLocaleString('en-IN')}\`\n` +
+      `• Valuation (Retail):     \`₹${Math.round(stock.totalSellingValue || 0).toLocaleString('en-IN')}\`\n` +
+      `• Volume in Stock:        \`${Math.round(stock.totalVolumeLiters || 0).toLocaleString('en-IN')} Liters\`\n` +
+      `• Total Stock-Out:        \`${stock.stockOutCount || 0} units\`\n` +
+      `• Total Stock-In:         \`${stock.stockInCount || 0} units\`\n\n` +
       `💡 _Valuation at Cost is computed using purchase prices. Valuation at Retail is computed using selling/menu prices._`;
 
     const inlineKeyboard = {
@@ -741,15 +768,15 @@ export async function sendStockCategories(chatId: string, reportType: 'godown_st
 
   try {
     const catAggs = data.categoryAggregates || [];
-    let text = `🗂️ *${config.BUSINESS_NAME} - ${titleLabel} Category Breakdown*\n\n`;
+    let text = `🗂️ *${config.BUSINESS_NAME} — ${titleLabel} Categories*\n\n`;
 
     if (catAggs.length > 0) {
       catAggs.forEach((c: any) => {
-        text += `• *${c.category || 'General'}*:\n` +
-          `  - Products: ${c.itemsCount || 0} items\n` +
-          `  - Valuation (Cost): ₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}\n` +
-          `  - Valuation (Retail): ₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}\n` +
-          `  - Volume: ${Math.round(c.totalVolumeLiters || 0).toLocaleString('en-IN')} L\n\n`;
+        text += `• *${c.category || 'General'}*\n` +
+          `  - Products:   \`${c.itemsCount || 0} items\`\n` +
+          `  - Cost Value: \`₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}\`\n` +
+          `  - Menu Value: \`₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}\`\n` +
+          `  - Liters Vol: \`${Math.round(c.totalVolumeLiters || 0).toLocaleString('en-IN')} L\`\n\n`;
       });
     } else {
       text += `_No category metrics found!_\n`;
@@ -793,12 +820,12 @@ export async function sendStockAlerts(chatId: string, reportType: 'godown_stock'
 
   try {
     const alerts = data.alerts || [];
-    let text = `🚨 *${config.BUSINESS_NAME} - ${titleLabel} Low Stock & Audit Alerts*\n\n`;
+    let text = `🚨 *${config.BUSINESS_NAME} — ${titleLabel} Compliance Alerts*\n\n`;
 
     if (alerts.length > 0) {
       alerts.slice(0, 10).forEach((a: any, i: number) => {
         const severityLabel = a.severity === 'high' || a.severity === 'critical' ? '🔴' : '⚠️';
-        text += `${i + 1}. ${severityLabel} *${a.ruleName || 'Audit Issue'}*:\n` +
+        text += `\`${i + 1}.\` ${severityLabel} *${a.ruleName || 'Audit Issue'}*\n` +
           `   _${a.message || 'Discrepancy detected'}_ \n\n`;
       });
       if (alerts.length > 10) {
@@ -851,7 +878,7 @@ export async function sendStockTopMovers(chatId: string, reportType: 'godown_sto
       .sort((a: any, b: any) => Number(b.stockOut || 0) - Number(a.stockOut || 0))
       .slice(0, 10);
 
-    let text = `🔥 *${config.BUSINESS_NAME} - ${titleLabel} Top 10 Moving Items (Stock-Out)*\n\n`;
+    let text = `🔥 *${config.BUSINESS_NAME} — ${titleLabel} Top Movers (Stock-Out)*\n\n`;
 
     if (topMovers.length > 0) {
       topMovers.forEach((item: any, i: number) => {
@@ -861,10 +888,10 @@ export async function sendStockTopMovers(chatId: string, reportType: 'godown_sto
         const sizeLabel = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
         const unitLabel = isLoose ? 'ml' : 'units';
         const pkgText = isLoose ? '' : ` (${item.packaging || 'bottle'})`;
-        text += `${i + 1}. *${item.itemName}* (${sizeLabel}):\n` +
-          `   • Outflow: *${qty} ${unitLabel}*${pkgText}\n` +
-          `   • Retail Value: *₹${Math.round(retailValue).toLocaleString('en-IN')}*\n` +
-          `   • Current Stock: *${item.closingStock} ${unitLabel} left*\n\n`;
+        text += `\`${i + 1}.\` *${item.itemName}* (${sizeLabel})\n` +
+          `   • Outflow: \`${qty} ${unitLabel}\`${pkgText}\n` +
+          `   • Retail:  \`₹${Math.round(retailValue).toLocaleString('en-IN')}\`\n` +
+          `   • Closing: \`${item.closingStock} ${unitLabel} left\`\n\n`;
       });
     } else {
       text += `_No items have been registered as stock-out in the current ledger._\n`;
@@ -913,7 +940,7 @@ export async function sendStockInflows(chatId: string, reportType: 'godown_stock
       .sort((a: any, b: any) => Number(b.stockIn || 0) - Number(a.stockIn || 0))
       .slice(0, 10);
 
-    let text = `📥 *${config.BUSINESS_NAME} - ${titleLabel} Top 10 Inflow / Restocked Items*\n\n`;
+    let text = `📥 *${config.BUSINESS_NAME} — ${titleLabel} Top Inflows (Restocked)*\n\n`;
 
     if (topInflows.length > 0) {
       topInflows.forEach((item: any, i: number) => {
@@ -923,10 +950,10 @@ export async function sendStockInflows(chatId: string, reportType: 'godown_stock
         const sizeLabel = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
         const unitLabel = isLoose ? 'ml' : 'units';
         const pkgText = isLoose ? '' : ` (${item.packaging || 'bottle'})`;
-        text += `${i + 1}. *${item.itemName}* (${sizeLabel}):\n` +
-          `   • Restocked: *${qty} ${unitLabel}*${pkgText}\n` +
-          `   • Cost Value: *₹${Math.round(costValue).toLocaleString('en-IN')}*\n` +
-          `   • Current Stock: *${item.closingStock} ${unitLabel} total*\n\n`;
+        text += `\`${i + 1}.\` *${item.itemName}* (${sizeLabel})\n` +
+          `   • Restocked: \`${qty} ${unitLabel}\`${pkgText}\n` +
+          `   • Cost:      \`₹${Math.round(costValue).toLocaleString('en-IN')}\`\n` +
+          `   • Closing:   \`${item.closingStock} ${unitLabel} total\`\n\n`;
       });
     } else {
       text += `_No items have been registered as stock-in in the current ledger._\n`;
@@ -944,6 +971,268 @@ export async function sendStockInflows(chatId: string, reportType: 'godown_stock
   } catch (err: any) {
     await telegramClient.sendMessage(
       `❌ *Failed to Read ${titleLabel} Inflows:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendSalesChart(chatId: string, editMessageId?: number): Promise<void> {
+  const data = await loadReport('sales');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Sales Summary Available*\n\nPlease trigger a sync first using /sync.`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const months = [...(data.months || [])].sort((a, b) => getMonthYearDate(a.sheetName).getTime() - getMonthYearDate(b.sheetName).getTime());
+    
+    if (months.length === 0) {
+      throw new Error("No monthly data available for cashflow visualization.");
+    }
+
+    // Build Chart.js v2 configuration
+    const chartConfig = {
+      type: 'bar',
+      data: {
+        labels: months.map(m => m.sheetName),
+        datasets: [
+          {
+            label: 'Inflows (₹)',
+            backgroundColor: 'rgba(16, 185, 129, 0.55)', // emerald-500
+            borderColor: 'rgb(16, 185, 129)',
+            borderWidth: 1.5,
+            data: months.map(m => Math.round((m.liquor || 0) + (m.food || 0) + (m.creditRecovery || 0))),
+          },
+          {
+            label: 'Net Cashflow (₹)',
+            type: 'line',
+            borderColor: 'rgb(99, 102, 241)', // indigo-500
+            backgroundColor: 'transparent',
+            borderWidth: 3,
+            fill: false,
+            data: months.map(m => Math.round((m.liquor || 0) + (m.food || 0) + (m.creditRecovery || 0) - ((m.expenses || 0) + (m.creditExtended || 0)))),
+          }
+        ]
+      },
+      options: {
+        title: {
+          display: true,
+          text: 'Monthly Inflows vs Net Surplus',
+          fontColor: '#ffffff',
+          fontSize: 16
+        },
+        legend: {
+          labels: { fontColor: '#ffffff' }
+        },
+        scales: {
+          yAxes: [{
+            ticks: { fontColor: '#ffffff', callback: (value: any) => '₹' + Number(value).toLocaleString() },
+            gridLines: { color: 'rgba(255, 255, 255, 0.08)' }
+          }],
+          xAxes: [{
+            ticks: { fontColor: '#ffffff' },
+            gridLines: { color: 'rgba(255, 255, 255, 0.08)' }
+          }]
+        }
+      }
+    };
+
+    const configStr = encodeURIComponent(JSON.stringify(chartConfig));
+    const quickchartUrl = `https://quickchart.io/chart?c=${configStr}&bkg=%230c0c0e&w=800&h=450`;
+
+    const caption = `📊 *${config.BUSINESS_NAME} — Cashflow Trend Chart*\n\n` +
+      `• Blue Line represents the *Net Cashflow (Surplus/Deficit)*.\n` +
+      `• Green Bars represent the *Total Monthly Inflows* (Revenue + Recoveries).\n\n` +
+      `🕒 _Generated from latest spreadsheet sync._`;
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [{ text: '◀️ Back to Options', callback_data: 'sales_back' }]
+      ]
+    };
+
+    await telegramClient.sendPhoto(quickchartUrl, caption, 'Markdown', inlineKeyboard, chatId);
+  } catch (err: any) {
+    logger.error({ err }, 'Failed to send sales chart');
+    await telegramClient.sendMessage(
+      `❌ *Failed to generate Cashflow Chart:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendDebitorsChart(chatId: string, editMessageId?: number): Promise<void> {
+  const data = await loadReport('debitors');
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No Debitors Summary Available*\n\nPlease trigger a sync first using /sync.`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const top = [...(data.topDebitors || [])].slice(0, 5);
+    if (top.length === 0) {
+      throw new Error("No pending debtor balances available for visualization.");
+    }
+
+    const chartConfig = {
+      type: 'horizontalBar',
+      data: {
+        labels: top.map(d => d.name),
+        datasets: [
+          {
+            label: 'Outstanding Dues (₹)',
+            backgroundColor: top.map(d => d.pending > 20000 ? 'rgba(239, 68, 68, 0.65)' : 'rgba(245, 158, 11, 0.65)'), // rose vs amber
+            borderColor: top.map(d => d.pending > 20000 ? 'rgb(239, 68, 68)' : 'rgb(245, 158, 11)'),
+            borderWidth: 1.5,
+            data: top.map(d => Math.round(d.pending || 0)),
+          }
+        ]
+      },
+      options: {
+        title: {
+          display: true,
+          text: 'Top Outstanding Customer Balances',
+          fontColor: '#ffffff',
+          fontSize: 16
+        },
+        legend: { display: false },
+        scales: {
+          yAxes: [{
+            ticks: { fontColor: '#ffffff' },
+            gridLines: { color: 'rgba(255, 255, 255, 0.08)' }
+          }],
+          xAxes: [{
+            ticks: { fontColor: '#ffffff', callback: (value: any) => '₹' + Number(value).toLocaleString() },
+            gridLines: { color: 'rgba(255, 255, 255, 0.08)' }
+          }]
+        }
+      }
+    };
+
+    const configStr = encodeURIComponent(JSON.stringify(chartConfig));
+    const quickchartUrl = `https://quickchart.io/chart?c=${configStr}&bkg=%230c0c0e&w=800&h=450`;
+
+    const caption = `👥 *${config.BUSINESS_NAME} — A/R Outstanding Chart*\n\n` +
+      `• Red Bars represent *High Risk Accounts* (>₹20,000).\n` +
+      `• Orange Bars represent *Medium Risk Accounts*.\n\n` +
+      `💬 _Tip: Direct collection effort immediately to these accounts to recover cashflow._`;
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [{ text: '◀️ Back to Debitors Menu', callback_data: 'debitors_menu' }]
+      ]
+    };
+
+    await telegramClient.sendPhoto(quickchartUrl, caption, 'Markdown', inlineKeyboard, chatId);
+  } catch (err: any) {
+    logger.error({ err }, 'Failed to send debitors chart');
+    await telegramClient.sendMessage(
+      `❌ *Failed to generate A/R Chart:*\n\n\`${err.message}\``,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+  }
+}
+
+export async function sendStockChart(chatId: string, reportType: 'godown_stock' | 'counter_stock', editMessageId?: number): Promise<void> {
+  const data = await loadReport(reportType);
+  const isCounter = reportType === 'counter_stock';
+  const titleLabel = isCounter ? 'Counter Stock' : 'Godown Stock';
+
+  if (!data) {
+    await telegramClient.sendMessage(
+      `⚠️ *No ${titleLabel} Summary Available*\n\nPlease trigger a sync first using /sync.`,
+      'Markdown',
+      getMainMenuKeyboard(),
+      chatId,
+      editMessageId
+    );
+    return;
+  }
+
+  try {
+    const catAggs = data.categoryAggregates || [];
+    if (catAggs.length === 0) {
+      throw new Error(`No category aggregates available for ${titleLabel} visualization.`);
+    }
+
+    const chartConfig = {
+      type: 'doughnut',
+      data: {
+        labels: catAggs.map((c: any) => c.category || 'General'),
+        datasets: [{
+          data: catAggs.map((c: any) => Math.round(c.closingValue || 0)),
+          backgroundColor: [
+            'rgba(99, 102, 241, 0.7)', // Indigo
+            'rgba(16, 185, 129, 0.7)', // Emerald
+            'rgba(245, 158, 11, 0.7)', // Amber
+            'rgba(239, 68, 68, 0.7)',  // Rose
+            'rgba(6, 182, 212, 0.7)',  // Cyan
+            'rgba(168, 85, 247, 0.7)'  // Purple
+          ],
+          borderColor: [
+            'rgb(99, 102, 241)',
+            'rgb(16, 185, 129)',
+            'rgb(245, 158, 11)',
+            'rgb(239, 68, 68)',
+            'rgb(6, 182, 212)',
+            'rgb(168, 85, 247)'
+          ],
+          borderWidth: 1.5
+        }]
+      },
+      options: {
+        title: {
+          display: true,
+          text: `${titleLabel} Valuation by Category (Cost)`,
+          fontColor: '#ffffff',
+          fontSize: 16
+        },
+        legend: {
+          position: 'bottom',
+          labels: { fontColor: '#ffffff', fontSize: 10 }
+        }
+      }
+    };
+
+    const configStr = encodeURIComponent(JSON.stringify(chartConfig));
+    const quickchartUrl = `https://quickchart.io/chart?c=${configStr}&bkg=%230c0c0e&w=800&h=450`;
+
+    const caption = `🏭 *${config.BUSINESS_NAME} — ${titleLabel} Category Chart*\n\n` +
+      `• Segments represent the total stock value calculated at purchase cost.\n\n` +
+      `🕒 _Generated from latest spreadsheet sync._`;
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [{ text: `◀️ Back to ${titleLabel} Menu`, callback_data: `${reportType}_menu` }]
+      ]
+    };
+
+    await telegramClient.sendPhoto(quickchartUrl, caption, 'Markdown', inlineKeyboard, chatId);
+  } catch (err: any) {
+    logger.error({ err, reportType }, `Failed to send ${reportType} chart`);
+    await telegramClient.sendMessage(
+      `❌ *Failed to generate ${titleLabel} Chart:*\n\n\`${err.message}\``,
       'Markdown',
       getMainMenuKeyboard(),
       chatId,

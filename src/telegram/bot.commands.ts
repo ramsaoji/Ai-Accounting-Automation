@@ -5,8 +5,16 @@ import { orchestratorService } from '../services/orchestrator.service.js';
 import { getSystemSetting } from '../db/db.client.js';
 import { formatCronExpression } from '../utils/cron.js';
 import { formatTimestampToDual } from './bot.utils.js';
-import { getMainMenuKeyboard } from './bot.keyboards.js';
-import { sendSalesSummaryOptions, sendDebitorsSummary, sendGodownStockSummary, sendCounterStockSummary } from './bot.callbacks.js';
+import { getMainMenuKeyboard, refreshActiveFileTypesCache } from './bot.keyboards.js';
+import {
+  sendSalesSummaryOptions,
+  sendDebitorsSummary,
+  sendGodownStockSummary,
+  sendCounterStockSummary,
+  sendSalesChart,
+  sendDebitorsChart,
+  sendStockChart
+} from './bot.callbacks.js';
 
 export async function handleCommand(command: string, chatId: string): Promise<void> {
   const cmdClean = command.toLowerCase();
@@ -25,6 +33,14 @@ export async function handleCommand(command: string, chatId: string): Promise<vo
     await sendGodownStockSummary(chatId);
   } else if (cmdClean === '/counterstock' || cmdClean === '/counter_stock' || cmdClean.includes('counter stock')) {
     await sendCounterStockSummary(chatId);
+  } else if (cmdClean === '/chart_sales' || cmdClean === '/chart_cashflow') {
+    await sendSalesChart(chatId);
+  } else if (cmdClean === '/chart_debitors' || cmdClean === '/chart_ageing') {
+    await sendDebitorsChart(chatId);
+  } else if (cmdClean === '/chart_godown') {
+    await sendStockChart(chatId, 'godown_stock');
+  } else if (cmdClean === '/chart_counter') {
+    await sendStockChart(chatId, 'counter_stock');
   } else {
     await telegramClient.sendMessage(
       `❓ *Unknown Command*\n\nI didn't recognize that command. Tap the keyboard buttons or type /help to see the available command panel.`,
@@ -87,6 +103,7 @@ export async function triggerSync(chatId: string): Promise<void> {
 
   try {
     const filesProcessed = await orchestratorService.runPipeline();
+    await refreshActiveFileTypesCache();
     if (filesProcessed === 0) {
       await telegramClient.sendMessage(
         `All spreadsheets are already synced and up-to-date. Skipping pipeline execution.`,
@@ -105,6 +122,7 @@ export async function triggerSync(chatId: string): Promise<void> {
       );
     }
   } catch (err: any) {
+    await refreshActiveFileTypesCache().catch(() => {});
     await telegramClient.sendMessage(
       `❌ *Pipeline Ingestion Encountered an Error:*\n\n\`${err.message}\``,
       'Markdown',

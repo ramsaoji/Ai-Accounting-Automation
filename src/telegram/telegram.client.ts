@@ -82,6 +82,70 @@ export class TelegramClient {
   }
 
   /**
+   * Sends a photo to configured Telegram chats.
+   * Supports passing a photo URL or file buffer.
+   */
+  async sendPhoto(
+    photo: string | Buffer,
+    caption?: string,
+    parseMode: 'Markdown' | 'HTML' | 'Plain' = 'Markdown',
+    replyMarkup?: Record<string, any>,
+    targetChatId?: string
+  ): Promise<{ success: boolean; messageId?: number }> {
+    const chatIds = targetChatId ? [targetChatId] : config.TELEGRAM_CHAT_ID;
+    
+    let processedCaption = caption;
+    if (caption && parseMode === 'Markdown') {
+      processedCaption = this.formatForTelegram(caption);
+    }
+
+    logger.info({ chatIds, parseMode, captionLength: caption?.length }, 'Sending photo via Telegram Client');
+
+    let allSucceeded = true;
+    let lastSentMessageId: number | undefined;
+
+    for (const chatId of chatIds) {
+      try {
+        const url = `${this.baseUrl}/sendPhoto`;
+        const payload: Record<string, any> = {
+          chat_id: chatId,
+          photo: photo,
+        };
+
+        if (processedCaption) {
+          payload.caption = processedCaption;
+        }
+
+        if (parseMode !== 'Plain') {
+          payload.parse_mode = parseMode;
+        }
+
+        if (replyMarkup) {
+          payload.reply_markup = replyMarkup;
+        }
+
+        const response = await axios.post(url, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000,
+        });
+
+        if (response.data?.ok) {
+          lastSentMessageId = response.data?.result?.message_id;
+        } else {
+          allSucceeded = false;
+        }
+      } catch (error: any) {
+        logger.error({ chatId, error: error.message }, 'Failed to send Telegram photo');
+        allSucceeded = false;
+      }
+    }
+
+    return { success: allSucceeded, messageId: lastSentMessageId };
+  }
+
+  /**
    * Sends a single chunk message via Telegram API.
    */
   private async sendSingleChunk(
