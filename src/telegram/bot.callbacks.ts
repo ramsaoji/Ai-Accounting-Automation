@@ -1255,7 +1255,17 @@ export async function sendStockChart(chatId: string, reportType: 'godown_stock' 
         },
         plugins: {
           datalabels: {
-            display: true,
+            display: `function(ctx) {
+              var value = ctx.dataset.data[ctx.dataIndex];
+              var sum = 0;
+              var dataArr = ctx.dataset.data;
+              for (var i = 0; i < dataArr.length; i++) {
+                sum += dataArr[i];
+              }
+              if (sum === 0) return false;
+              var percentage = (value * 100) / sum;
+              return percentage >= 5;
+            }`,
             color: '#ffffff',
             borderRadius: 4,
             backgroundColor: 'rgba(12, 12, 14, 0.75)',
