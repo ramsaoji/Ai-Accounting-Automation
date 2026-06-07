@@ -22,7 +22,8 @@ import {
   ChevronRight,
   AlertCircle,
   AlertTriangle,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 
 const OverviewCharts = React.lazy(() => import('./OverviewCharts'));
@@ -30,6 +31,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatINR, formatTimestamp, getSheetDate } from '@/utils/format';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 interface StockDepletionPanelProps {
   items: any[];
@@ -696,6 +699,17 @@ const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months })
   const [baseMonthName, setBaseMonthName] = useState<string>('');
   const [compareMonthName, setCompareMonthName] = useState<string>('');
 
+  const resetPeriods = () => {
+    if (availableMonths.length > 0) {
+      setBaseMonthName(availableMonths[0].sheetName);
+      if (availableMonths.length > 1) {
+        setCompareMonthName(availableMonths[1].sheetName);
+      } else {
+        setCompareMonthName(availableMonths[0].sheetName);
+      }
+    }
+  };
+
   useEffect(() => {
     if (availableMonths.length > 0) {
       setBaseMonthName(availableMonths[0].sheetName);
@@ -774,31 +788,47 @@ const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months })
         <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 p-3 bg-muted/20 border border-border/75 rounded-lg select-none">
           <div className="flex flex-col gap-1 w-full sm:w-auto">
             <label className="text-[10px] font-bold text-muted-foreground uppercase">Base Period</label>
-            <select
-              value={baseMonthName}
-              onChange={(e) => setBaseMonthName(e.target.value)}
-              className="bg-background text-foreground border border-input text-xs font-semibold px-2 py-1.5 rounded-lg w-full sm:w-48 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-primary"
-            >
-              {availableMonths.map(m => (
-                <option key={`base-${m.sheetName}`} value={m.sheetName}>{m.sheetName}</option>
-              ))}
-            </select>
+            <Select value={baseMonthName} onValueChange={(val) => setBaseMonthName(val ?? '')}>
+              <SelectTrigger className="!h-9 w-full sm:w-48 text-xs font-semibold">
+                <SelectValue placeholder="Select base period" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMonths.map(m => (
+                  <SelectItem key={`base-${m.sheetName}`} value={m.sheetName}>
+                    {m.sheetName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <ArrowRight className="size-4 text-muted-foreground hidden sm:block mt-4 shrink-0" />
 
           <div className="flex flex-col gap-1 w-full sm:w-auto">
             <label className="text-[10px] font-bold text-muted-foreground uppercase">Comparison Period</label>
-            <select
-              value={compareMonthName}
-              onChange={(e) => setCompareMonthName(e.target.value)}
-              className="bg-background text-foreground border border-input text-xs font-semibold px-2 py-1.5 rounded-lg w-full sm:w-48 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-primary"
-            >
-              {availableMonths.map(m => (
-                <option key={`compare-${m.sheetName}`} value={m.sheetName}>{m.sheetName}</option>
-              ))}
-            </select>
+            <Select value={compareMonthName} onValueChange={(val) => setCompareMonthName(val ?? '')}>
+              <SelectTrigger className="!h-9 w-full sm:w-48 text-xs font-semibold">
+                <SelectValue placeholder="Select comparison period" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMonths.map(m => (
+                  <SelectItem key={`compare-${m.sheetName}`} value={m.sheetName}>
+                    {m.sheetName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={resetPeriods}
+            className="mt-4 !h-9 text-xs font-semibold sm:ml-auto w-full sm:w-auto cursor-pointer"
+          >
+            <RotateCcw className="size-3.5" />
+            Reset
+          </Button>
         </div>
 
         {baseMonth && compareMonth && (
