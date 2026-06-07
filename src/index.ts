@@ -2,7 +2,7 @@ import { schedulerJob } from './scheduler/scheduler.job.js';
 import { config } from './config/config.js';
 import { logger } from './logger/logger.js';
 import { telegramBot } from './telegram/telegram.bot.js';
-import { initDb, initSecurityConfig, initSystemSettings, closeDb } from './db/db.client.js';
+import { initDb, initSecurityConfig, initSystemSettings, verifyConnection, closeDb } from './db/db.client.js';
 import { createFastifyApp } from './api/fastify.app.js';
 import { AiProviderFactory } from './ai/ai.factory.js';
 import type { FastifyInstance } from 'fastify';
@@ -16,13 +16,19 @@ let app: FastifyInstance;
  * requests before security credentials are loaded into the database.
  */
 async function start() {
-  // 0. Initialize database and seed security config — must complete before anything else
+  // 0. Initialize or verify database connection depending on the environment
   try {
-    await initDb();
-    await initSecurityConfig();
-    await initSystemSettings();
+    if (config.NODE_ENV === 'production') {
+      logger.info('Database connection check: production mode enabled. Skipping auto-migrations on boot...');
+      await verifyConnection();
+    } else {
+      logger.info('Database auto-migrations: development/test mode enabled. Running migrations and configuration seeding...');
+      await initDb();
+      await initSecurityConfig();
+      await initSystemSettings();
+    }
   } catch (dbErr) {
-    logger.fatal({ err: dbErr }, 'CRITICAL: Failed to initialize PostgreSQL database. The application requires PostgreSQL to be running. Exiting.');
+    logger.fatal({ err: dbErr }, 'CRITICAL: Failed to connect to or initialize PostgreSQL database. Exiting.');
     process.exit(1);
   }
 

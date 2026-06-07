@@ -694,7 +694,12 @@ export async function reEvaluateAlertsForFile(
     }
   });
 
-  reportCache.delete(fileId);
+  // Evict from cache (can be simple fileId or hyphenated composite key containing fileId)
+  for (const key of reportCache.keys()) {
+    if (key === fileId || key.split('-').includes(fileId)) {
+      reportCache.delete(key);
+    }
+  }
 }
 
 /**
@@ -1179,8 +1184,10 @@ export async function getTransactionsList(request: FastifyRequest, reply: Fastif
       return;
     }
 
-    const page = Math.max(1, parseInt(query.page || '1', 10));
-    const limit = Math.max(1, parseInt(query.limit || '10', 10));
+    const parsedPage = parseInt(query.page || '1', 10);
+    const page = isNaN(parsedPage) ? 1 : Math.max(1, parsedPage);
+    const parsedLimit = parseInt(query.limit || '10', 10);
+    const limit = isNaN(parsedLimit) ? 10 : Math.max(1, parsedLimit);
     const search = query.search || '';
     const category = query.category || '';
     const vendor = query.vendor || '';

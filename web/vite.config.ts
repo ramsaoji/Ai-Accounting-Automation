@@ -12,4 +12,18 @@ export default defineConfig({
       "@backend-types": path.resolve(__dirname, "../src/types"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("recharts") || id.includes("d3")) {
+              return "recharts";
+            }
+            return "vendor";
+          }
+        },
+      },
+    },
+  },
 })

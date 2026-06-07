@@ -3,8 +3,6 @@ import { AiProvider } from './ai.types.js';
 import { PromptInputData, buildDebitorsPrompt, buildSalesPrompt, buildGodownStockPrompt } from './ai.prompts.js';
 import { ParsingError, Transaction } from '../types/accounting.types.js';
 import { logger } from '../logger/logger.js';
-import { generateHtmlReport } from './report-template.js';
-import { generateDebitorsHtmlReport } from './debitors-template.js';
 import { config } from '../config/config.js';
 import {
   calculateDebitorMetrics,
@@ -89,7 +87,6 @@ export function extractSection(markdown: string, headerSynonyms: string[]): stri
 
 export interface GeneratedReports {
   markdownReport: string;
-  htmlReport: string;
   jsonSummary: string;
 }
 
@@ -301,24 +298,6 @@ Inventory cumulative totals for the snapshot date:
         `### 🚨 Ingestion Exceptions & Warnings\n` +
         `> * All stock registers are cleanly matching with zero alerts!\n`;
 
-      const htmlReport = `
-        <div style="font-family: sans-serif; padding: 20px; color: #fff; background: #0f172a;">
-          <h1 style="color: #e2e8f0; border-bottom: 1px solid #334155; padding-bottom: 10px;">Godown Stock Report</h1>
-          <p>File parsed: <strong>${fileName}</strong></p>
-          <p>Total items: <strong>${todaysItems.length}</strong></p>
-          <p>Total retail value: <strong>₹${Math.round(totalStockValue).toLocaleString()}</strong></p>
-          
-          <h2>AI Intelligence</h2>
-          <ul>${htmlIntelligencePoints}</ul>
-
-          <h2>Weekly Staff Meeting Checklist</h2>
-          <ul>${htmlChecklistPoints}</ul>
-
-          <h2>3-Month Outlook</h2>
-          <ul>${htmlProjectionsPoints}</ul>
-        </div>
-      `;
-
       const jsonSummary = JSON.stringify({
         fileName,
         timestamp: runTimestamp,
@@ -339,7 +318,7 @@ Inventory cumulative totals for the snapshot date:
           .filter(line => line.length > 0)
       }, null, 2);
 
-      return { markdownReport, htmlReport, jsonSummary };
+      return { markdownReport, jsonSummary };
     }
 
     // =========================================================================
@@ -457,33 +436,7 @@ Master Debitor Accounts Cumulative Totals:
         })
         .join('\n');
 
-      const htmlAlertsList = groupAlertsIntoHtml(alerts);
-      const htmlErrors = parsingErrors.slice(0, 10).map(e => `<li><strong>Row ${e.row}</strong>: ${e.error}</li>`).join('');
-
-      const htmlReport = generateDebitorsHtmlReport({
-        fileName,
-        runTimestamp,
-        totalDebitorsCount: activeDebitorsCount,
-        totalTransactionsCount: transactions.length,
-        totalDebitSum,
-        totalCreditSum,
-        totalPendingSum,
-        collectionSuccessRate,
-        averageOutstandingDues,
-        topDebtorName,
-        topDebtorValue,
-        debitorsLimit,
-        sortedDebitorsList: topDebitorsLimitList,
-        generatedSvgChart,
-        htmlDebitorRows,
-        htmlChecklistPoints,
-        htmlProjectionsPoints,
-        htmlIntelligencePoints,
-        htmlErrors,
-        allErrorsLength: parsingErrors.length,
-        htmlAlertsList,
-        aiGenerated
-      });
+      // Legacy HTML report generation removed.
 
       // Format Markdown checklist and projections
       const mdChecklistPoints = aiWeeklyChecklist
@@ -592,7 +545,7 @@ Master Debitor Accounts Cumulative Totals:
         intelligence: aiIntelligence.split('\n').map(l => cleanPromptPoint(l)).filter(l => l.length > 0),
       }, null, 2);
 
-      return { markdownReport, htmlReport, jsonSummary };
+      return { markdownReport, jsonSummary };
     }
 
     // =========================================================================
@@ -857,36 +810,7 @@ Master Cumulative Totals (All Months):
       `## ⚠️ Key Operational Alerts (Top Exceptions)\n\n` +
       `${mdAlertsList || '> [!NOTE]\n> ✅ No alerts or exceptions detected across the entire historical data.'}\n`;
 
-    const htmlReport = generateHtmlReport({
-      fileName,
-      runTimestamp,
-      sortedSheets,
-      bestRevenueMonth,
-      bestRevenueValue,
-      bestProfitMonth,
-      bestProfitValue,
-      peakExpenseMonth,
-      peakExpenseValue,
-      liquorPercentage,
-      foodPercentage,
-      creditRecoveryRate,
-      creditOutstandingGap,
-      masterLiquor,
-      masterFood,
-      masterIncome,
-      masterOutflow,
-      masterNet,
-      generatedSvgChart,
-      htmlTrendRows,
-      htmlChecklistPoints,
-      htmlProjectionsPoints,
-      htmlIntelligencePoints,
-      allTransactionsLength: allTransactions.length,
-      allErrorsLength: allErrors.length,
-      htmlErrors,
-      htmlAlertsList,
-      aiGenerated
-    });
+    // Legacy HTML report generation removed.
 
     const jsonSummary = JSON.stringify({
       fileName,
@@ -928,7 +852,7 @@ Master Cumulative Totals (All Months):
       intelligence: aiIntelligence.split('\n').map(l => cleanPromptPoint(l)).filter(l => l.length > 0)
     }, null, 2);
 
-    return { markdownReport, htmlReport, jsonSummary };
+    return { markdownReport, jsonSummary };
   }
 }
 

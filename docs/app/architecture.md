@@ -1,5 +1,7 @@
 # 🏛️ AI Accounting Automation Service — Architecture Guide
 
+> **Last Updated**: June 7, 2026
+
 This guide provides an in-depth breakdown of the structural blueprint, design patterns, and processing flows implemented in the service.
 
 ---
@@ -14,11 +16,13 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     ▼
 [TRANSFORM] Facade Parser Engine (excel.parser.ts)
     │   ├── Specialized Sales Register Sub-Parser
-    │   └── Specialized Outstanding Debitors Sub-Parser
+    │   ├── Specialized Outstanding Debitors Sub-Parser
+    │   ├── Specialized Counter Stock Register Sub-Parser
+    │   └── Specialized Godown Stock Register Sub-Parser
     │
     ▼
 [AUDIT] Business Rules Engine (rules.engine.ts)
-    │   └── Concrete Validation Strategy Classes
+    │   └── Concrete Validation Strategy Classes (including Stock Alerts & Credit Limits)
     │
     ▼
 [SYNTHESIZE] AI Strategic Forecast Engine (ai.service.ts)
@@ -26,7 +30,8 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     │
     ▼
 [LOAD] Relational Database Persistence (Neon / PostgreSQL)
-        ├── Normalized tables: files, transactions, party_balances
+        ├── Normalized tables: files, transactions, party_balances, godown_stock_items, counter_stock_items
+        ├── Configuration tables: system_settings, audit_policies, history_retention_settings
         ├── Exception tracking: audit_alerts, parsing_errors
         └── Telegram Bot Notifications & Dispatch Queue
 ```
@@ -52,6 +57,8 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
   * `excel.parser.ts`: Lightweight interface selector. Performs sheet signature detections (tab names and column layouts checks) and dynamically routes execution to specialized sub-parsers.
   * `parsers/sales.parser.ts`: Tailored sales register parser.
   * `parsers/debitors.parser.ts`: Tailored customer outstanding balance parser.
+  * `parsers/counter.parser.ts`: Tailored counter inventory register parser.
+  * `parsers/godown.parser.ts`: Tailored godown inventory register parser.
   * `excel.mapper.ts`: Synonym header translator. Resolves variants (e.g. `Amount` vs `Invoiced Amount`) dynamically.
 * **Safety Patch:** Implements an in-memory monkey patch to safely intercept ExcelJS name validation bugs regarding Microsoft Excel protected tab names (e.g. `History`).
 
@@ -80,7 +87,7 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 
 ### 8. Fastify HTTP Router and Controllers (`src/api/`)
 * **Role:** Expose JSON query endpoints and spreadsheet uploader channels.
-* **Technique:** Fastify server configuration with schema validation hooks and cookie support plugin.
+* **Technique:** Fastify server configuration with schema validation hooks, cookie support, and automated **OpenAPI/Swagger API documentation** (served at `/documentation`).
 * **Routing Strategy:** 
   * Public routes verify overall system health (`/health`), check unlock credentials (`/api/v1/security/verify-app`), check session cookie status (`/api/v1/security/status`), and clear active cookies (`/api/v1/security/logout`).
   * Authorized workspace routes are nested within Fastify pre-handler plugin validations (`fastify.auth.ts`) which intercept and verify secure **HttpOnly cookies** (`app_session_token`), falling back to Bearer tokens in headers for Telegram Bot compatibility.
@@ -100,12 +107,17 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 
 ## 🔑 Database Schema Layout
 
-The relational schema strictly maps parsed ledger transactions and outstanding balances to normalize data rows:
+The relational schema strictly maps parsed ledger transactions, outstanding balances, and inventory valuations to normalize data rows:
 
-1. **`files`**: Ingestion runs tracking workbook metadata, AI summaries, and execution statuses.
+1. **`files`**: Ingestion runs tracking workbook metadata, content hash signatures, AI summaries, and execution statuses.
 2. **`transactions`**: Unified sales counter registers, payroll entries, and operational payment logs.
-3. **`party_balances`**: Outstanding balance records for debtors (Udhari) and creditors/suppliers.
-4. **`audit_alerts`**: Rules engine exceptions and warning records.
-5. **`parsing_errors`**: Structural anomalies and validation failures flagged during parsing.
-6. **`security_config`**: Password Argon2 hashes (app and upload tokens).
-7. **`syncMetadata`**: Google Drive file tracking logs (modification times and filenames).
+3. **`godown_stock_items`**: Relational rows mapping godown inventory snapshots, bottle size, quantities, cost/sell prices, valuations, and snapshot dates.
+4. **`counter_stock_items`**: Relational rows mapping counter bar inventory snapshots, sales movement, valuations, and snapshot dates.
+5. **`party_balances`**: Outstanding balance records for debtors (Udhari) and creditors/suppliers.
+6. **`audit_alerts`**: Rules engine exceptions and warning records.
+7. **`parsing_errors`**: Structural anomalies and validation failures flagged during parsing.
+8. **`security_config`**: Password Argon2 hashes (app and upload tokens).
+9. **`sync_metadata`**: Google Drive file tracking logs (modification times and filenames).
+10. **`system_settings`**: Key-value settings to toggle features (e.g. `web_chat_enabled`, `telegram_chat_enabled`).
+11. **`audit_policies`**: Dynamic compliance parameters for rules (e.g., `ruleHighExpenseCeiling`, `ruleOutstandingCreditCap`).
+12. **`history_retention_settings`**: Workspace-specific historical snapshot retention configuration (days).

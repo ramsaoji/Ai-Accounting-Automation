@@ -31,6 +31,31 @@ export const db = drizzle(pool, { schema });
 let isInitialized = false;
 
 /**
+ * Verifies that the database is reachable and accepting connections.
+ * Performs a simple query check with retry and exponential backoff.
+ */
+export async function verifyConnection(): Promise<void> {
+  const maxRetries = 5;
+  let delay = 2000;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info(`Attempt ${attempt} of ${maxRetries}: Verifying database connection...`);
+      await pool.query('SELECT 1');
+      logger.info('Database connection verified successfully.');
+      return;
+    } catch (err) {
+      logger.error({ err, attempt }, `Database connection attempt ${attempt} failed.`);
+      if (attempt === maxRetries) {
+        throw err;
+      }
+      logger.info(`Retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
+    }
+  }
+}
+
+/**
  * Initializes the database by applying all outstanding migrations from the /drizzle folder.
  * This runs automatically on boot to ensure the relational schema matches the TypeScript models.
  */

@@ -1,6 +1,8 @@
 # 📘 Workbook Integration Guide — Adding New Excel Layouts
 
-This guide explains how to extend the service to support a completely new Excel workbook format (e.g. `INVENTORY LIST.xlsx`) in the relational architecture.
+> **Last Updated**: June 7, 2026
+
+This guide explains how to extend the service to support a completely new Excel workbook format (e.g. `PAYROLL LIST.xlsx`) in the relational architecture. Note: **Godown Stock** and **Counter Stock** inventory sheets are already fully implemented out-of-the-box using the schemas detailed in this guide.
 
 ---
 

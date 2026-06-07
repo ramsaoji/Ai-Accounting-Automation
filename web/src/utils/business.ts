@@ -29,7 +29,7 @@ export function deriveBusinessName(fileName?: string): string {
 
   // Remove common spreadsheet noise words
   name = name
-    .replace(/(daily\s*sales?\s*register|debitors?\s*list|debitors?|sales?|ledger|list|register|summary|report)/gi, '')
+    .replace(/(daily\s*sales?\s*register|debitors?\s*list|debitors?|sales?|ledger|list|register|summary|report|godown|godwon|counter|stock)/gi, '')
     .trim();
 
   // Normalize separators to spaces

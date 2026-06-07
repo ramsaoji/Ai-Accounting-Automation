@@ -1,5 +1,7 @@
 # 🛠️ System Troubleshooting & Operations Guide
 
+> **Last Updated**: June 7, 2026
+
 This guide describes the operational parameters, diagnostic steps, and error resolutions for the AI Accounting Automation Service.
 
 ---
@@ -47,7 +49,11 @@ If all external AI keys are unavailable or expired, the service **does not crash
 
 ### B. LLM Provider Token Throttling
 * **Problem:** Large transaction sets exceed the model's Context Token limits.
-* **Resolution:** The orchestrator trims transaction inputs to the most significant rows (e.g. anomalously flagged entries or consolidated monthly statistics matrices) before forwarding the prompt to the AI provider.
+* **Resolution:** The orchestrator trims transaction inputs to the most significant rows (e.g. anomalously flagged entries, consolidated monthly statistics matrices, or top 60 sorted stock items) before forwarding the prompt to the AI provider to minimize prompt context size and prevent Groq/LLM timeouts.
+
+### C. Authentication Passcode Rate Limiting
+* **Problem:** Brute force or repetitive verification requests causes server CPU spikes or potential compromise.
+* **Resolution:** Fastify rate limiting is configured. Public passcode routes `/api/v1/security/verify-app` and `/api/v1/security/verify-upload` enforce a strict limit of **5 requests per minute** per client IP, returning a `429 Too Many Requests` status upon breach.
 
 ---
 

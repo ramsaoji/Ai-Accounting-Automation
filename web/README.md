@@ -1,5 +1,7 @@
 # AI Accounting Automation — Financial Command Center Dashboard
 
+> **Last Updated**: June 7, 2026
+
 A high-fidelity, production-grade executive dashboard for real-time accounting verification, anomaly auditing, and business intelligence insights from financial registers. Connects live to the Node.js backend API which reads directly from a PostgreSQL (Neon) database.
 
 ---
@@ -57,9 +59,9 @@ web/
 ├── src/
 │   ├── assets/                   # Local image and media assets
 │   ├── components/               # React UI & page section components
-│   │   ├── layout/               # Main layout components (Sidebar, Header, LoadingScreen)
+│   │   ├── layout/               # Main layout components (AppSidebar, Header, LoadingScreen)
 │   │   ├── sections/             # Dashboard section interfaces (portal, overview, ledger, auditor, advisor)
-│   │   ├── security/             # Security lock screen and credentials settings modal
+│   │   ├── security/             # Security lock screen, credentials settings modal, and history retention modal
 │   │   ├── shared/               # Shared onboarding/upload wizard modals (OnboardingWizard, UploadModal)
 │   │   └── ui/                   # Primitive layout components (card, button, input)
 │   ├── hooks/                    # Custom React hooks
@@ -97,33 +99,42 @@ web/
 
 ## 🛠 Key Features
 
-### 📊 Dual-Ledger Portal (Home)
-- **Overview Cards**: Two portal cards (Sales Register, Customer Debitors) with live data status, alert counts, and sparkline trend previews.
+### 📊 Multi-Workspace Command Center Portal (Home)
+- **Overview Cards**: Four workspace portal cards (**Daily Sales Register, Customer Debitors (Udhari), Godown Stock, and Counter Stock**) with live data statuses, alert indicators, and sparkline trend previews.
 - **Cron Schedule Display**: Shows the next scheduled auto-sync time from the backend cron configuration.
 
 ### 📈 Executive Overview
-- **Dynamic KPIs**: Track Net Surplus, Credit Recovery split, and Clearance Indexes derived directly from parsed Excel data.
-- **Interactive Time-Series Charts**: View cashflow timelines and dynamic priority debt risk splits using Recharts.
+- **Dynamic KPIs**: Track Net Surplus, Credit Recovery split, stock valuations, and Clearance Indexes derived directly from parsed Excel data.
+- **Interactive Time-Series Charts**: View cashflow timelines, product cost-vs-selling trends, and dynamic priority debt risk splits using Recharts.
 - **Outreach Copy Triggers**: Copy personalized SMS/WhatsApp payment reminder drafts directly from outstanding accounts.
 
 ### 🗃 Transaction Ledger Explorer
-- **Record Inspection**: Drill down into detailed ledger sheets with full pagination.
-- **Live Search & Filter**: Refine records by customer names, months, or credit thresholds.
+- **Record Inspection & Double-Tab Layout**: Switch between aggregated summaries (monthly sales ledgers / customer debt ranks / stock lists) and the **Raw Transactions Ledger** grid.
+- **Raw Transaction Grid**: Direct row-level grid view showcasing individual records (Date, Category, Invoice ID, Amount, Type, Vendor/Payee, Particulars).
+- **Interactive Click Drilldowns**: Click on any monthly ledger row or customer outstanding debt row to slide out a drawer detailing a pre-filtered list of all corresponding raw transactions.
+- **Live Search & Filter**: Refine records by customer names, months, categories, transaction types, or credit thresholds.
 - **Client-Side CSV Exporter**: Compile and download audited rows to a formatted CSV spreadsheet file matching your active filters.
 
 ### 🚨 Audit Anomaly Board
-- **Security Exceptions**: Tracks structural issues (credit breaches, excessive category spending).
-- **Rule Limits Configurator**: Live sliders adjust the compliance boundaries, recalculating active exceptions on the fly.
+- **Security & Stock Exceptions**: Tracks structural issues (credit breaches, excessive category spending, negative stock levels, out-of-stock items, negative cost-to-sell margin alerts).
+- **Rule Limits Configurator Sliders**: Active sliders dynamically adjust compliance policies (High Outflow Ceiling, Category Spike Multiplier, and Outstanding Credit Cap limits) on the fly, saving preferences to the Postgres database.
 - **One-click Acknowledgements**: Resolve or reopen issues with instant toast feedback.
 
 ### 💬 AI Strategic Advisor
-- **Contextual Ledger Chat**: Ask questions about top debtors or spending spikes. The advisor generates responses using real parsed metrics via `POST /api/chat`.
+- **Contextual Ledger & Inventory Chat**: Ask questions about top debtors, category spending spikes, or stock movement. The advisor generates responses using real parsed metrics via `/api/chat`.
+- **Isolated Workspace History**: Isolates chat logs by workspace type so Counter Stock inquiries do not clutter Godown Stock or Daily Sales sessions.
 - **Offline Heuristic Fallback**: If the backend AI is unreachable, a local data-driven heuristic engine generates meaningful answers from the already-loaded ledger summary.
 
-### 🔐 Security & Access Control
+### 🔐 Security, Access Control & Retention Config
 - **Fullscreen App Lock Screen**: Displays a security lock overlay upon mounting. It dynamically validates session health with the backend using secure, **bank-grade HttpOnly cookies** (`app_session_token`) completely invisible to client-side scripts (immune to XSS session-theft), with optional **"Remember this device"** 7-day duration scaling.
 - **Upload Passcode Gate**: Form submissions for ledger uploads require a correct ingestion password, utilizing an in-memory scoped token inside the component to prevent persistent XSS exposure and remain immune to CSRF.
-- **Tabbed Security console**: Features a dedicated settings console to update credentials in the Neon PostgreSQL database using **argon2 password hashing** on the backend. Provides side-by-side tabs for updating the App Lock passcode or the Upload passcode independently with confirmation mismatch verification and password visibility toggles (`Eye`/`EyeOff`).
+- **Tabbed Security Console**: Features a dedicated settings console to update credentials in the Neon PostgreSQL database. Provides side-by-side tabs for updating the App Lock passcode or the Upload passcode independently.
+- **History Retention Configurator Modal**: Sidebar button launches a configuration modal to set historical data retention windows for different workspaces (e.g., "Latest Only" or custom durations in days like 30, 60, or 90 days), persisting them directly to the database.
+
+### ⚡ Performance & Optimization
+- **Rollup Manual Chunks Splitting**: Heavy dependencies like `recharts` and `d3` are compiled into their own distinct cached assets, preventing them from blocking the initial Lock Screen and load loops.
+- **React Lazy Loading**: View sections (Overview, Ledger, Auditor, Advisor) and security modals are imported asynchronously using React `lazy` + `Suspense`.
+- **Shared Workspace Types**: Domain models (`Alert`, `ParsingError`, etc.) are imported directly from the backend types folder via `@backend-types` Vite path alias, preventing type drift.
 
 ---
 
@@ -191,4 +202,4 @@ Deploy the frontend to Vercel with one environment variable:
 > Vercel builds with `npm run build`. Make sure `VITE_API_BASE_URL` is set **before** deploying — Vite bakes it into the static bundle at build time. If you update the backend URL, you must trigger a re-deploy.
 
 > [!NOTE]
-> CORS is handled by the backend. The backend's `cors.ts` already allows all origins (`*`), so no additional Vercel configuration is needed for cross-origin requests.
+> CORS is handled by the backend using `@fastify/cors` dynamically registered in [fastify.app.ts](file:///d:/1.WORK/PROJECTS/NODEJS/ai-accounting-automation/src/api/fastify.app.ts). It allows requests from localhost/127.0.0.1 and domains explicitly listed in the `.env` configuration parameter `ALLOWED_ORIGINS`.

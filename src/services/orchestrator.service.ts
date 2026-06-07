@@ -401,7 +401,8 @@ export class OrchestratorService {
           // 2. Rules Engine: Run modular business validations
           const alerts = await rulesEngine.evaluate(allTransactions, {
             fileType,
-            fileName
+            fileName,
+            godownStockItems: allGodownStockItems
           });
 
           const debitorsLimit = options?.debitorsLimit ?? 10;
@@ -423,7 +424,7 @@ export class OrchestratorService {
 
           // 4. DB mode: persist relationally to PostgreSQL DB
           try {
-            const hashItems = isGodownStock
+            const hashItems = (isGodownStock || isCounter)
               ? allGodownStockItems.map(s => ({
                   date: s.snapshotDate,
                   amount: s.closingStock,

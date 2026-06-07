@@ -11,18 +11,9 @@
  * Alert and ParsingError are structurally identical and safely shared.
  */
 
-export interface Alert {
-  ruleId: string;
-  ruleName: string;
-  severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
-  message: string;
-}
+import type { Alert, ParsingError } from '@backend-types/accounting.types.js';
 
-export interface ParsingError {
-  row: number;
-  invoiceNumber?: string;
-  error: string;
-}
+export type { Alert, ParsingError };
 
 // ─── Frontend-only types ─────────────────────────────────────────────────────
 

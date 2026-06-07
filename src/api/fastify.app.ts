@@ -4,6 +4,8 @@ import FastifyMultipart from '@fastify/multipart';
 import FastifyCookie from '@fastify/cookie';
 import FastifyRateLimit from '@fastify/rate-limit';
 import FastifyJwt from '@fastify/jwt';
+import FastifySwagger from '@fastify/swagger';
+import FastifySwaggerUI from '@fastify/swagger-ui';
 import { config } from '../config/config.js';
 import { getHealth, getSystemConfig } from './controllers/health.controller.js';
 import {
@@ -50,6 +52,33 @@ export function createFastifyApp() {
     max: 1000,
     timeWindow: '1 minute',
   });
+
+  // Register Swagger support
+  app.register(FastifySwagger, {
+    openapi: {
+      info: {
+        title: 'AI Accounting Automation API',
+        description: 'Production-ready financial ledger parsing, rules engine, and AI reporting API',
+        version: '1.0.0',
+      },
+      servers: [
+        {
+          url: `http://localhost:${config.PORT || 8080}`,
+          description: 'Development server',
+        },
+      ],
+    },
+  });
+
+  // Register Swagger UI
+  app.register(FastifySwaggerUI, {
+    routePrefix: '/documentation',
+    uiConfig: {
+      docExpansion: 'list',
+      deepLinking: false,
+    },
+  });
+
 
   // Global hook to disable caching on all API responses unless explicitly set by the controller
   app.addHook('onSend', async (request, reply, payload) => {

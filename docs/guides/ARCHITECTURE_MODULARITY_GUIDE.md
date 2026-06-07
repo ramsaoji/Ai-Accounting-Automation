@@ -1,5 +1,7 @@
 # ENGINEERING_ARCHITECTURE_AND_CODE_QUALITY_GUIDE.md
 
+> **Last Updated**: June 7, 2026
+
 ## Purpose
 
 This guide defines universal engineering standards for building, reviewing, refactoring, and scaling software systems.

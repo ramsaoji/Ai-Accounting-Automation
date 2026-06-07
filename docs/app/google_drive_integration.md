@@ -1,5 +1,7 @@
 # Google Drive Integration Guide
 
+> **Last Updated**: June 7, 2026
+
 Connect the accounting automation service to **Google Drive** so it can automatically download your Excel ledger files, run the full AI auditing pipeline, and push results to PostgreSQL on every scheduled cron tick — or whenever you trigger it manually.
 
 ---
@@ -141,6 +143,8 @@ You will see in the logs:
 
 ## 🔄 How the Sync Works
 
+The sync pipeline retrieves all target Excel spreadsheets (Daily Sales Registers, Debitors Lists, and Godown/Counter Stock sheets) from Google Drive, parses them sequentially, executes audit validation rules, runs AI forecasts, persists the parsed records and exceptions relationally to Neon DB, and dispatches real-time summaries to Telegram.
+
 ```mermaid
 sequenceDiagram
     participant Cron as Scheduler (CRON_SCHEDULE)
@@ -158,9 +162,9 @@ sequenceDiagram
     loop For each Excel file (oldest first)
         Orch->>Drive: downloadFile(fileId)
         Drive-->>Orch: Excel Buffer
-        Orch->>AI: generateFinancialSummary(transactions)
+        Orch->>AI: generateFinancialSummary(data)
         AI-->>Orch: Markdown + JSON reports
-        Orch->>DB: saveToRelationalDb(fileName, transactions, alerts, summaries)
+        Orch->>DB: saveToRelationalDb(fileName, transactions/stock, alerts, summaries)
         Orch->>TG: sendReport(executiveSummary)
         TG-->>TG: Deliver to authorized Chat ID
     end
@@ -189,28 +193,42 @@ Use [crontab.guru](https://crontab.guru) to build and validate cron expressions.
 
 ## 🚀 Manual Trigger (Without Waiting for Cron)
 
-To trigger an immediate Drive sync without waiting for the next scheduled tick:
+To trigger an immediate Drive sync without waiting for the next scheduled tick, use the **Sync Drive** button in the Web Command Center Header, the `/sync` command in the Telegram Bot, or send an authenticated POST request to the API:
 
-**Linux / macOS / Git Bash:**
+> [!NOTE]
+> If an application passcode is configured, you must pass the JWT session token in the `Authorization` header as a Bearer token (e.g., `-H "Authorization: Bearer <your_session_token>"`). If no passcode is set, authentication is bypassed.
+
+**Linux / macOS / Git Bash (Authenticated example):**
 ```bash
-curl -X POST http://localhost:8080/api/v1/trigger-pipeline
+curl -X POST http://localhost:8080/api/v1/trigger-pipeline \
+  -H "Authorization: Bearer <jwt_session_token>"
 ```
 
-**Windows PowerShell** (`curl` is an alias — use one of these instead):
+**Windows PowerShell (Authenticated example):**
 ```powershell
-# Option A: force real curl binary
-curl.exe -X POST http://localhost:8080/api/v1/trigger-pipeline
-
-# Option B: native PowerShell
-Invoke-WebRequest -Uri http://localhost:8080/api/v1/trigger-pipeline -Method POST
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/trigger-pipeline" `
+  -Method Post `
+  -Headers @{ Authorization = "Bearer <jwt_session_token>" }
 ```
 
-Response:
+Response (if new/modified files are found):
 ```json
-{ "status": "processing", "message": "Sync started. Ingesting spreadsheet(s)..." }
+{
+  "status": "processing",
+  "message": "Sync started. Ingesting 2 spreadsheet(s)..."
+}
 ```
 
-The pipeline runs asynchronously in the background — the API responds immediately with `202 Accepted` while processing continues in the server logs.
+Response (if no files changed):
+```json
+{
+  "status": "up-to-date",
+  "message": "All spreadsheets are already up-to-date"
+}
+```
+
+The pipeline runs asynchronously in the background — the API responds immediately with `202 Accepted` (when syncing starts) or `200 OK` (if up-to-date) while processing continues in the server logs.
+
 
 ---
 

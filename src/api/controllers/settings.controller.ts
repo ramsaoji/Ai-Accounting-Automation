@@ -171,7 +171,7 @@ export async function updateSettings(
 
       if (activeFile) {
         const { reEvaluateAlertsForFile } = await import('./report.controller.js');
-        await reEvaluateAlertsForFile(activeFile.id, fileType as 'sales' | 'debitors' | 'godown_stock', activeFile.fileName);
+        await reEvaluateAlertsForFile(activeFile.id, fileType as 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', activeFile.fileName);
       }
     }
 

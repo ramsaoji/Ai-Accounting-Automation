@@ -1,5 +1,7 @@
 # Telegram Bot Integration & Interactive Command Center
 
+> **Last Updated**: June 7, 2026
+
 Turn your Telegram Bot into a secure, mobile-friendly **Financial Command Center** for "Hotel Gaurav". The integration enables the restaurant owner (and any trusted team members) to execute ledger operations, view outstanding customer balances, sync spreadsheets in real-time, and converse directly with the **AI Financial Advisor** from anywhere in the world.
 
 ---
@@ -125,6 +127,8 @@ sequenceDiagram
 | `/start` or `/help` | — | Onboarding Card | Welcome card with all commands |
 | `/summary` | 📊 Sales Summary | Sub-menu | Opens timeframe selector (today / month / master) |
 | `/debitors` | 👥 Debitors List | Ranked Table | Top 5 outstanding debtors with risk flags |
+| `/stock` or `/godownstock` | 🏭 Godown Stock | Valuations & Alerts | Inspect godown inventory levels, valuations, and low-stock alerts |
+| `/counterstock` or `/counter_stock` | 🏪 Counter Stock | Valuations & Alerts | Inspect counter bar inventory levels, valuations, and sales movement |
 | `/sync` | 🔄 Sync Ledger | Drive Pipeline | Downloads Drive files → audits → updates DB → notifies all users |
 | `/status` or `/health` | 🩺 Service Health | Diagnostics | AI provider, model, cron schedule, user count, server time |
 
@@ -146,8 +150,11 @@ You don't need commands — type any question and the bot routes it to the **AI 
 * *"Who is our top debtor and what is their collection risk?"*
 * *"Suggest a recovery strategy for [Customer Name]"*
 * *"Compare sales trends across all months"*
+* *"Show the current valuation of Godown and Counter liquor stock"*
+* *"Which products in our inventory have low-stock warnings?"*
+* *"Which items have negative cost-to-sell margins?"*
 
-The AI loads the latest sales and debitors summaries, performs mathematical verification, and formats answers as clean Markdown tables in monospaced blocks (properly aligned on Telegram mobile).
+The AI loads the latest sales, debitors, and stock summaries, performs mathematical verification, and formats answers as clean Markdown tables in monospaced blocks (properly aligned on Telegram mobile). The bot utilizes an optimized prompt format for stock lists (sorting by sales velocity and trimming non-essential fields) to prevent timeout failures and respect token limits.
 
 ---
 

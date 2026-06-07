@@ -109,6 +109,42 @@ export function App() {
 
   const isSyncingDriveRef = useRef(false);
   const isUploadingRef = useRef(false);
+  const hasInitializedWorkspaceRef = useRef(false);
+
+  // Reset initialization flag when user locks/logs out of the console
+  useEffect(() => {
+    if (!appSessionToken) {
+      hasInitializedWorkspaceRef.current = false;
+    }
+  }, [appSessionToken]);
+
+  // Dynamically set default active workspace to the first one that has data on initial load
+  useEffect(() => {
+    if (!isLoading && !hasInitializedWorkspaceRef.current) {
+      const activeData = activeWorkspace === 'sales' ? salesData
+        : activeWorkspace === 'debitors' ? debitorsData
+        : activeWorkspace === 'godown_stock' ? godownStockData
+        : counterStockData;
+
+      if (!activeData) {
+        if (salesData) {
+          setActiveWorkspace('sales');
+          hasInitializedWorkspaceRef.current = true;
+        } else if (debitorsData) {
+          setActiveWorkspace('debitors');
+          hasInitializedWorkspaceRef.current = true;
+        } else if (godownStockData) {
+          setActiveWorkspace('godown_stock');
+          hasInitializedWorkspaceRef.current = true;
+        } else if (counterStockData) {
+          setActiveWorkspace('counter_stock');
+          hasInitializedWorkspaceRef.current = true;
+        }
+      } else {
+        hasInitializedWorkspaceRef.current = true;
+      }
+    }
+  }, [isLoading, salesData, debitorsData, godownStockData, counterStockData, activeWorkspace, setActiveWorkspace]);
 
   // Custom Drive Sync hook to isolate background polling/interval logic
   const { isSyncingDrive, syncProgress, handleDriveSync, resetDriveSync } = useDriveSync({
@@ -125,9 +161,14 @@ export function App() {
     isSyncingDriveRef
   });
 
-  // Sync state values to refs synchronously on each render
-  isSyncingDriveRef.current = isSyncingDrive;
-  isUploadingRef.current = isUploading;
+  // Sync state values to refs on state change to avoid rendering violations
+  useEffect(() => {
+    isSyncingDriveRef.current = isSyncingDrive;
+  }, [isSyncingDrive]);
+
+  useEffect(() => {
+    isUploadingRef.current = isUploading;
+  }, [isUploading]);
 
   // Trigger sync on mount if already authenticated
   useEffect(() => {

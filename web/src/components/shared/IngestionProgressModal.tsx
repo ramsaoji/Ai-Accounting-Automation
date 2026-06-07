@@ -31,7 +31,7 @@ interface IngestionProgressModalProps {
 }
 
 /* ─── Derived colour tokens based on mode / state ──────────────────────── */
-function useThemeTokens(
+function getThemeTokens(
   isDrive: boolean,
   isComplete: boolean,
   successCount: number,
@@ -274,7 +274,7 @@ export const IngestionProgressModal: React.FC<IngestionProgressModalProps> = ({
 
   if (!progress) return null;
 
-  const tokens = useThemeTokens(isDrive, isComplete, successCount, errorCount, hasError);
+  const tokens = getThemeTokens(isDrive, isComplete, successCount, errorCount, hasError);
 
   const ModeIcon = isDrive ? Cloud : UploadCloud;
 

@@ -13,6 +13,14 @@ export interface ParsingError {
   error: string;
 }
 
+export interface Alert {
+  ruleId: string;
+  ruleName: string;
+  severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+}
+
+
 export interface SheetParsingResult {
   sheetName: string;
   transactions: Transaction[];

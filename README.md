@@ -1,5 +1,7 @@
 # AI Accounting Automation Service 📊💼
 
+> **Last Updated**: June 7, 2026
+
 A production-ready, database-backed financial audit orchestrator and background worker built with **Node.js**, **TypeScript**, and **Drizzle ORM**. This service automatically syncs with Google Drive or accepts manual uploads of Excel financial ledgers via the Web UI, parses and aggregates transaction records, runs an extensible anomaly-detection rules engine, generates high-quality executive summaries using **swappable AI LLM Providers**, persists everything relationally to a PostgreSQL database, and dispatches real-time executive briefs to Telegram!
 
 ---
@@ -64,7 +66,9 @@ ai-accounting-automation/
 │   │   ├── excel.parser.ts       # Main parser selector facade
 │   │   └── parsers/
 │   │       ├── sales.parser.ts    # Daily sales register parser
-│   │       └── debitors.parser.ts # Customer outstanding udhari parser
+│   │       ├── debitors.parser.ts # Customer outstanding udhari parser
+│   │       ├── counter.parser.ts  # Counter stock inventory parser
+│   │       └── godown.parser.ts   # Godown stock inventory parser
 │   ├── rules/
 │   │   ├── rules.types.ts        # Modular Rules Engine interfaces
 │   │   ├── rules.engine.ts       # Concrete Rule implementations (Spikes, Duplicates)
@@ -75,7 +79,9 @@ ai-accounting-automation/
 │   │       ├── high-expense.rule.ts
 │   │       ├── negative-or-zero.rule.ts
 │   │       ├── off-hours-transaction.rule.ts
-│   │       └── suspicious-spike.rule.ts
+│   │       ├── suspicious-spike.rule.ts
+│   │       ├── godown-stock-alerts.rule.ts     # Godown stock and margin alerts rule
+│   │       └── outstanding-credit-cap.rule.ts  # Customer credit limit rule
 │   ├── ai/
 │   │   ├── providers/
 │   │   │   ├── openai.provider.ts # OpenAI, DeepSeek, & OpenRouter client
@@ -87,8 +93,6 @@ ai-accounting-automation/
 │   │   ├── ai.calculator.ts      # Specialized stats calculator for sales & debitors
 │   │   ├── ai.parser.ts          # AI response parser and text format cleaner
 │   │   ├── report-helper.ts      # Visual charts coordinate math & HTML trend row builders
-│   │   ├── report-template.ts    # Daily Sales Register HTML console UI shell
-│   │   ├── debitors-template.ts  # Customer outstanding Udhari HTML console UI shell
 │   │   └── ai.service.ts         # Central orchestrator for LLM prompt connections
 │   ├── telegram/
 │   │   ├── telegram.bot.ts       # Telegram long polling entrypoint & lifecycle router
@@ -152,6 +156,11 @@ To clear database tables and reapply clean schema migrations:
 npm run reset-drizzle
 ```
 
+### 5. Interactive API Documentation
+Once the server is running locally, access the dynamic OpenAPI/Swagger documentation interface at:
+`http://localhost:8080/documentation`
+
+
 ---
 
 ## 🔐 Environment Configuration Parameters
@@ -203,15 +212,17 @@ To protect administrative functions and financial metrics, the application imple
 
 ## 🕵️ Rules Engine Specification
 
-The service features an automated, extensible audit rules runner (`src/rules/rules.engine.ts`). Seven validation modules are enabled out-of-the-box:
+The service features an automated, extensible audit rules runner (`src/rules/rules.engine.ts`). Nine validation modules are enabled out-of-the-box:
 
 1. **`DuplicateInvoiceRule` (High Severity)**: Groups transaction data on invoice codes. Alerts if a ledger records duplicate payments to avoid vendor billing issues.
-2. **`HighExpenseRule` (High/Critical Severity)**: Triggers an alert when a single outflow transaction breaches a spending limit (configured to `₹50,000` by default).
-3. **`SuspiciousSpikeRule` (Medium Severity)**: Calculates the historical spending averages of each category. If any single payment in that category is `> 3x category average` and exceeds ₹5,000, it flags a suspicious spending spike.
+2. **`HighExpenseRule` (High/Critical Severity)**: Triggers an alert when a single outflow transaction breaches a spending limit (configured via audit policies, default ₹50,000).
+3. **`SuspiciousSpikeRule` (Medium Severity)**: Calculates historical spending averages of each category. If any single payment in that category is `> 3x category average` (or custom policy multiplier) and exceeds ₹5,000, it flags a suspicious spending spike.
 4. **`OffHoursTransactionRule` (Low Severity)**: Flags records posted outside standard operational windows (e.g., weekends or late-night between 11 PM and 5 AM IST) to audit delay lags or unauthorized logs.
 5. **`NegativeOrZeroTransactionRule` (Critical Severity)**: Flags records that contain erroneous zero or negative values.
 6. **`DuplicateDateRule` (High Severity)**: Detects duplicate transaction entries for the same date and category in daily registers.
 7. **`CrossWorkbookReconciliationRule` (High Severity)**: Reconciles credit extended and credit recovery between the Daily Sales Register and the Debitors Ledger, flagging any variance mismatches.
+8. **`OutstandingCreditCapRule` (High/Critical Severity)**: Flags customers whose cumulative outstanding credit balance exceeds the defined limit (configured via audit policies, default ₹100,000).
+9. **`GodownStockAlertsRule` (Critical/High/Medium Severity)**: Audits godown/counter stock closing numbers, depletion levels, and cost-to-sell ratios. Flags erroneous negative stock levels, out-of-stock items, low-stock alerts (< 5 units), and cost-to-sell margin losses.
 
 ---
 
