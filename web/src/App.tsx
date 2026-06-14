@@ -54,6 +54,8 @@ export function App() {
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
   const [isRetentionOpen, setIsRetentionOpen] = useState(false);
   const [securityModalInitialTab, setSecurityModalInitialTab] = useState<'app-lock' | 'upload' | 'system-settings'>('app-lock');
+  // Tracks whether a first-time sync or upload completed during the wizard session
+  const [wizardDataReady, setWizardDataReady] = useState(false);
 
   const handleOpenSecuritySettings = (tab: 'app-lock' | 'upload' | 'system-settings' | 'history-retention' = 'app-lock') => {
     if (tab === 'history-retention') {
@@ -144,13 +146,16 @@ export function App() {
     salesData,
     debitorsData,
     connectionMode,
-    fetchRealData,
+    fetchRealData: async (silent?: boolean) => {
+      setWizardDataReady(true);
+      return fetchRealData(silent);
+    },
     isUploadingRef
   });
 
   // Manual upload hook — owns upload logic and progress state
   const { isUploading, uploadProgress, startUpload, resetUpload } = useManualUpload({
-    onSuccess: fetchRealData,
+    onSuccess: async () => { setWizardDataReady(true); await fetchRealData(); },
     isSyncingDriveRef
   });
 
@@ -282,6 +287,7 @@ export function App() {
           isSyncingDrive={isSyncingDrive}
           isLoading={isLoading}
           hasSyncedBefore={hasSyncedBefore}
+          hasData={wizardDataReady}
           onDriveSync={handleDriveSync}
           onFilesReady={startUpload}
         />

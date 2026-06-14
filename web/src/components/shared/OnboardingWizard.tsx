@@ -23,6 +23,7 @@ interface OnboardingWizardProps {
   isSyncingDrive: boolean;
   isLoading: boolean;
   hasSyncedBefore?: boolean;
+  hasData?: boolean;
   onDriveSync: () => void;
   onFilesReady: (files: File[], sessionToken: string) => void;
 }
@@ -83,10 +84,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   isSyncingDrive,
   isLoading,
   hasSyncedBefore,
+  hasData = false,
   onDriveSync,
   onFilesReady,
 }) => {
   const [step, setStep] = useState(1);
+
+  // Auto-advance from step 3 → 4 as soon as data lands (Drive sync or upload finished)
+  React.useEffect(() => {
+    if (step === 3 && hasData) {
+      setStep(4);
+    }
+  }, [hasData, step]);
 
   const steps = [
     { id: 1, title: 'Orientation' },
@@ -343,7 +352,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Button
               size="sm"
               onClick={() => setStep(prev => Math.min(4, prev + 1))}
-              disabled={step === 3}
+              disabled={step === 3 && !hasData}
               className="gap-1.5 text-xs font-semibold cursor-pointer h-9 px-4"
             >
               Continue
