@@ -908,11 +908,12 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                             {tx.particulars || '—'}
                           </TableCell>
                           <TableCell className="text-center select-none">
-                            <span className={`text-[0.58rem] font-bold border rounded-full px-2 py-0.5 uppercase tracking-wider ${
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold border rounded-full px-2.5 py-0.5 uppercase tracking-wide ${
                               isCredit 
-                                ? 'bg-success/10 text-success border-success/20' 
-                                : 'bg-destructive/10 text-destructive border-destructive/20'
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25' 
+                                : 'bg-destructive/10 text-destructive border-destructive/25'
                             }`}>
+                              <span className={`size-1.5 rounded-full shrink-0 ${isCredit ? 'bg-emerald-500' : 'bg-destructive'}`} />
                               {isCredit ? 'Inflow' : 'Outflow'}
                             </span>
                           </TableCell>
@@ -1146,11 +1147,12 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                               {tx.particulars || '—'}
                             </TableCell>
                             <TableCell className="text-center select-none">
-                              <span className={`text-[0.52rem] font-bold border rounded-full px-2.2 py-0.5 uppercase tracking-wider ${
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold border rounded-full px-2.5 py-0.5 uppercase tracking-wide ${
                                 isCredit 
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' 
-                                  : 'bg-destructive/10 text-destructive border-destructive/20'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25' 
+                                  : 'bg-destructive/10 text-destructive border-destructive/25'
                               }`}>
+                                <span className={`size-1.5 rounded-full shrink-0 ${isCredit ? 'bg-emerald-500' : 'bg-destructive'}`} />
                                 {isCredit ? 'Inflow' : 'Outflow'}
                               </span>
                             </TableCell>
