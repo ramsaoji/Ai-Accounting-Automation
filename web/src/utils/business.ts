@@ -13,7 +13,7 @@
 
 /** The canonical business name from the build-time environment variable. Falls back to 'Hotel Gaurav'. */
 export const BUSINESS_NAME: string =
-  (import.meta.env.VITE_BUSINESS_NAME as string | undefined) || 'Hotel Gaurav';
+  (import.meta.env.VITE_BUSINESS_NAME as string | undefined) || 'Unified Accounting';
 
 /** A lowercase slug of the business name for filename matching (e.g. 'hotel gaurav') */
 const BUSINESS_NAME_SLUG = BUSINESS_NAME.toLowerCase();

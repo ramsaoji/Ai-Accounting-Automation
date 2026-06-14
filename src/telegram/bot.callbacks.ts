@@ -4,6 +4,16 @@ import { telegramClient } from './telegram.client.js';
 import { getMainMenuKeyboard } from './bot.keyboards.js';
 import { loadReport, getMonthYearDate, formatTimestampToDual } from './bot.utils.js';
 
+function getCategoryEmoji(catName: string): string {
+  const lower = catName.toLowerCase();
+  if (lower.includes('hair') || lower.includes('styling') || lower.includes('salon')) return '✂️';
+  if (lower.includes('spa') || lower.includes('massage') || lower.includes('therapy') || lower.includes('facial')) return '💆';
+  if (lower.includes('product') || lower.includes('retail') || lower.includes('item')) return '🛍️';
+  if (lower.includes('liquor') || lower.includes('wine') || lower.includes('beer') || lower.includes('bar')) return '🍷';
+  if (lower.includes('food') || lower.includes('restaurant') || lower.includes('dine')) return '🍲';
+  return '📈';
+}
+
 interface InlineKeyboardButton {
   text: string;
   callback_data?: string;
@@ -113,6 +123,11 @@ export async function sendTodaySales(chatId: string): Promise<void> {
   }
 
   try {
+    const salesReport = await loadReport('sales');
+    const bizMeta = salesReport?.businessMetadata || {};
+    const isHospitality = bizMeta.industryProfile === 'HOSPITALITY';
+    const businessName = bizMeta.businessName || config.BUSINESS_NAME;
+
     const latestDay = dailyData[0];
     
     const rawDate = new Date(latestDay.date);
@@ -122,16 +137,34 @@ export async function sendTodaySales(chatId: string): Promise<void> {
       year: 'numeric'
     });
 
-    const inflow = (latestDay.liquor || 0) + (latestDay.food || 0) + (latestDay.creditRecovery || 0);
-    const outflow = (latestDay.expenses || 0) + (latestDay.creditExtended || 0);
+    const inflow = latestDay.inflows !== undefined ? latestDay.inflows : ((latestDay.liquor || 0) + (latestDay.food || 0) + (latestDay.creditRecovery || 0));
+    const outflow = latestDay.outflows !== undefined ? latestDay.outflows : ((latestDay.expenses || 0) + (latestDay.creditExtended || 0));
     const net = inflow - outflow;
     const statusLabel = net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
-    const summaryText = `📅 *${config.BUSINESS_NAME} — Daily Sales Report*\n` +
+    let dynamicCategoryLines = '';
+    if (latestDay.departments) {
+      for (const [name, val] of Object.entries(latestDay.departments)) {
+        const numVal = Number(val);
+        if (!isNaN(numVal) && numVal > 0 && !name.includes('Recovery') && !name.includes('Expense') && !name.includes('Extended')) {
+          const emoji = getCategoryEmoji(name);
+          dynamicCategoryLines += `• ${emoji} ${name}:      \`₹${Math.round(numVal).toLocaleString('en-IN')}\`\n`;
+        }
+      }
+    }
+    if (!dynamicCategoryLines) {
+      const rev1 = isHospitality ? 'Liquor Counter' : 'Primary Revenue';
+      const rev2 = isHospitality ? 'Food Counter' : 'Secondary Revenue';
+      const emoji1 = isHospitality ? '🍷' : '📈';
+      const emoji2 = isHospitality ? '🍲' : '📈';
+      dynamicCategoryLines = `• ${emoji1} ${rev1}:      \`₹${Math.round(latestDay.liquor || 0).toLocaleString('en-IN')}\`\n` +
+                             `• ${emoji2} ${rev2}:        \`₹${Math.round(latestDay.food || 0).toLocaleString('en-IN')}\`\n`;
+    }
+
+    const summaryText = `📅 *${businessName} — Daily Sales Report*\n` +
        `📆 *Reconciled Date*: \`${formattedDate}\`\n\n` +
        `🔹 *Revenue Registers*\n` +
-       `• 🍷 Liquor Counter:      \`₹${Math.round(latestDay.liquor || 0).toLocaleString('en-IN')}\`\n` +
-       `• 🍲 Food Counter:        \`₹${Math.round(latestDay.food || 0).toLocaleString('en-IN')}\`\n` +
+       dynamicCategoryLines +
        `• 📥 Credit Recovery:     \`₹${Math.round(latestDay.creditRecovery || 0).toLocaleString('en-IN')}\`\n\n` +
        `🔹 *Expense & Credit*\n` +
        `• 🛠️ Daily Expenses:      \`₹${Math.round(latestDay.expenses || 0).toLocaleString('en-IN')}\`\n` +
@@ -321,6 +354,10 @@ export async function sendSpecificMonthSales(chatId: string, targetMonth: string
   }
 
   try {
+    const bizMeta = data.businessMetadata || {};
+    const isHospitality = bizMeta.industryProfile === 'HOSPITALITY';
+    const businessName = bizMeta.businessName || config.BUSINESS_NAME;
+
     const months = data.months || [];
 
     const cleanTarget = targetMonth.toLowerCase().replace(/_/g, '').trim();
@@ -337,15 +374,32 @@ export async function sendSpecificMonthSales(chatId: string, targetMonth: string
       return;
     }
 
-    const inflows = (mData.liquor || 0) + (mData.food || 0) + (mData.creditRecovery || 0);
-    const outflows = (mData.expenses || 0) + (mData.creditExtended || 0);
+    const inflows = mData.inflows !== undefined ? mData.inflows : ((mData.liquor || 0) + (mData.food || 0) + (mData.creditRecovery || 0));
+    const outflows = mData.outflows !== undefined ? mData.outflows : ((mData.expenses || 0) + (mData.creditExtended || 0));
     const net = inflows - outflows;
     const statusLabel = net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴';
 
-    const summaryText = `📅 *${config.BUSINESS_NAME} — ${mData.sheetName} Sales Summary*\n\n` +
+    let dynamicCategoryLines = '';
+    if (mData.departments) {
+      for (const [name, val] of Object.entries(mData.departments as Record<string, number>)) {
+        if (val > 0 && !name.includes('Recovery') && !name.includes('Expense') && !name.includes('Extended')) {
+          const emoji = getCategoryEmoji(name);
+          dynamicCategoryLines += `• ${emoji} ${name}:        \`₹${Math.round(val).toLocaleString('en-IN')}\`\n`;
+        }
+      }
+    }
+    if (!dynamicCategoryLines) {
+      const rev1 = isHospitality ? 'Liquor Sales' : 'Primary Revenue';
+      const rev2 = isHospitality ? 'Food Sales' : 'Secondary Revenue';
+      const emoji1 = isHospitality ? '🍷' : '📈';
+      const emoji2 = isHospitality ? '🍲' : '📈';
+      dynamicCategoryLines = `• ${emoji1} ${rev1}:        \`₹${Math.round(mData.liquor || 0).toLocaleString('en-IN')}\`\n` +
+                             `• ${emoji2} ${rev2}:          \`₹${Math.round(mData.food || 0).toLocaleString('en-IN')}\`\n`;
+    }
+
+    const summaryText = `📅 *${businessName} — ${mData.sheetName} Sales Summary*\n\n` +
       `🔹 *Revenue Registers*\n` +
-      `• 🍷 Liquor Sales:        \`₹${Math.round(mData.liquor || 0).toLocaleString('en-IN')}\`\n` +
-      `• 🍲 Food Sales:          \`₹${Math.round(mData.food || 0).toLocaleString('en-IN')}\`\n` +
+      dynamicCategoryLines +
       `• 📥 Credit Recovery:     \`₹${Math.round(mData.creditRecovery || 0).toLocaleString('en-IN')}\`\n\n` +
       `🔹 *Expense & Credit*\n` +
       `• 🛠️ Operating Expenses:  \`₹${Math.round(mData.expenses || 0).toLocaleString('en-IN')}\`\n` +
@@ -399,12 +453,50 @@ export async function sendSalesSummary(chatId: string, editMessageId?: number): 
   }
 
   try {
-    const summaryText = `📊 *${config.BUSINESS_NAME} — Master Sales Performance*\n` +
+    const bizMeta = data.businessMetadata || {};
+    const isHospitality = bizMeta.industryProfile === 'HOSPITALITY';
+    const businessName = bizMeta.businessName || config.BUSINESS_NAME;
+
+    let dynamicCategoryLines = '';
+    try {
+      const deptSums: Record<string, number> = {};
+      let totalRevenue = 0;
+      if (data.months) {
+        for (const m of data.months) {
+          if (m.dynamicDepartments) {
+            for (const dept of m.dynamicDepartments) {
+              if (dept.accountType === 'REVENUE' && !dept.name.includes('Recovery') && !dept.name.includes('Inflow')) {
+                deptSums[dept.name] = (deptSums[dept.name] || 0) + dept.value;
+                totalRevenue += dept.value;
+              }
+            }
+          }
+        }
+      }
+      const sortedDepts = Object.entries(deptSums).sort((a, b) => b[1] - a[1]);
+      for (const [name, val] of sortedDepts.slice(0, 3)) {
+        const pct = totalRevenue > 0 ? ((val / totalRevenue) * 100).toFixed(0) : '0';
+        const emoji = getCategoryEmoji(name);
+        dynamicCategoryLines += `• ${emoji} ${name}:     \`₹${Math.round(val).toLocaleString('en-IN')}\` (${pct}% share)\n`;
+      }
+    } catch (catErr) {
+      // ignore
+    }
+
+    if (!dynamicCategoryLines) {
+      const rev1 = isHospitality ? 'Liquor Total' : 'Primary Revenue';
+      const rev2 = isHospitality ? 'Food Total' : 'Secondary Revenue';
+      const emoji1 = isHospitality ? '🍷' : '📈';
+      const emoji2 = isHospitality ? '🍲' : '📈';
+      dynamicCategoryLines = `• ${emoji1} ${rev1}:     \`₹${Math.round(data.masterTotals?.liquorSales || 0).toLocaleString('en-IN')}\` (${data.benchmarks?.liquorPercentage || 0}% share)\n` +
+                             `• ${emoji2} ${rev2}:       \`₹${Math.round(data.masterTotals?.foodSales || 0).toLocaleString('en-IN')}\` (${data.benchmarks?.foodPercentage || 0}% share)\n`;
+    }
+
+    const summaryText = `📊 *${businessName} — Master Sales Performance*\n` +
       `📅 *Audited Scope*: \`${data.totalMonths ?? data.months?.length ?? 0} months\` (${data.totalTransactions.toLocaleString()} transactions)\n` +
       `🕒 *Last Ingested*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
       `🔹 *Financial Metrics*\n` +
-      `• 🍷 Liquor Total:     \`₹${Math.round(data.masterTotals?.liquorSales || 0).toLocaleString('en-IN')}\` (${data.benchmarks?.liquorPercentage || 0}% share)\n` +
-      `• 🍲 Food Total:       \`₹${Math.round(data.masterTotals?.foodSales || 0).toLocaleString('en-IN')}\` (${data.benchmarks?.foodPercentage || 0}% share)\n` +
+      dynamicCategoryLines +
       `• 💵 Net Cashflow:      \`₹${Math.round(data.masterTotals?.netCashflow || 0).toLocaleString('en-IN')}\` (${data.masterTotals?.surplusStatus || 'N/A'})\n` +
       `• 🔄 Recovery Rate:     \`${data.benchmarks?.creditRecoveryRate || 0}%\` collection\n` +
       `• 🌟 Peak Performance:  \`${data.benchmarks?.bestRevenueMonth}\` (\`₹${Math.round(data.benchmarks?.bestRevenueValue || 0).toLocaleString('en-IN')}\`)\n` +
@@ -719,13 +811,19 @@ export async function sendStockMetrics(chatId: string, reportType: 'godown_stock
     const agg = data.aggregates || {};
     const stock = agg[locKey] || {};
 
+    const industryProfile = data.businessMetadata?.industryProfile || 'HOSPITALITY';
+    const isHospitality = industryProfile === 'HOSPITALITY';
+    const volumeLine = isHospitality
+      ? `• Volume in Stock:        \`${Math.round(stock.totalVolumeLiters || 0).toLocaleString('en-IN')} Liters\`\n`
+      : '';
+
     const metricsText = `📊 *${config.BUSINESS_NAME} — ${titleLabel} Valuation Metrics*\n` +
       `🕒 *Last Reconciled*: \`${formatTimestampToDual(data.runTimestamp || data.timestamp)}\`\n\n` +
       `${emoji} *${titleLabel} Stock Details*\n` +
       `• Active Products:        \`${stock.totalItemsCount || 0} lines\`\n` +
       `• Valuation (Cost):       \`₹${Math.round(stock.totalClosingValue || 0).toLocaleString('en-IN')}\`\n` +
       `• Valuation (Retail):     \`₹${Math.round(stock.totalSellingValue || 0).toLocaleString('en-IN')}\`\n` +
-      `• Volume in Stock:        \`${Math.round(stock.totalVolumeLiters || 0).toLocaleString('en-IN')} Liters\`\n` +
+      volumeLine +
       `• Total Stock-Out:        \`${stock.stockOutCount || 0} units\`\n` +
       `• Total Stock-In:         \`${stock.stockInCount || 0} units\`\n\n` +
       `💡 _Valuation at Cost is computed using purchase prices. Valuation at Retail is computed using selling/menu prices._`;
@@ -770,13 +868,19 @@ export async function sendStockCategories(chatId: string, reportType: 'godown_st
     const catAggs = data.categoryAggregates || [];
     let text = `🗂️ *${config.BUSINESS_NAME} — ${titleLabel} Categories*\n\n`;
 
+    const industryProfile = data.businessMetadata?.industryProfile || 'HOSPITALITY';
+    const isHospitality = industryProfile === 'HOSPITALITY';
+
     if (catAggs.length > 0) {
       catAggs.forEach((c: any) => {
+        const volumeDetail = isHospitality
+          ? `  - Liters Vol: \`${Math.round(c.totalVolumeLiters || 0).toLocaleString('en-IN')} L\``
+          : '';
         text += `• *${c.category || 'General'}*\n` +
           `  - Products:   \`${c.itemsCount || 0} items\`\n` +
           `  - Cost Value: \`₹${Math.round(c.closingValue || 0).toLocaleString('en-IN')}\`\n` +
           `  - Menu Value: \`₹${Math.round(c.sellingValue || 0).toLocaleString('en-IN')}\`\n` +
-          `  - Liters Vol: \`${Math.round(c.totalVolumeLiters || 0).toLocaleString('en-IN')} L\`\n\n`;
+          (volumeDetail ? volumeDetail + '\n\n' : '\n');
       });
     } else {
       text += `_No category metrics found!_\n`;
@@ -878,16 +982,19 @@ export async function sendStockTopMovers(chatId: string, reportType: 'godown_sto
       .sort((a: any, b: any) => Number(b.stockOut || 0) - Number(a.stockOut || 0))
       .slice(0, 10);
 
+    const industryProfile = data.businessMetadata?.industryProfile || 'HOSPITALITY';
+    const isHospitality = industryProfile === 'HOSPITALITY';
+
     let text = `🔥 *${config.BUSINESS_NAME} — ${titleLabel} Top Movers (Stock-Out)*\n\n`;
 
     if (topMovers.length > 0) {
       topMovers.forEach((item: any, i: number) => {
         const qty = item.stockOut;
         const retailValue = qty * (item.sellingPrice || 0);
-        const isLoose = item.bottleSizeMl === 0;
-        const sizeLabel = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
-        const unitLabel = isLoose ? 'ml' : 'units';
-        const pkgText = isLoose ? '' : ` (${item.packaging || 'bottle'})`;
+        const isLoose = isHospitality && item.bottleSizeMl === 0;
+        const sizeLabel = (isHospitality && item.bottleSizeMl) ? `${item.bottleSizeMl}ml` : (item.specification || 'Standard');
+        const unitLabel = isLoose ? 'ml' : (item.unitOfMeasure || 'units');
+        const pkgText = isHospitality ? ` (${item.packaging || 'bottle'})` : ` (${item.packaging || item.unitOfMeasure || 'units'})`;
         text += `\`${i + 1}.\` *${item.itemName}* (${sizeLabel})\n` +
           `   • Outflow: \`${qty} ${unitLabel}\`${pkgText}\n` +
           `   • Retail:  \`₹${Math.round(retailValue).toLocaleString('en-IN')}\`\n` +
@@ -940,16 +1047,19 @@ export async function sendStockInflows(chatId: string, reportType: 'godown_stock
       .sort((a: any, b: any) => Number(b.stockIn || 0) - Number(a.stockIn || 0))
       .slice(0, 10);
 
+    const industryProfile = data.businessMetadata?.industryProfile || 'HOSPITALITY';
+    const isHospitality = industryProfile === 'HOSPITALITY';
+
     let text = `📥 *${config.BUSINESS_NAME} — ${titleLabel} Top Inflows (Restocked)*\n\n`;
 
     if (topInflows.length > 0) {
       topInflows.forEach((item: any, i: number) => {
         const qty = item.stockIn;
         const costValue = qty * (item.costPrice || 0);
-        const isLoose = item.bottleSizeMl === 0;
-        const sizeLabel = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
-        const unitLabel = isLoose ? 'ml' : 'units';
-        const pkgText = isLoose ? '' : ` (${item.packaging || 'bottle'})`;
+        const isLoose = isHospitality && item.bottleSizeMl === 0;
+        const sizeLabel = (isHospitality && item.bottleSizeMl) ? `${item.bottleSizeMl}ml` : (item.specification || 'Standard');
+        const unitLabel = isLoose ? 'ml' : (item.unitOfMeasure || 'units');
+        const pkgText = isHospitality ? ` (${item.packaging || 'bottle'})` : ` (${item.packaging || item.unitOfMeasure || 'units'})`;
         text += `\`${i + 1}.\` *${item.itemName}* (${sizeLabel})\n` +
           `   • Restocked: \`${qty} ${unitLabel}\`${pkgText}\n` +
           `   • Cost:      \`₹${Math.round(costValue).toLocaleString('en-IN')}\`\n` +

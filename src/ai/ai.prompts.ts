@@ -25,11 +25,25 @@ export interface PromptInputData {
   isGodownStockList?: boolean;
   debitors?: DebitorSummary[];
   debitorsLimit?: number;
+  industryProfile?: string;
 }
 
-export function buildDebitorsPrompt(businessName: string, statsText: string, debtorsSummaryText: string): string {
+export function buildDebitorsPrompt(
+  businessName: string,
+  statsText: string,
+  debtorsSummaryText: string,
+  industryProfile = 'HOSPITALITY'
+): string {
+  const persona = industryProfile === 'SERVICES'
+    ? 'local service business financial consultant'
+    : industryProfile === 'RETAIL'
+      ? 'local retail financial consultant'
+      : 'local hospitality/restaurant consultant';
+  
+  const entityTerm = industryProfile === 'SERVICES' ? 'business' : industryProfile === 'RETAIL' ? 'store' : 'restaurant';
+
   return `
-You are a friendly, encouraging local restaurant consultant advising the owner of "${businessName}" on how to recover uncollected customer tab balances (Udhari).
+You are a friendly, encouraging ${persona} advising the owner of "${businessName}" on how to recover uncollected customer tab balances (Udhari).
 Review these outstanding credit collections stats:
 ${statsText}
 Top Debitor Accounts detailed breakdown:
@@ -69,9 +83,26 @@ Rules:
 `;
 }
 
-export function buildSalesPrompt(businessName: string, statsText: string, monthlySummaryText: string): string {
+export function buildSalesPrompt(
+  businessName: string,
+  statsText: string,
+  monthlySummaryText: string,
+  industryProfile = 'HOSPITALITY'
+): string {
+  const persona = industryProfile === 'SERVICES'
+    ? 'local service business financial consultant'
+    : industryProfile === 'RETAIL'
+      ? 'local retail financial consultant'
+      : 'local hospitality/restaurant consultant';
+
+  const leakExamples = industryProfile === 'SERVICES'
+    ? 'billable rates vs overhead, peak monthly opex leakages, credit recovery loops'
+    : industryProfile === 'RETAIL'
+      ? 'product categories margin splits, peak monthly expense leakage, stock credit gap'
+      : 'food vs liquor ratio, peak monthly expense leakage, credit collections gap risk';
+
   return `
-You are a friendly, encouraging local restaurant consultant advising the owner of "${businessName}".
+You are a friendly, encouraging ${persona} advising the owner of "${businessName}".
 Review these financial stats:
 ${statsText}
 Monthly breakdown:
@@ -82,7 +113,7 @@ Analyze the provided financial data and generate three separate sections of insi
 
 1. WEEKLY STAFF MEETING CHECKLIST: Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist.
 2. DYNAMIC 3-MONTH PROJECTIONS: Project the operational outlook for the NEXT 3 MONTHS in exactly 3 bullet points.
-3. STRATEGIC INTELLIGENCE (HIDDEN LEAKS & RATIO OPPORTUNITIES): Identify exactly 3 hidden insights, ratio optimizations, or operational leak alerts (e.g. food vs liquor ratio, peak monthly expense leakage, credit collections gap risk).
+3. STRATEGIC INTELLIGENCE (HIDDEN LEAKS & RATIO OPPORTUNITIES): Identify exactly 3 hidden insights, ratio optimizations, or operational leak alerts (e.g. ${leakExamples}).
 
 Rules:
 - Speak in a friendly, encouraging, and supportive consulting tone.
@@ -111,9 +142,22 @@ Rules:
 `;
 }
 
-export function buildGodownStockPrompt(businessName: string, statsText: string, stockSummaryText: string): string {
+export function buildGodownStockPrompt(
+  businessName: string,
+  statsText: string,
+  stockSummaryText: string,
+  industryProfile = 'HOSPITALITY'
+): string {
+  const persona = industryProfile === 'SERVICES'
+    ? 'local service business operations consultant'
+    : industryProfile === 'RETAIL'
+      ? 'local retail inventory consultant'
+      : 'local hospitality inventory/bar consultant';
+
+  const warehouseTerm = industryProfile === 'SERVICES' ? 'storage room' : industryProfile === 'RETAIL' ? 'backroom' : 'godown (warehouse)';
+
   return `
-You are a friendly, encouraging local restaurant/bar consultant advising the owner of "${businessName}" on their godown (warehouse) inventory.
+You are a friendly, encouraging ${persona} advising the owner of "${businessName}" on their ${warehouseTerm} inventory.
 Review these inventory totals and movement stats:
 ${statsText}
 Top Inventory Items detailed breakdown (closing stock and movement):
@@ -124,7 +168,7 @@ Analyze the provided inventory data and generate three separate sections of insi
 
 1. WEEKLY STAFF MEETING CHECKLIST: Write exactly 3 direct, practical business suggestions for their weekly staff meeting checklist (e.g., restocking specific low stock items, audits on negative items, or organizing specific categories).
 2. DYNAMIC 3-MONTH PROJECTIONS: Project the inventory demand, valuation trends, and depletion outlook for the NEXT 3 MONTHS in exactly 3 bullet points.
-3. STRATEGIC INTELLIGENCE (HIDDEN LEAKS & RUNNING COSTS): Identify exactly 3 hidden insights, capital lock alerts, or dead stock optimization recommendations (e.g. slow-moving bottles, margin differences, category space distribution, purchase frequency).
+3. STRATEGIC INTELLIGENCE (HIDDEN LEAKS & RUNNING COSTS): Identify exactly 3 hidden insights, capital lock alerts, or dead stock optimization recommendations (e.g. slow-moving stock, margin differences, category shelf space distribution, purchase frequency).
 
 Rules:
 - Speak in a friendly, encouraging, and supportive consulting tone.
@@ -152,4 +196,3 @@ Rules:
 [INTELLIGENCE_END]
 `;
 }
-

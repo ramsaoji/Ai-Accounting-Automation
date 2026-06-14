@@ -1,9 +1,9 @@
 import ExcelJS from 'exceljs';
 import { Readable } from 'stream';
-import { SheetParsingResult, ParsingError, GodownStockItem, ExcelParsingResult } from '../../types/accounting.types.js';
-import { extractStringValue } from '../excel.mapper.js';
-import { logger } from '../../logger/logger.js';
-import { getHistoryRetentionDays } from '../../db/db.client.js';
+import { SheetParsingResult, ParsingError, GodownStockItem, ExcelParsingResult } from '../../../types/accounting.types.js';
+import { extractStringValue } from '../../excel.mapper.js';
+import { logger } from '../../../logger/logger.js';
+import { getHistoryRetentionDays } from '../../../db/db.client.js';
 
 /**
  * Normalizes product name to handle spelling inconsistencies.
@@ -61,7 +61,7 @@ function findDateInRow(row: ExcelJS.Row): Date | null {
 }
 
 /**
- * Parses the pricing section at the bottom of the "Current" sheet.
+ * Parses the pricing section at the bottom of the "Todays" sheet.
  */
 function parsePriceLookup(worksheet: any): Map<string, { costPrice: number; sellingPrice: number }> {
   const priceLookup = new Map<string, { costPrice: number; sellingPrice: number }>();
@@ -92,17 +92,13 @@ function parsePriceLookup(worksheet: any): Map<string, { costPrice: number; sell
       }
 
       const normalizedName = normalizeProductName(colB);
-      // Rates columns are: 90 PR/SR, 180 PR/SR, 375 PR/SR, 750 PR/SR, Loose PR/SR (5 sizes, 1000/2000 pricing is missing)
-      const sizes = [90, 180, 375, 750, 0];
-      const packagings = ['BOTTLE', 'BOTTLE', 'BOTTLE', 'BOTTLE', 'LOOSE'];
-
+      const sizes = [90, 180, 375, 750, 1000];
       for (let i = 0; i < sizes.length; i++) {
         const size = sizes[i];
-        const packaging = packagings[i];
         const pr = getNum(row, 9 + i * 2);
         const sr = getNum(row, 10 + i * 2);
         if (pr > 0 || sr > 0) {
-          const key = `${normalizedName}_${size}_${packaging}`;
+          const key = `${normalizedName}_${size}_BOTTLE`;
           priceLookup.set(key, { costPrice: pr, sellingPrice: sr });
         }
       }
@@ -214,8 +210,8 @@ function parseBlockRows(
     let packagings: string[] = [];
 
     if (currentCategory === 'Liquor') {
-      sizes = [90, 180, 375, 750, 1000, 2000, 0];
-      packagings = ['bottle', 'bottle', 'bottle', 'bottle', 'bottle', 'bottle', 'loose'];
+      sizes = [90, 180, 375, 750, 1000, 2000];
+      packagings = ['bottle', 'bottle', 'bottle', 'bottle', 'bottle', 'bottle'];
     } else if (currentCategory === 'Strong Beer' || currentCategory === 'Mild Beer') {
       sizes = [330, 330, 500, 650];
       packagings = ['bottle', 'tin', 'tin', 'bottle'];
@@ -232,16 +228,18 @@ function parseBlockRows(
         const packaging = packagings[i];
 
         const colOpening = 3 + i;
-        const colIn = size === 0 ? -1 : 11 + i; // Loose (size 0) has no In column
-        const colClosing = 18 + i;
-        const colSales = 26 + i;
+        const colIn = 10 + i;
+        const colOut = 17 + i;
+        const colClosing = 24 + i;
 
         const openingStock = getNum(row, colOpening);
-        const stockIn = colIn === -1 ? 0 : getNum(row, colIn);
-        const closingStock = getNum(row, colClosing);
-        const sales = getNum(row, colSales);
+        const stockIn = getNum(row, colIn);
+        const stockOut = getNum(row, colOut);
+        
+        const expectedClosing = openingStock + stockIn - stockOut;
+        const closingStock = getNum(row, colClosing, expectedClosing);
 
-        if (openingStock === 0 && stockIn === 0 && closingStock === 0 && sales === 0) {
+        if (openingStock === 0 && stockIn === 0 && stockOut === 0 && closingStock === 0) {
           continue;
         }
 
@@ -261,9 +259,10 @@ function parseBlockRows(
           itemCode: null,
           category: currentCategory,
           bottleSizeMl: size,
+          unitOfMeasure: 'units',
           openingStock,
           stockIn,
-          stockOut: sales, // Map Counter Sales → stock_out column database field
+          stockOut,
           closingStock,
           quantity: closingStock,
           unitPrice: sellingPrice ?? 0,
@@ -272,8 +271,8 @@ function parseBlockRows(
           sellingPrice,
           totalCostValue,
           totalSellValue,
-          location: 'counter',
-          metadata: size === 0 ? { packaging, unit: 'ml', isLoose: true } : { packaging }
+          location: 'godown',
+          metadata: { packaging }
         });
       }
     } catch (err) {
@@ -289,59 +288,60 @@ function parseBlockRows(
 }
 
 /**
- * Main parser entry point for Counter Stock Workbooks.
+ * Main parser entry point for Godown Stock Workbooks.
  */
-export async function parseCounterStockWorkbook(workbook: ExcelJS.Workbook, fileName: string): Promise<ExcelParsingResult> {
-  logger.info({ fileName }, 'Counter Stock parsing initiated');
+export async function parseGodownStockWorkbook(workbook: ExcelJS.Workbook, fileName: string): Promise<ExcelParsingResult> {
+  logger.info({ fileName }, 'Godown Stock parsing initiated');
 
-  const currentSheet = workbook.getWorksheet('Current');
+  const todaysSheet = workbook.getWorksheet('Todays');
   const historySheet = workbook.getWorksheet('History_') || workbook.getWorksheet('History');
 
-  if (!currentSheet) {
-    throw new Error('Malformed Counter Stock Workbook: Missing "Current" worksheet.');
+  if (!todaysSheet) {
+    throw new Error('Malformed Godown Stock Workbook: Missing "Todays" worksheet.');
   }
 
-  // 1. Build pricing lookup from Current sheet first
-  logger.info('Building pricing map from Current sheet...');
-  const priceLookup = parsePriceLookup(currentSheet);
+  // 1. Build pricing lookup from Todays sheet first
+  logger.info('Building pricing map from Todays sheet...');
+  const priceLookup = parsePriceLookup(todaysSheet);
   logger.info({ priceCount: priceLookup.size }, 'Pricing map successfully established');
 
   const sheets: SheetParsingResult[] = [];
 
-  // 2. Parse Current sheet snapshots
-  logger.info('Parsing Current sheet snapshots...');
-  const currentBlocks = extractBlocks(currentSheet);
+  // 2. Parse Todays sheet snapshots
+  logger.info('Parsing Todays sheet snapshots...');
+  const todaysBlocks = extractBlocks(todaysSheet);
   
-  // Find where the pricing starts (usually row 121/122 in Current sheet)
-  let currentEndRow = currentSheet.rowCount;
-  for (let r = 1; r <= currentSheet.rowCount; r++) {
-    const colB = extractStringValue(currentSheet.getRow(r).getCell(2).value).trim().toUpperCase();
-    if (colB === 'ALL QUANTITY' || (colB === 'LIQUOR NAME' && r > 90)) {
-      currentEndRow = r - 1;
+  // Note: Only parse rows up to the pricing block (or endRow limits)
+  // Find where the pricing starts (usually row 107 in Todays sheet)
+  let todaysEndRow = todaysSheet.rowCount;
+  for (let r = 1; r <= todaysSheet.rowCount; r++) {
+    const colB = extractStringValue(todaysSheet.getRow(r).getCell(2).value).trim().toUpperCase();
+    if (colB === 'ALL QUANTITY' || colB === 'LIQUOR NAME' && r > 90) {
+      todaysEndRow = r - 1;
       break;
     }
   }
 
-  const currentStockItems: GodownStockItem[] = [];
-  const currentErrors: ParsingError[] = [];
+  const todaysStockItems: GodownStockItem[] = [];
+  const todaysErrors: ParsingError[] = [];
 
-  for (const block of currentBlocks) {
-    const actualEnd = Math.min(block.endRow, currentEndRow);
-    const { items, errors } = parseBlockRows(currentSheet, block.startRow, actualEnd, block.date, 'Current', priceLookup);
-    currentStockItems.push(...items);
-    currentErrors.push(...errors);
+  for (const block of todaysBlocks) {
+    const actualEnd = Math.min(block.endRow, todaysEndRow);
+    const { items, errors } = parseBlockRows(todaysSheet, block.startRow, actualEnd, block.date, 'Todays', priceLookup);
+    todaysStockItems.push(...items);
+    todaysErrors.push(...errors);
   }
 
   sheets.push({
-    sheetName: 'Current',
+    sheetName: 'Todays',
     transactions: [], // Not a financial ledger
-    errors: currentErrors,
-    godownStockItems: currentStockItems
+    errors: todaysErrors,
+    godownStockItems: todaysStockItems
   });
 
   // 3. Parse History sheet based on history retention settings table
-  const historyDays = await getHistoryRetentionDays('godown_stock', 0); // Share godown retention setting
-  logger.info({ historyDaysSetting: historyDays }, 'Stock history setting fetched for counter');
+  const historyDays = await getHistoryRetentionDays('godown_stock', 0);
+  logger.info({ historyDaysSetting: historyDays }, 'Stock history setting fetched');
 
   if (historySheet && historyDays > 0) {
     logger.info('Scanning History sheet snapshot blocks...');
@@ -378,21 +378,20 @@ export async function parseCounterStockWorkbook(workbook: ExcelJS.Workbook, file
   logger.info({
     fileName,
     sheetsParsed: sheets.map(s => `${s.sheetName} (${s.godownStockItems?.length || 0} rows, ${s.errors.length} errors)`)
-  }, 'Counter Stock parsing completed');
+  }, 'Godown Stock parsing completed');
 
   return {
     fileName,
     sheets,
-    isGodownStockList: true, // Classify as inventory list type
-    isCounterStockList: true
+    isGodownStockList: true
   };
 }
 
-export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileName: string): Promise<ExcelParsingResult> {
-  logger.info({ fileName }, 'Counter Stock streaming parser initiated');
+export async function parseGodownStockWorkbookStreaming(buffer: Buffer, fileName: string): Promise<ExcelParsingResult> {
+  logger.info({ fileName }, 'Godown Stock streaming parser initiated');
 
   const historyDays = await getHistoryRetentionDays('godown_stock', 0);
-  logger.info({ historyDaysSetting: historyDays }, 'Stock history setting fetched for streaming counter');
+  logger.info({ historyDaysSetting: historyDays }, 'Stock history setting fetched for streaming');
 
   const priceLookup = new Map<string, { costPrice: number; sellingPrice: number }>();
   const todaysStockItems: GodownStockItem[] = [];
@@ -415,11 +414,11 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
 
   for await (const worksheet of workbookReader) {
     const rawSheetName = (worksheet as any).name;
-    const isCurrent = rawSheetName === 'Current';
+    const isTodays = rawSheetName === 'Todays';
     const isHistory = rawSheetName === 'History' || rawSheetName === 'History_';
 
-    if (isCurrent) {
-      logger.info('Streaming: Loading Current sheet rows into memory...');
+    if (isTodays) {
+      logger.info('Streaming: Loading Todays sheet rows into memory...');
       const rowsMap = new Map<number, ExcelJS.Row>();
       let maxRowNumber = 0;
       for await (const row of worksheet) {
@@ -434,27 +433,27 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
         getRow: (r: number) => rowsMap.get(r) || { getCell: () => ({ value: null }) } as any
       };
 
-      logger.info('Streaming: Building pricing map from Current row container...');
+      logger.info('Streaming: Building pricing map from Todays row container...');
       const priceLookupLocal = parsePriceLookup(rowContainer);
       for (const [k, v] of priceLookupLocal) {
         priceLookup.set(k, v);
       }
       logger.info({ priceCount: priceLookup.size }, 'Streaming: Pricing map established');
 
-      // Find blocks in Current sheet
-      const currentBlocks = extractBlocks(rowContainer);
-      let currentEndRow = rowContainer.rowCount;
+      // Find blocks in Todays sheet
+      const todaysBlocks = extractBlocks(rowContainer);
+      let todaysEndRow = rowContainer.rowCount;
       for (let r = 1; r <= rowContainer.rowCount; r++) {
         const colB = extractStringValue(rowContainer.getRow(r).getCell(2).value).trim().toUpperCase();
         if (colB === 'ALL QUANTITY' || (colB === 'LIQUOR NAME' && r > 90)) {
-          currentEndRow = r - 1;
+          todaysEndRow = r - 1;
           break;
         }
       }
 
-      for (const block of currentBlocks) {
-        const actualEnd = Math.min(block.endRow, currentEndRow);
-        const { items, errors } = parseBlockRows(rowContainer, block.startRow, actualEnd, block.date, 'Current', priceLookup);
+      for (const block of todaysBlocks) {
+        const actualEnd = Math.min(block.endRow, todaysEndRow);
+        const { items, errors } = parseBlockRows(rowContainer, block.startRow, actualEnd, block.date, 'Todays', priceLookup);
         todaysStockItems.push(...items);
         todaysErrors.push(...errors);
       }
@@ -513,8 +512,8 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
         let packagings: string[] = [];
 
         if (currentCategory === 'Liquor') {
-          sizes = [90, 180, 375, 750, 1000, 2000, 0];
-          packagings = ['bottle', 'bottle', 'bottle', 'bottle', 'bottle', 'bottle', 'loose'];
+          sizes = [90, 180, 375, 750, 1000, 2000];
+          packagings = ['bottle', 'bottle', 'bottle', 'bottle', 'bottle', 'bottle'];
         } else if (currentCategory === 'Strong Beer' || currentCategory === 'Mild Beer') {
           sizes = [330, 330, 500, 650];
           packagings = ['bottle', 'tin', 'tin', 'bottle'];
@@ -531,16 +530,18 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
             const packaging = packagings[i];
 
             const colOpening = 3 + i;
-            const colIn = size === 0 ? -1 : 11 + i;
-            const colClosing = 18 + i;
-            const colSales = 26 + i;
+            const colIn = 10 + i;
+            const colOut = 17 + i;
+            const colClosing = 24 + i;
 
             const openingStock = getNum(row, colOpening);
-            const stockIn = colIn === -1 ? 0 : getNum(row, colIn);
-            const closingStock = getNum(row, colClosing);
-            const sales = getNum(row, colSales);
+            const stockIn = getNum(row, colIn);
+            const stockOut = getNum(row, colOut);
+            
+            const expectedClosing = openingStock + stockIn - stockOut;
+            const closingStock = getNum(row, colClosing, expectedClosing);
 
-            if (openingStock === 0 && stockIn === 0 && closingStock === 0 && sales === 0) {
+            if (openingStock === 0 && stockIn === 0 && stockOut === 0 && closingStock === 0) {
               continue;
             }
 
@@ -560,9 +561,10 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
               itemCode: null,
               category: currentCategory,
               bottleSizeMl: size,
+              unitOfMeasure: 'units',
               openingStock,
               stockIn,
-              stockOut: sales,
+              stockOut,
               closingStock,
               quantity: closingStock,
               unitPrice: sellingPrice ?? 0,
@@ -571,8 +573,8 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
               sellingPrice,
               totalCostValue,
               totalSellValue,
-              location: 'counter',
-              metadata: size === 0 ? { packaging, unit: 'ml', isLoose: true } : { packaging }
+              location: 'godown',
+              metadata: { packaging }
             });
           }
         } catch (err) {
@@ -588,7 +590,7 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
 
   const sheets: SheetParsingResult[] = [
     {
-      sheetName: 'Current',
+      sheetName: 'Todays',
       transactions: [],
       errors: todaysErrors,
       godownStockItems: todaysStockItems
@@ -607,12 +609,11 @@ export async function parseCounterStockWorkbookStreaming(buffer: Buffer, fileNam
   logger.info({
     fileName,
     sheetsParsed: sheets.map(s => `${s.sheetName} (${s.godownStockItems?.length || 0} rows, ${s.errors.length} errors)`)
-  }, 'Counter Stock streaming parsing completed');
+  }, 'Godown Stock streaming parsing completed');
 
   return {
     fileName,
     sheets,
-    isGodownStockList: true,
-    isCounterStockList: true
+    isGodownStockList: true
   };
 }

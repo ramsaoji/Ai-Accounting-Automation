@@ -32,14 +32,8 @@ export function generateSalesSvgChart(
   const pointsOutflow: any[] = [];
 
   sortedSheets.forEach((s, idx) => {
-    const liq = s.transactions.filter((t: Transaction) => t.category === 'Liquor Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const food = s.transactions.filter((t: Transaction) => t.category === 'Food Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const rec = s.transactions.filter((t: Transaction) => t.category === 'Credit Recovery').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const exp = s.transactions.filter((t: Transaction) => t.category === 'Operational Expense').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const cred = s.transactions.filter((t: Transaction) => t.category === 'Credit Extended').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-
-    const inf = liq + food + rec;
-    const out = exp + cred;
+    const inf = s.transactions.filter((t: Transaction) => t.type === 'credit').reduce((sum: number, t: Transaction) => sum + Number(t.amount || 0), 0);
+    const out = s.transactions.filter((t: Transaction) => t.type === 'debit').reduce((sum: number, t: Transaction) => sum + Number(t.amount || 0), 0);
 
     const x = svgPaddingX + (idx * (svgWidth - 2 * svgPaddingX)) / Math.max(1, sortedSheets.length - 1);
     const yInf = svgHeight - svgPaddingY - (inf / maxInflowOutflow) * (svgHeight - 2 * svgPaddingY);
@@ -131,7 +125,8 @@ export function generateSalesSvgChart(
  */
 export function buildSalesTrendElements(
   sortedSheets: any[],
-  maxAbsNet: number
+  maxAbsNet: number,
+  coaList: any[] = []
 ): SalesReportElements {
   let bestRevenueMonth = 'None';
   let bestRevenueValue = 0;
@@ -150,12 +145,124 @@ export function buildSalesTrendElements(
   const monthlyTrendRows: string[] = [];
   const jsonMonths: any[] = [];
 
+  // Derive fallbacks from transaction categories to prevent hardcoded liquor/food associations
+  const allTxs = sortedSheets.flatMap(s => s.transactions || []);
+  const creditCategories = Array.from(new Set(
+    allTxs
+      .filter((t: any) => t.type === 'credit' && !t.category?.toLowerCase().includes('recovery') && !t.category?.toLowerCase().includes('jama'))
+      .map((t: any) => t.category)
+  ));
+  const fallbackRev1Name = creditCategories[0];
+  const fallbackRev2Name = creditCategories[1];
+
+  const recoveryCoa = coaList.find(c =>
+    c.accountType === 'REVENUE' &&
+    (
+      c.accountName.toLowerCase().includes('recover') ||
+      c.accountName.toLowerCase().includes('jama') ||
+      c.accountName.toLowerCase().includes('collected')
+    )
+  ) || coaList.find(c => c.accountCode === '4003');
+
+  const creditExtendedCoa = coaList.find(c =>
+    (c.accountType === 'OPEX' || c.accountType === 'EXPENSE') &&
+    (
+      c.accountName.toLowerCase().includes('extended') ||
+      c.accountName.toLowerCase().includes('given') ||
+      c.accountName.toLowerCase().includes('udhari')
+    )
+  ) || coaList.find(c => c.accountCode === '5002');
+
+  const revenueCoas = coaList.filter(c => c.accountType === 'REVENUE' && c.id !== recoveryCoa?.id);
+  const rev1 = revenueCoas[0];
+  const rev2 = revenueCoas[1];
+
+  const revenueCategories = revenueCoas.length > 0 
+    ? revenueCoas.map(c => c.accountName)
+    : [fallbackRev1Name || 'Primary Revenue', fallbackRev2Name || 'Secondary Revenue'].filter(Boolean);
+
   for (const s of sortedSheets) {
-    const liq = s.transactions.filter((t: Transaction) => t.category === 'Liquor Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const food = s.transactions.filter((t: Transaction) => t.category === 'Food Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const rec = s.transactions.filter((t: Transaction) => t.category === 'Credit Recovery').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const exp = s.transactions.filter((t: Transaction) => t.category === 'Operational Expense').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    const cred = s.transactions.filter((t: Transaction) => t.category === 'Credit Extended').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+    let liq = 0;
+    let food = 0;
+    let rec = 0;
+    let exp = 0;
+    let cred = 0;
+
+    const sheetCatSums: Record<string, number> = {};
+    for (const cat of revenueCategories) {
+      sheetCatSums[cat] = 0;
+    }
+
+    for (const t of s.transactions) {
+      const amt = Number(t.amount || 0);
+      const categoryLower = (t.category || '').toLowerCase();
+      
+      const coa = t.coaId ? coaList.find(c => c.id === t.coaId) : null;
+      const coaCode = coa?.accountCode || '';
+
+      let isRecovery =
+        (recoveryCoa && (t.coaId === recoveryCoa.id || coaCode === recoveryCoa.accountCode)) ||
+        categoryLower.includes('recover') ||
+        categoryLower.includes('jama');
+
+      let isPrimaryRev = false;
+      let isSecondaryRev = false;
+
+      if (coaList.length > 0) {
+        if (coa) {
+          if (rev1 && coa.id === rev1.id) isPrimaryRev = true;
+          else if (rev2 && coa.id === rev2.id) isSecondaryRev = true;
+        } else {
+          if (rev1 && categoryLower.includes(rev1.accountName.toLowerCase())) isPrimaryRev = true;
+          else if (rev2 && categoryLower.includes(rev2.accountName.toLowerCase())) isSecondaryRev = true;
+        }
+      }
+
+      if (!isPrimaryRev && !isSecondaryRev) {
+        // Fallback dynamic matching if no COA or no match
+        if (fallbackRev1Name && categoryLower === fallbackRev1Name.toLowerCase()) {
+          isPrimaryRev = true;
+        } else if (fallbackRev2Name && categoryLower === fallbackRev2Name.toLowerCase()) {
+          isSecondaryRev = true;
+        }
+      }
+
+      if (t.type === 'credit') {
+        if (isPrimaryRev) {
+          liq += amt;
+          const key = rev1 ? rev1.accountName : (fallbackRev1Name || 'Primary Revenue');
+          if (key in sheetCatSums) {
+            sheetCatSums[key] = (sheetCatSums[key] || 0) + amt;
+          }
+        } else if (isSecondaryRev) {
+          food += amt;
+          const key = rev2 ? rev2.accountName : (fallbackRev2Name || 'Secondary Revenue');
+          if (key in sheetCatSums) {
+            sheetCatSums[key] = (sheetCatSums[key] || 0) + amt;
+          }
+        } else if (isRecovery) {
+          rec += amt;
+        } else {
+          const key = coa ? coa.accountName : (revenueCategories.includes(t.category) ? t.category : revenueCategories[0]);
+          if (key in sheetCatSums) {
+            sheetCatSums[key] = (sheetCatSums[key] || 0) + amt;
+          }
+          liq += amt;
+        }
+      } else {
+        const isCreditExtended =
+          (creditExtendedCoa && (coa?.id === creditExtendedCoa.id || coaCode === creditExtendedCoa.accountCode)) ||
+          categoryLower.includes('extended') ||
+          categoryLower.includes('given') ||
+          categoryLower.includes('udhari');
+
+        if (isCreditExtended) {
+          cred += amt;
+        } else {
+          exp += amt; // default opex
+        }
+      }
+    }
 
     const inflows = liq + food + rec;
     const outflows = exp + cred;
@@ -180,8 +287,9 @@ export function buildSalesTrendElements(
     masterExpenses += exp;
     masterCreditExtended += cred;
 
+    const revColsStr = revenueCategories.map(cat => `₹${Math.round(sheetCatSums[cat] || 0).toLocaleString()}`).join(' | ');
     monthlyTrendRows.push(
-      `| **${s.sheetName}** | ₹${Math.round(liq).toLocaleString()} | ₹${Math.round(food).toLocaleString()} | ₹${Math.round(cred).toLocaleString()} | ₹${Math.round(exp).toLocaleString()} | ₹${Math.round(net).toLocaleString()} | ${net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴'} |`
+      `| **${s.sheetName}** | ${revColsStr} | ₹${Math.round(cred).toLocaleString()} | ₹${Math.round(exp).toLocaleString()} | ₹${Math.round(net).toLocaleString()} | ${net >= 0 ? 'Surplus 🟢' : 'Deficit 🔴'} |`
     );
 
     const barPercent = Math.min(100, Math.max(8, Math.round((Math.abs(net) / maxAbsNet) * 100)));
@@ -229,6 +337,7 @@ export function buildSalesTrendElements(
     peakExpenseValue,
     masterLiquor,
     masterFood,
+
     masterRecovery,
     masterExpenses,
     masterCreditExtended,
@@ -400,6 +509,9 @@ export interface SalesFallbackParams {
   bestRevenueValue: number;
   peakExpenseMonth: string;
   peakExpenseValue: number;
+  industryProfile?: string;
+  rev1Name?: string;
+  rev2Name?: string;
 }
 
 /**
@@ -422,8 +534,14 @@ export function computeSalesFallbackInsights(p: SalesFallbackParams): { checklis
   // Expense buffer = 10% above peak month
   const expenseBuffer = Math.round(p.peakExpenseValue * 1.1);
 
+  const isHospitality = p.industryProfile === 'HOSPITALITY';
+  const rev1 = p.rev1Name || (isHospitality ? 'Liquor' : 'Primary Revenue');
+  const rev2 = p.rev2Name || (isHospitality ? 'Food' : 'Secondary Revenue');
+
   const checklist = [
-    `Food sales are at ${p.foodPercentage}% of total menu revenue vs ${p.liquorPercentage}% liquor — brief staff to upsell food add-ons and meal combos during every liquor order to improve the revenue mix.`,
+    isHospitality
+      ? `Food sales are at ${p.foodPercentage}% of total menu revenue vs ${p.liquorPercentage}% liquor — brief staff to upsell food add-ons and meal combos during every liquor order to improve the revenue mix.`
+      : `${rev2} sales are at ${p.foodPercentage}% of sales vs ${p.liquorPercentage}% for ${rev1} — brief staff to cross-sell ${rev2.toLowerCase()} offerings to improve the revenue mix.`,
     `₹${Math.round(p.creditOutstandingGap).toLocaleString()} in outstanding credit remains uncollected (${p.creditRecoveryRate}% recovery rate) — assign a dedicated follow-up list from the debitors ledger and target clearing at least ₹${Math.round(avgMonthlyCreditExtended * 0.3).toLocaleString()} this week.`,
     `${p.peakExpenseMonth} recorded the highest expense month at ₹${Math.round(p.peakExpenseValue).toLocaleString()} — cross-check current supplier invoices against that period to identify any recurring cost spikes that can be renegotiated.`
   ].join('\n');
@@ -435,9 +553,11 @@ export function computeSalesFallbackInsights(p: SalesFallbackParams): { checklis
   ].join('\n');
 
   const intelligence = [
-    `The restaurant sales mix is highly skewed with ${p.liquorPercentage}% Liquor (₹${Math.round(p.masterLiquor).toLocaleString()}) and only ${p.foodPercentage}% Food (₹${Math.round(p.masterFood).toLocaleString()}). Increasing food sales by cross-selling at the table represents a major untapped margin booster.`,
+    isHospitality
+      ? `The restaurant sales mix is highly skewed with ${p.liquorPercentage}% Liquor (₹${Math.round(p.masterLiquor).toLocaleString()}) and only ${p.foodPercentage}% Food (₹${Math.round(p.masterFood).toLocaleString()}). Increasing food sales by cross-selling at the table represents a major untapped margin booster.`
+      : `The business sales mix shows ${p.liquorPercentage}% ${rev1} (₹${Math.round(p.masterLiquor).toLocaleString()}) vs ${p.foodPercentage}% ${rev2} (₹${Math.round(p.masterFood).toLocaleString()}). Optimizing this ratio represents an untapped margin booster.`,
     `Peak operating outflow occurred in ${p.peakExpenseMonth} with expenses hitting ₹${Math.round(p.peakExpenseValue).toLocaleString()}. Setting up a rolling supplier quote budget during peak months can prevent over-ordering cost leaks.`,
-    `There is a ₹${Math.round(p.creditOutstandingGap).toLocaleString()} outstanding credit gap (${p.creditRecoveryRate}% recovery). Establishing a credit threshold where customer order accounts are capped at 5 days or ₹5,000 outstanding will instantly lock in working capital gains.`
+    `There is a ₹${Math.round(p.creditOutstandingGap).toLocaleString()} outstanding credit gap (${p.creditRecoveryRate}% recovery). Establishing a credit threshold where customer accounts are capped at standard outstanding balances will instantly lock in working capital gains.`
   ].join('\n');
 
   return { checklist, projections, intelligence };

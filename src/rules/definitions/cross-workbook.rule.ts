@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Transaction } from '../../types/accounting.types.js';
-import { Rule, RuleAlert } from '../rules.types.js';
+import { Rule, RuleAlert, RuleContext } from '../rules.types.js';
 import { db } from '../../db/db.client.js';
 import * as schema from '../../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
@@ -31,13 +31,12 @@ export class CrossWorkbookReconciliationRule implements Rule {
   name = 'Cross-Workbook Ledger Reconciliation Check';
   description = 'Reconciles Credit Extended / Credit Recovery sums between Daily Sales and Debitors outstanding ledger';
 
-  async evaluate(transactions: Transaction[]): Promise<RuleAlert[]> {
+  async evaluate(transactions: Transaction[], context?: RuleContext): Promise<RuleAlert[]> {
     const alerts: RuleAlert[] = [];
 
-    const hasSalesCategory = transactions.some(t => t.category === 'Liquor Revenue' || t.category === 'Food Revenue');
-    const isDebitorsList = transactions.some(t => t.invoiceNumber.startsWith('UD-DB') || t.invoiceNumber.startsWith('UD-CR'));
+    const fileType = context?.fileType || 'sales';
 
-    if (hasSalesCategory) {
+    if (fileType === 'sales') {
       let summary: ReconciliationSummary | null = null;
       try {
         const [activeFile] = await db
@@ -76,8 +75,25 @@ export class CrossWorkbookReconciliationRule implements Rule {
           const debTotalDebit = summary.aggregates?.totalDebitSum || 0;
           const debTotalCredit = summary.aggregates?.totalCreditSum || 0;
 
-          const salesTotalDebit = transactions.filter(t => t.category === 'Credit Extended').reduce((sum, t) => sum + t.amount, 0);
-          const salesTotalCredit = transactions.filter(t => t.category === 'Credit Recovery').reduce((sum, t) => sum + t.amount, 0);
+          // Fetch Chart of Accounts to resolve codes
+          const coaList = await db.select().from(schema.chartOfAccounts);
+          const coaMap = new Map(coaList.map(c => [c.id, c]));
+
+          const salesTotalDebit = transactions
+            .filter(t => {
+              const coa = t.coaId ? coaMap.get(t.coaId) : null;
+              const catLower = (t.category || '').toLowerCase();
+              return t.type === 'debit' && (coa?.accountCode === '5002' || catLower.includes('extended') || catLower.includes('given'));
+            })
+            .reduce((sum, t) => sum + t.amount, 0);
+
+          const salesTotalCredit = transactions
+            .filter(t => {
+              const coa = t.coaId ? coaMap.get(t.coaId) : null;
+              const catLower = (t.category || '').toLowerCase();
+              return t.type === 'credit' && (coa?.accountCode === '4003' || catLower.includes('recovery') || catLower.includes('jama'));
+            })
+            .reduce((sum, t) => sum + t.amount, 0);
 
           const debitDiff = Math.abs(salesTotalDebit - debTotalDebit);
           const creditDiff = Math.abs(salesTotalCredit - debTotalCredit);
@@ -102,7 +118,7 @@ export class CrossWorkbookReconciliationRule implements Rule {
           // ignore
         }
       }
-    } else if (isDebitorsList) {
+    } else if (fileType === 'debitors') {
       let summary: ReconciliationSummary | null = null;
       try {
         const [activeFile] = await db
@@ -119,7 +135,7 @@ export class CrossWorkbookReconciliationRule implements Rule {
         if (activeFile) {
           const [result] = await db
             .select({
-              creditExtended: sql<number>`COALESCE(SUM(CASE WHEN ${schema.transactions.type} = 'debit' AND lower(${schema.transactions.category}) LIKE '%extended%' THEN ${schema.transactions.amount} ELSE 0 END), 0)`,
+              creditExtended: sql<number>`COALESCE(SUM(CASE WHEN ${schema.transactions.type} = 'debit' AND (lower(${schema.transactions.category}) LIKE '%extended%' OR lower(${schema.transactions.category}) LIKE '%given%') THEN ${schema.transactions.amount} ELSE 0 END), 0)`,
               creditRecovery: sql<number>`COALESCE(SUM(CASE WHEN lower(${schema.transactions.category}) LIKE '%recovery%' OR lower(${schema.transactions.category}) LIKE '%jama%' THEN ${schema.transactions.amount} ELSE 0 END), 0)`
             })
             .from(schema.transactions)

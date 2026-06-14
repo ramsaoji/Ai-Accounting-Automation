@@ -25,6 +25,10 @@ interface SalesTotals {
   bestProfitValue: number;
   bestProfitMonth: string;
   creditRecoveryRate: string;
+  splitTitle?: string;
+  splitValue?: string;
+  splitTooltip?: string;
+  splitDesc?: string;
 }
 
 interface StockTotals {
@@ -56,6 +60,7 @@ interface OverviewKpiCardsProps {
   dynamicDebitorTotals: DebitorTotals | null;
   dynamicSalesTotals: SalesTotals | null;
   dynamicStockTotals: StockTotals | null;
+  industryProfile?: string;
 }
 
 export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
@@ -64,6 +69,7 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
   dynamicDebitorTotals,
   dynamicSalesTotals,
   dynamicStockTotals,
+  industryProfile,
 }) => {
   if (isDebitors && dynamicDebitorTotals) {
     return (
@@ -115,6 +121,16 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
     const godownVol = dynamicStockTotals.godown?.totalVolumeLiters || 0;
     const counterVol = dynamicStockTotals.counter?.totalVolumeLiters || 0;
 
+    const isHospitality = industryProfile === 'HOSPITALITY';
+    const volumeTitle = isHospitality ? "Total Volume" : "Total Stock Items";
+    const volumeValue = isHospitality 
+      ? `${Math.round(dynamicStockTotals.totalVolumeLiters || 0).toLocaleString('en-IN')} Liters`
+      : `${Math.round(dynamicStockTotals.totalItemsCount || 0).toLocaleString('en-IN')} Units`;
+    const volumeDesc = isHospitality ? "Consolidated volume in liters." : "Total quantity of items in stock.";
+    const volumeTooltip = isHospitality
+      ? `Combined volume in liters. Godown: ${Math.round(godownVol).toLocaleString('en-IN')} L | Counter: ${Math.round(counterVol).toLocaleString('en-IN')} L`
+      : `Combined units in stock. Godown: ${Math.round(dynamicStockTotals.godown?.totalItemsCount || 0).toLocaleString('en-IN')} | Counter: ${Math.round(dynamicStockTotals.counter?.totalItemsCount || 0).toLocaleString('en-IN')}`;
+
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 select-none">
         <KpiCard
@@ -141,10 +157,10 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
           icon={<Users className="text-primary size-4 shrink-0" />}
         />
         <KpiCard
-          title="Total Volume"
-          tooltipText={`Combined volume in liters. Godown: ${Math.round(godownVol).toLocaleString('en-IN')} L | Counter: ${Math.round(counterVol).toLocaleString('en-IN')} L`}
-          value={`${Math.round(dynamicStockTotals.totalVolumeLiters).toLocaleString('en-IN')} Liters`}
-          description="Consolidated volume in liters."
+          title={volumeTitle}
+          tooltipText={volumeTooltip}
+          value={volumeValue}
+          description={volumeDesc}
           icon={<Percent className="text-primary size-4 shrink-0" />}
         />
       </div>
@@ -163,10 +179,10 @@ export const OverviewKpiCards: React.FC<OverviewKpiCardsProps> = ({
           variant="green"
         />
         <KpiCard
-          title="Liquor vs Food Split"
-          tooltipText="Proportional ratio of liquor sales compared to food menu sales."
-          value={`${dynamicSalesTotals.liquorPercentage}% / ${dynamicSalesTotals.foodPercentage}%`}
-          description="Ratio of liquor sales vs. food sales."
+          title={dynamicSalesTotals.splitTitle || "Primary vs Secondary Split"}
+          tooltipText={dynamicSalesTotals.splitTooltip || "Proportional ratio of primary revenue compared to secondary revenue."}
+          value={dynamicSalesTotals.splitValue !== undefined ? dynamicSalesTotals.splitValue : `${dynamicSalesTotals.liquorPercentage}% / ${dynamicSalesTotals.foodPercentage}%`}
+          description={dynamicSalesTotals.splitDesc || "Ratio of primary vs. secondary revenue."}
           icon={<Percent className="text-amber-500 size-4 shrink-0" />}
           variant="gold"
         />

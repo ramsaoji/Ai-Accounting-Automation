@@ -157,11 +157,13 @@ export const DebitorLedgerTable: React.FC<DebitorLedgerTableProps> = ({
               onClick={() => onRowClick?.(debtor.name)}
               className="hover:bg-muted/30 transition-colors h-11 border-b cursor-pointer select-none"
             >
-              <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-3">
-                <div className="size-7 rounded-full bg-primary/10 text-primary border flex items-center justify-center font-bold text-[0.68rem] font-mono select-none">
-                  {getAvatarInitials(debtor.name)}
+              <TableCell className="pl-6 font-semibold text-foreground">
+                <div className="flex items-center gap-3">
+                  <div className="size-7 rounded-full bg-primary/10 text-primary border flex items-center justify-center font-bold text-[0.68rem] font-mono select-none">
+                    {getAvatarInitials(debtor.name)}
+                  </div>
+                  <span className="truncate max-w-[150px]">{debtor.name}</span>
                 </div>
-                <span className="truncate max-w-[150px]">{debtor.name}</span>
               </TableCell>
               
               <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(debtor.debit)}</TableCell>

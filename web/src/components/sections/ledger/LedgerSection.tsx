@@ -10,7 +10,11 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  X
+  X,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Calendar
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -94,6 +98,8 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const [txSelectedMonths, setTxSelectedMonths] = useState<string[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerSearch, setDrawerSearch] = useState('');
+  const [drawerFlowFilter, setDrawerFlowFilter] = useState<'all' | 'credit' | 'debit'>('all');
 
   // Reset selected months when tab changes
   useEffect(() => {
@@ -287,12 +293,18 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
     }
 
     return [...list].sort((a: MonthlySummary, b: MonthlySummary) => {
-      let valA: any = a[salesSortBy as keyof MonthlySummary];
-      let valB: any = b[salesSortBy as keyof MonthlySummary];
+      let valA: any;
+      let valB: any;
 
       if (salesSortBy === 'sheetName') {
         valA = parseSheetNameToValue(a.sheetName);
         valB = parseSheetNameToValue(b.sheetName);
+      } else if (a.departments && a.departments[salesSortBy] !== undefined) {
+        valA = a.departments[salesSortBy];
+        valB = b.departments ? b.departments[salesSortBy] : 0;
+      } else {
+        valA = a[salesSortBy as keyof MonthlySummary];
+        valB = b[salesSortBy as keyof MonthlySummary];
       }
 
       if (typeof valA === 'string' && typeof valB === 'string') {
@@ -367,6 +379,8 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
 
   // Row drilldown click handlers
   const handleMonthClick = async (monthName: string) => {
+    setDrawerSearch('');
+    setDrawerFlowFilter('all');
     setDrawerTitle(`${monthName} Ledger Entries`);
     setDrawerDescription(`Raw accounting logs compiled for the ${monthName} statement sheet.`);
     setDrawerTransactions([]);
@@ -388,6 +402,8 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   };
 
   const handleDebtorClick = async (debtorName: string) => {
+    setDrawerSearch('');
+    setDrawerFlowFilter('all');
     setDrawerTitle(`${debtorName} Transaction History`);
     setDrawerDescription(`Audit log of all credit extended and cash payments cleared for ${debtorName}.`);
     setDrawerTransactions([]);
@@ -409,6 +425,41 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   };
 
   const onRowClick = isDebitors ? handleDebtorClick : handleMonthClick;
+
+  const filteredDrawerTransactions = useMemo(() => {
+    return drawerTransactions.filter((tx) => {
+      const query = drawerSearch.toLowerCase().trim();
+      if (!query && drawerFlowFilter === 'all') return true;
+      
+      const matchesSearch = 
+        tx.category.toLowerCase().includes(query) ||
+        tx.particulars.toLowerCase().includes(query) ||
+        (tx.vendor && tx.vendor.toLowerCase().includes(query)) ||
+        tx.date.includes(query);
+      
+      const matchesFlow = drawerFlowFilter === 'all' ? true : tx.type === drawerFlowFilter;
+      
+      return matchesSearch && matchesFlow;
+    });
+  }, [drawerTransactions, drawerSearch, drawerFlowFilter]);
+
+  const drawerStats = useMemo(() => {
+    let inflow = 0;
+    let outflow = 0;
+    filteredDrawerTransactions.forEach((tx) => {
+      if (tx.type === 'credit') {
+        inflow += tx.amount;
+      } else {
+        outflow += tx.amount;
+      }
+    });
+    return {
+      inflow,
+      outflow,
+      net: inflow - outflow,
+      count: filteredDrawerTransactions.length,
+    };
+  }, [filteredDrawerTransactions]);
 
   // Pagination Logic
   const totalItems = isDebitors
@@ -766,6 +817,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                 stockSortBy={stockSortBy}
                 stockSortOrder={stockSortOrder}
                 onStockSort={handleStockSort}
+                departments={summary.departments}
               />
             ) : (              /* Raw Transactions Explorer Tab */
               txLoading ? (
@@ -918,14 +970,126 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       </Card>
 
       {/* Side Drawer Drilldown overlay */}
+      {/* Side Drawer Drilldown overlay */}
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl w-full h-full flex flex-col p-6 bg-background/95 backdrop-blur-md border-l border-border/80 shadow-2xl overflow-hidden">
+        <SheetContent className="sm:max-w-2xl! w-full h-full flex flex-col p-6 bg-background/95 backdrop-blur-md border-l border-border/80 shadow-2xl overflow-hidden">
           <SheetHeader className="pb-4 border-b border-border/60 shrink-0">
-            <SheetTitle className="text-lg font-bold text-foreground">{drawerTitle}</SheetTitle>
+            <SheetTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+              <Calendar className="size-5 text-primary" />
+              {drawerTitle}
+            </SheetTitle>
             <SheetDescription className="text-xs text-muted-foreground mt-1">
               {drawerDescription}
             </SheetDescription>
           </SheetHeader>
+
+          {/* KPI Summary Cards - Responsive grid */}
+          {!drawerLoading && drawerTransactions.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 mb-1 shrink-0">
+              {/* Total Inflow Card */}
+              <div className="p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 flex flex-col justify-between select-none">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-wider">Total Inflow</span>
+                  <TrendingUp className="size-3.5 text-emerald-500 shrink-0" />
+                </div>
+                <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1.5 leading-none">
+                  {formatINR(drawerStats.inflow)}
+                </span>
+              </div>
+
+              {/* Total Outflow Card */}
+              <div className="p-3 rounded-xl bg-destructive/5 dark:bg-destructive/10 border border-destructive/15 dark:border-destructive/20 flex flex-col justify-between select-none">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-wider">Total Outflow</span>
+                  <TrendingDown className="size-3.5 text-destructive shrink-0" />
+                </div>
+                <span className="text-sm font-extrabold text-destructive font-mono mt-1.5 leading-none">
+                  {formatINR(drawerStats.outflow)}
+                </span>
+              </div>
+
+              {/* Net Flow Card - spans 2 columns on mobile, 1 column on desktop */}
+              <div className={`col-span-2 sm:col-span-1 p-3 rounded-xl border flex flex-col justify-between select-none ${
+                drawerStats.net >= 0 
+                  ? 'bg-primary/5 border-primary/20' 
+                  : 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/15 dark:border-amber-500/20'
+              }`}>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-wider">Net Cashflow</span>
+                  <Activity className={`size-3.5 shrink-0 ${drawerStats.net >= 0 ? 'text-primary' : 'text-amber-500'}`} />
+                </div>
+                <span className={`text-sm font-extrabold font-mono mt-1.5 leading-none ${
+                  drawerStats.net >= 0 
+                    ? 'text-primary' 
+                    : 'text-amber-600 dark:text-amber-400'
+                }`}>
+                  {drawerStats.net >= 0 ? '+' : ''}{formatINR(drawerStats.net)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Interactive Search & Filter Bar - Responsive side-by-side or stacked layout */}
+          {!drawerLoading && drawerTransactions.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-3 mt-4 mb-1 shrink-0 sm:items-center">
+              <div className="relative w-full sm:flex-grow">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search category, particulars, or date..."
+                  value={drawerSearch}
+                  onChange={(e) => setDrawerSearch(e.target.value)}
+                  className="pl-9.5 h-9 text-xs bg-muted/20 border-border/80 focus-visible:ring-primary/50 w-full"
+                  id="drawer-search-input"
+                />
+                {drawerSearch && (
+                  <button 
+                    onClick={() => setDrawerSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                    id="clear-drawer-search-btn"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex bg-muted/40 p-0.5 rounded-lg border border-border/60 text-xs shrink-0 select-none w-full sm:w-auto justify-between sm:justify-start gap-1">
+                <button
+                  onClick={() => setDrawerFlowFilter('all')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer text-center ${
+                    drawerFlowFilter === 'all' 
+                      ? 'bg-background shadow-xs text-foreground font-extrabold border border-border/10' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  id="filter-flow-all-btn"
+                >
+                  All ({drawerTransactions.length})
+                </button>
+                <button
+                  onClick={() => setDrawerFlowFilter('credit')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer text-center ${
+                    drawerFlowFilter === 'credit' 
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold border border-emerald-500/20' 
+                      : 'text-muted-foreground hover:text-emerald-500'
+                  }`}
+                  id="filter-flow-inflow-btn"
+                >
+                  Inflow
+                </button>
+                <button
+                  onClick={() => setDrawerFlowFilter('debit')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer text-center ${
+                    drawerFlowFilter === 'debit' 
+                      ? 'bg-destructive/10 text-destructive font-extrabold border border-destructive/20' 
+                      : 'text-muted-foreground hover:text-destructive'
+                  }`}
+                  id="filter-flow-outflow-btn"
+                >
+                  Outflow
+                </button>
+              </div>
+            </div>
+          )}
           
           <div className="flex-1 overflow-y-auto mt-4 pr-1">
             {drawerLoading ? (
@@ -947,48 +1111,101 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
               <div className="text-center py-20 text-xs text-muted-foreground">
                 No transaction lines found for this record.
               </div>
-            ) : (
-              <div className="border rounded-lg overflow-hidden bg-muted/10">
-                <Table>
-                  <TableHeader className="bg-muted/20 select-none">
-                    <TableRow className="text-[0.62rem] font-bold text-muted-foreground uppercase h-8 border-b hover:bg-transparent">
-                      <TableHead className="pl-4">Date</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Particulars</TableHead>
-                      <TableHead className="text-center">Flow</TableHead>
-                      <TableHead className="text-right pr-4">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="text-[0.7rem]">
-                    {drawerTransactions.map((tx, idx) => {
-                      const isCredit = tx.type === 'credit';
-                      return (
-                        <TableRow key={idx} className="hover:bg-muted/15 border-b h-10">
-                          <TableCell className="pl-4 font-mono text-muted-foreground">
-                            {tx.date}
-                          </TableCell>
-                          <TableCell className="font-semibold text-foreground">{tx.category}</TableCell>
-                          <TableCell className="text-muted-foreground max-w-[150px] truncate" title={tx.particulars}>
-                            {tx.particulars || '—'}
-                          </TableCell>
-                          <TableCell className="text-center select-none">
-                            <span className={`text-[0.52rem] font-bold border rounded-full px-1.5 py-0.2 uppercase tracking-wider ${
-                              isCredit 
-                                ? 'bg-success/10 text-success border-success/20' 
-                                : 'bg-destructive/10 text-destructive border-destructive/20'
-                            }`}>
-                              {isCredit ? 'Inflow' : 'Outflow'}
-                            </span>
-                          </TableCell>
-                          <TableCell className={`text-right font-mono font-bold pr-4 ${isCredit ? 'text-success' : 'text-destructive'}`}>
-                            {formatINR(tx.amount)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+            ) : filteredDrawerTransactions.length === 0 ? (
+              <div className="text-center py-20 text-xs text-muted-foreground flex flex-col items-center justify-center gap-2 bg-muted/5 border border-dashed rounded-lg border-border/80">
+                <Search className="size-8 text-muted-foreground/35 animate-pulse" />
+                <span className="font-bold text-foreground">No matching transactions found</span>
+                <span className="text-[10px] max-w-xs text-muted-foreground">
+                  Try adjusting your search terms or flow filters.
+                </span>
               </div>
+            ) : (
+              <>
+                {/* 1. Spacious table representation - Hidden on mobile, visible on desktop */}
+                <div className="hidden sm:block border rounded-lg overflow-hidden bg-muted/5 shadow-xs border-border/80 mb-4">
+                  <Table>
+                    <TableHeader className="bg-muted/15 select-none">
+                      <TableRow className="text-[0.62rem] font-bold text-muted-foreground uppercase h-9.5 border-b hover:bg-transparent">
+                        <TableHead className="pl-4 w-[110px]">Date</TableHead>
+                        <TableHead className="w-[160px]">Category</TableHead>
+                        <TableHead className="w-auto">Particulars</TableHead>
+                        <TableHead className="text-center w-[90px]">Flow</TableHead>
+                        <TableHead className="text-right pr-4 w-[130px]">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="text-[0.7rem]">
+                      {filteredDrawerTransactions.map((tx, idx) => {
+                        const isCredit = tx.type === 'credit';
+                        return (
+                          <TableRow key={idx} className="hover:bg-muted/20 border-b h-10 transition-colors">
+                            <TableCell className="pl-4 font-mono text-muted-foreground">
+                              {tx.date}
+                            </TableCell>
+                            <TableCell className="font-semibold text-foreground">{tx.category}</TableCell>
+                            <TableCell className="text-muted-foreground truncate max-w-[200px]" title={tx.particulars}>
+                              {tx.particulars || '—'}
+                            </TableCell>
+                            <TableCell className="text-center select-none">
+                              <span className={`text-[0.52rem] font-bold border rounded-full px-2.2 py-0.5 uppercase tracking-wider ${
+                                isCredit 
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' 
+                                  : 'bg-destructive/10 text-destructive border-destructive/20'
+                              }`}>
+                                {isCredit ? 'Inflow' : 'Outflow'}
+                              </span>
+                            </TableCell>
+                            <TableCell className={`text-right font-mono font-bold pr-4 ${isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                              {isCredit ? '+' : '-'}{formatINR(tx.amount)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* 2. Responsive list representation - Visible on mobile, hidden on desktop */}
+                <div className="block sm:hidden space-y-2.5 pb-4">
+                  {filteredDrawerTransactions.map((tx, idx) => {
+                    const isCredit = tx.type === 'credit';
+                    return (
+                      <div 
+                        key={idx} 
+                        className="p-3 rounded-xl bg-muted/10 border border-border/50 hover:bg-muted/20 transition-all flex items-center justify-between gap-4"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Flow Status Icon Indicator */}
+                          <div className={`size-8 rounded-full flex items-center justify-center shrink-0 border ${
+                            isCredit 
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/10' 
+                              : 'bg-destructive/10 text-destructive border-destructive/10'
+                          }`}>
+                            {isCredit ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
+                          </div>
+                          
+                          <div className="min-w-0">
+                            <span className="text-[11px] font-bold text-foreground block truncate">{tx.category}</span>
+                            <span className="text-[10px] text-muted-foreground block truncate mt-0.5" title={tx.particulars}>
+                              {tx.particulars || '—'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right shrink-0">
+                          <span className={`text-[12px] font-mono font-extrabold block ${
+                            isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
+                          }`}>
+                            {isCredit ? '+' : '-'}{formatINR(tx.amount)}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground block mt-0.5 font-mono tracking-wider">
+                            {tx.date}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </SheetContent>

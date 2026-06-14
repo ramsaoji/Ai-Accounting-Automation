@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { getReconstructedReport } from './report.controller.js';
 import { AiProviderFactory } from '../../ai/ai.factory.js';
-import { getSystemSetting } from '../../db/db.client.js';
+import { getSystemSetting, db } from '../../db/db.client.js';
+import * as schema from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
 import { logger } from '../../logger/logger.js';
 import { config } from '../../config/config.js';
 import { z } from 'zod';
@@ -108,45 +110,98 @@ export async function handleAdvisorChat(
     // Load AI Provider from factory dynamically
     const provider = AiProviderFactory.createProvider(providerName, modelName);
 
-    const businessName = config.BUSINESS_NAME;
+    // Find business profile for the branch associated with the file
+    let businessName = config.BUSINESS_NAME;
+    let industryProfile = 'HOSPITALITY';
+    let currency = 'INR';
+
+    try {
+      const fileName = summary.fileName as string;
+      if (fileName) {
+        const fileRecord = await db.select().from(schema.files).where(eq(schema.files.fileName, fileName)).limit(1).then(r => r[0]);
+        if (fileRecord?.branchId) {
+          const branch = await db.select().from(schema.branches).where(eq(schema.branches.id, fileRecord.branchId)).limit(1).then(r => r[0]);
+          if (branch) {
+            const biz = await db.select().from(schema.businessEntities).where(eq(schema.businessEntities.id, branch.entityId)).limit(1).then(r => r[0]);
+            if (biz) {
+              businessName = biz.name;
+              industryProfile = biz.industryProfile;
+              currency = biz.baseCurrency;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, 'Failed to resolve dynamic business profile in chat controller');
+    }
+
     let domainContext = '';
+    const formattedCurrency = currency === 'INR' ? '₹' : (currency + ' ');
 
     if (isGodownStock) {
       const inventoryName = workspace === 'counter_stock' ? 'counter' : 'godown';
+      const isHospitality = industryProfile === 'HOSPITALITY';
+      const volumeLine = isHospitality ? `- Total volume: ${Math.round(Number(aggregates?.totalVolumeLiters ?? 0)).toLocaleString()} Liters\n` : '';
       domainContext = `
-You are helping the owner understand their ${inventoryName} inventory, stock levels, valuations, bottle volumes, and potential audit discrepancies.
+You are helping the owner understand their ${inventoryName} inventory, stock levels, valuations, item specifications, and potential audit discrepancies.
 Key metrics available:
 - Total items tracked: ${summary.totalItems} products
-- Valuation at Cost: ₹${Math.round(Number(aggregates?.totalClosingValue ?? 0)).toLocaleString()}
-- Valuation at Retail (Selling): ₹${Math.round(Number(aggregates?.totalSellingValue ?? 0)).toLocaleString()}
+- Valuation at Cost: ${formattedCurrency}${Math.round(Number(aggregates?.totalClosingValue ?? 0)).toLocaleString()}
+- Valuation at Retail (Selling): ${formattedCurrency}${Math.round(Number(aggregates?.totalSellingValue ?? 0)).toLocaleString()}
 - Total active items (closing stock > 0): ${aggregates?.totalItemsCount} items
-- Total volume: ${Math.round(Number(aggregates?.totalVolumeLiters ?? 0)).toLocaleString()} Liters
-- Stock In / Stock Out transactions count: In: ${aggregates?.stockInCount}, Out: ${aggregates?.stockOutCount}
+${volumeLine}- Stock In / Stock Out transactions count: In: ${aggregates?.stockInCount}, Out: ${aggregates?.stockOutCount}
 `;
     } else if (isDebitors) {
       domainContext = `
 You are helping the owner understand their customer credits, outstanding dues (Udhari), credit recoveries, and collection risk profiles.
 Key metrics available:
 - Total outstanding credit accounts: ${aggregates?.activeDebitorsCount} customers on books
-- Total credit extended (debit sum): ₹${Math.round(Number(aggregates?.totalDebitSum ?? 0)).toLocaleString()}
-- Total credit recovered (credit sum): ₹${Math.round(Number(aggregates?.totalCreditSum ?? 0)).toLocaleString()}
-- Net outstanding balance dues: ₹${Math.round(Number(aggregates?.totalPendingSum ?? 0)).toLocaleString()}
+- Total credit extended (debit sum): ${formattedCurrency}${Math.round(Number(aggregates?.totalDebitSum ?? 0)).toLocaleString()}
+- Total credit recovered (credit sum): ${formattedCurrency}${Math.round(Number(aggregates?.totalCreditSum ?? 0)).toLocaleString()}
+- Net outstanding balance dues: ${formattedCurrency}${Math.round(Number(aggregates?.totalPendingSum ?? 0)).toLocaleString()}
 - Collections success rate: ${aggregates?.collectionSuccessRate}%
-- Top outstanding debtor: ${aggregates?.topDebtorName} (₹${Math.round(Number(aggregates?.topDebtorValue ?? 0)).toLocaleString()} pending)
+- Top outstanding debtor: ${aggregates?.topDebtorName} (${formattedCurrency}${Math.round(Number(aggregates?.topDebtorValue ?? 0)).toLocaleString()} pending)
 `;
     } else {
+      // Calculate dynamic category totals across all months
+      const categoryTotals: Record<string, number> = {};
+      let totalRevenue = 0;
+      const monthsList = Array.isArray(summary.months) ? (summary.months as any[]) : [];
+      for (const m of monthsList) {
+        if (m.departments) {
+          for (const [name, val] of Object.entries(m.departments)) {
+            if (!name.toLowerCase().includes('recovery') && !name.toLowerCase().includes('jama') && !name.toLowerCase().includes('expense') && !name.toLowerCase().includes('extended')) {
+              categoryTotals[name] = (categoryTotals[name] || 0) + Number(val);
+              totalRevenue += Number(val);
+            }
+          }
+        }
+      }
+
+      let categoryLines = '';
+      for (const [name, val] of Object.entries(categoryTotals)) {
+        const pct = totalRevenue > 0 ? ((val / totalRevenue) * 100).toFixed(1) : '0.0';
+        categoryLines += `- ${name}: ${formattedCurrency}${Math.round(val).toLocaleString()} (${pct}% of sales)\n`;
+      }
+      if (!categoryLines) {
+        const lPct = String(benchmarks?.liquorPercentage || '0.0');
+        const fPct = String(benchmarks?.foodPercentage || '0.0');
+        categoryLines = `- Primary Revenue: ${formattedCurrency}${Math.round(Number(masterTotals?.liquorSales ?? 0)).toLocaleString()} (${lPct}% of sales)\n` +
+                        `- Secondary Revenue: ${formattedCurrency}${Math.round(Number(masterTotals?.foodSales ?? 0)).toLocaleString()} (${fPct}% of sales)\n`;
+      }
+
+
       domainContext = `
-You are helping the owner understand their restaurant's revenues, expenses, liquor/food splits, trends, and seasonal cashflows.
+You are helping the owner understand their business revenues, expenses, splits, trends, and seasonal cashflows.
 Key metrics available:
 - Total operational months parsed: ${summary.totalMonths} months
 - Total audited transactions: ${summary.totalTransactions} items
-- Liquor Sales: ₹${Math.round(Number(masterTotals?.liquorSales ?? 0)).toLocaleString()} (${benchmarks?.liquorPercentage}% of sales)
-- Food Sales: ₹${Math.round(Number(masterTotals?.foodSales ?? 0)).toLocaleString()} (${benchmarks?.foodPercentage}% of sales)
-- Net cashflow position: ₹${Math.round(Number(masterTotals?.netCashflow ?? 0)).toLocaleString()} (${masterTotals?.surplusStatus})
-- Credit outstanding gap: ₹${Math.round(Number(benchmarks?.creditOutstandingGap ?? 0)).toLocaleString()} (Recovery rate: ${benchmarks?.creditRecoveryRate}%)
-- Best revenue month: ${benchmarks?.bestRevenueMonth} (₹${Math.round(Number(benchmarks?.bestRevenueValue ?? 0)).toLocaleString()})
+${categoryLines}- Net cashflow position: ${formattedCurrency}${Math.round(Number(masterTotals?.netCashflow ?? 0)).toLocaleString()} (${masterTotals?.surplusStatus})
+- Credit outstanding gap: ${formattedCurrency}${Math.round(Number(benchmarks?.creditOutstandingGap ?? 0)).toLocaleString()} (Recovery rate: ${benchmarks?.creditRecoveryRate}%)
+- Best revenue month: ${benchmarks?.bestRevenueMonth} (${formattedCurrency}${Math.round(Number(benchmarks?.bestRevenueValue ?? 0)).toLocaleString()})
 `;
     }
+
 
     let conversationHistoryPrompt = '';
     if (history && Array.isArray(history) && history.length > 0) {
@@ -156,8 +211,15 @@ ${history.map(h => `${h.sender === 'user' ? 'Owner' : 'Advisor'}: ${h.text}`).jo
 `;
     }
 
+    const persona = industryProfile === 'SERVICES'
+      ? 'local service business financial consultant'
+      : industryProfile === 'RETAIL'
+        ? 'local retail financial consultant'
+        : 'local hospitality/restaurant consultant';
+    const entityTerm = industryProfile === 'SERVICES' ? 'business' : industryProfile === 'RETAIL' ? 'store' : 'restaurant';
+
     const prompt = `
-You are a friendly, encouraging, and experienced local bar-and-restaurant financial consultant.
+You are a friendly, encouraging, and experienced ${persona}.
 You are helping the owner of "${businessName}" understand their accounting ledger spreadsheet data.
 Use ONLY the following pre-calculated Master Ledger Summary data to answer their question:
 
@@ -172,7 +234,7 @@ ${conversationHistoryPrompt}
 "${message}"
 
 === INSTRUCTIONS FOR 100% AUDIT ACCURACY ===
-1. Tone & Style: Answer in a warm, encouraging, direct, and supportive tone as their local consultant. Address them directly as "${businessName}" or "your restaurant".
+1. Tone & Style: Answer in a warm, encouraging, direct, and supportive tone as their local consultant. Address them directly as "${businessName}" or "your ${entityTerm}".
 2. Simple Language: Do NOT use dry corporate jargon (no: CFO, leverage, compliance, governance, board, executive, ingestion, pipeline). Use clear local business terms.
 3. Strict Mathematical Double-Check:
    - If the owner asks for a numeric filter, range (e.g. "between 5k and 10k"), mathematical aggregate (e.g. "total sum", "average"), or list count, you MUST physically review every single item in the data arrays (like topDebitors, allDebitors, masterTotals, or months).

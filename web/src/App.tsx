@@ -202,8 +202,22 @@ export function App() {
       : activeWorkspace === 'debitors' ? debitorsData
       : activeWorkspace === 'godown_stock' ? godownStockData
       : counterStockData;
+    
+    if (activeFile?.businessMetadata?.businessName) {
+      return activeFile.businessMetadata.businessName;
+    }
+
+    // Check fallback from any other loaded file's businessMetadata
+    const fallbackName = salesData?.businessMetadata?.businessName ||
+                         debitorsData?.businessMetadata?.businessName ||
+                         godownStockData?.businessMetadata?.businessName ||
+                         counterStockData?.businessMetadata?.businessName;
+    if (fallbackName) {
+      return fallbackName;
+    }
+
     return deriveBusinessName(activeFile?.fileName ?? salesData?.fileName ?? debitorsData?.fileName ?? godownStockData?.fileName ?? counterStockData?.fileName);
-  }, [activeWorkspace, salesData?.fileName, debitorsData?.fileName, godownStockData?.fileName, counterStockData?.fileName]);
+  }, [activeWorkspace, salesData, debitorsData, godownStockData, counterStockData]);
 
 
 

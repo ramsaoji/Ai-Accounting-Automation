@@ -29,8 +29,11 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
   const isStock = summary.isGodownStockList === true;
   
   const businessName = useMemo(() => {
+    if (summary?.businessMetadata?.businessName) {
+      return summary.businessMetadata.businessName;
+    }
     return deriveBusinessName(summary?.fileName);
-  }, [summary?.fileName]);
+  }, [summary?.fileName, summary?.businessMetadata?.businessName]);
 
   const [webChatEnabled, setWebChatEnabled] = useState<boolean>(true);
   const [activeAiProvider, setActiveAiProvider] = useState<string>(initialAiProvider);
@@ -176,24 +179,29 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
 
   // Chips derived from selected playbook & register context
   const suggestions = useMemo(() => {
+    const profile = summary.businessMetadata?.industryProfile || 'HOSPITALITY';
+    const isHospitality = profile === 'HOSPITALITY';
+    const isServices = profile === 'SERVICES';
+    const isRetail = profile === 'RETAIL';
+
     if (isStock) {
       if (activePlaybook === 'auditing') {
         return [
           "What inventory alerts or audit discrepancies were flagged?",
           "Are there any products with high stock levels and no sales?",
-          "Check bottle size and packaging consistency."
+          isHospitality ? "Check bottle size and packaging consistency." : "Check product units and packaging consistency."
         ];
       }
       if (activePlaybook === 'recovery') {
         return [
           "Suggest pricing updates for slow-moving categories.",
           "Analyze stock levels to optimize ordering thresholds.",
-          "Assess liquor vs beer turnover splits."
+          isHospitality ? "Assess liquor vs beer turnover splits." : "Assess product category turnover splits."
         ];
       }
       return [
         "Compare Valuation at Cost vs Valuation at Retail.",
-        "What is the total liquor volume currently in stock?",
+        isHospitality ? "What is the total liquor volume currently in stock?" : "Which items have the highest closing stock quantity?",
         "Provide stock summary by categories."
       ];
     }
@@ -220,7 +228,10 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
     } else {
       if (activePlaybook === 'revenue') {
         return [
-          "Compare liquor vs food performance.",
+          isHospitality ? "Compare liquor vs food performance." :
+          isServices ? "Compare services vs product sales." :
+          isRetail ? "Compare top product categories performance." :
+          "Compare sales categories performance.",
           "What was our best revenue month?",
           "Analyze seasonal sales trends."
         ];
@@ -229,16 +240,21 @@ export const AdvisorSection: React.FC<AdvisorSectionProps> = ({ summary, aiProvi
         return [
           "What spending alerts were flagged?",
           "Reconcile monthly supplier invoice spikes.",
-          "Check counter credits above ₹2,000."
+          isHospitality ? "Check counter credits above ₹2,000." : "Check client credits above ₹2,000."
         ];
       }
       return [
-        "Audit seasonal liquor markup splits.",
-        "Evaluate cumulative restaurant net surplus.",
+        isHospitality ? "Audit seasonal liquor markup splits." :
+        isServices ? "Audit seasonal services markup splits." :
+        isRetail ? "Audit seasonal retail markup splits." :
+        "Audit seasonal sales markup splits.",
+        isHospitality ? "Evaluate cumulative restaurant net surplus." :
+        isServices ? "Evaluate cumulative salon net surplus." :
+        "Evaluate cumulative business net surplus.",
         "Calculate gross margin split forecasts."
       ];
     }
-  }, [isStock, isDebitors, activePlaybook]);
+  }, [isStock, isDebitors, activePlaybook, summary.businessMetadata]);
 
   const activePlaybookInfo = useMemo(() => {
     const playbook = playbooks.find((p) => p.id === activePlaybook);

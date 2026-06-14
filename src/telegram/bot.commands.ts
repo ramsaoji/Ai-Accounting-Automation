@@ -4,7 +4,7 @@ import { telegramClient } from './telegram.client.js';
 import { orchestratorService } from '../services/orchestrator.service.js';
 import { getSystemSetting } from '../db/db.client.js';
 import { formatCronExpression } from '../utils/cron.js';
-import { formatTimestampToDual } from './bot.utils.js';
+import { formatTimestampToDual, loadReport } from './bot.utils.js';
 import { getMainMenuKeyboard, refreshActiveFileTypesCache } from './bot.keyboards.js';
 import {
   sendSalesSummaryOptions,
@@ -52,16 +52,19 @@ export async function handleCommand(command: string, chatId: string): Promise<vo
 }
 
 export async function sendHelp(chatId: string): Promise<void> {
-  const welcomeText = `🌟 *${config.BUSINESS_NAME} - AI Financial Command Center* 🌟\n\n` +
+  const salesReport = await loadReport('sales');
+  const businessName = salesReport?.businessMetadata?.businessName || config.BUSINESS_NAME;
+
+  const welcomeText = `🌟 *${businessName} - AI Financial Command Center* 🌟\n\n` +
     `Welcome, Owner! I am your real-time interactive AI Financial Advisor. I monitor your daily sales registers, debt ledgers, and cashflows.\n\n` +
     `*Available Command Panel:*\n` +
     `📊 *Sales Summary* - View interactive timeframe summaries for Daily Sales.\n` +
     `👥 *Debitors List* - Inspect Top Outstanding Customer Debts & Collection Risk.\n` +
     `🏭 *Godown Stock* - Inspect godown inventory, valuations, and low-stock alerts.\n` +
-    `🏪 *Counter Stock* - Inspect counter bar inventory, valuations, and sales movement.\n` +
+    `🏪 *Counter Stock* - Inspect counter inventory, valuations, and sales movement.\n` +
     `🔄 *Sync Ledger* - Manually trigger Google Drive sync & ingestion pipeline.\n` +
     `🩺 *Service Health* - Check accounting service health & active AI engine.\n\n` +
-    `💬 *Or just text me any question!* (e.g., 'Compare food vs liquor sales' or 'Show current valuation of Liquor stock')`;
+    `💬 *Or just text me any question!* (e.g., 'Compare category sales performance' or 'Show current stock valuation')`;
   await telegramClient.sendMessage(welcomeText, 'Markdown', getMainMenuKeyboard(), chatId);
 }
 

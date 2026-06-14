@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { UploadModal } from './UploadModal';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { 
   Sparkles, 
   Cloud, 
@@ -25,6 +26,55 @@ interface OnboardingWizardProps {
   onDriveSync: () => void;
   onFilesReady: (files: File[], sessionToken: string) => void;
 }
+
+interface TruncatedTooltipCellProps {
+  text: string;
+  dotColorClass: string;
+}
+
+const TruncatedTooltipCell: React.FC<TruncatedTooltipCellProps> = ({ text, dotColorClass }) => {
+  const textRef = React.useRef<HTMLSpanElement>(null);
+  const [isTruncated, setIsTruncated] = React.useState(false);
+
+  const checkTruncation = () => {
+    if (textRef.current) {
+      const { scrollWidth, clientWidth } = textRef.current;
+      setIsTruncated(scrollWidth > clientWidth);
+    }
+  };
+
+  React.useEffect(() => {
+    checkTruncation();
+    const timer = setTimeout(checkTruncation, 100);
+    window.addEventListener('resize', checkTruncation);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkTruncation);
+    };
+  }, [text]);
+
+  const content = (
+    <div className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20 min-w-0 ${isTruncated ? 'cursor-help' : 'cursor-default'}`}>
+      <div className={`size-1.5 rounded-full shrink-0 ${dotColorClass}`} />
+      <span ref={textRef} className="font-semibold truncate">
+        {text}
+      </span>
+    </div>
+  );
+
+  if (!isTruncated) {
+    return content;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={content} />
+      <TooltipContent className="text-[0.72rem] p-2 bg-popover text-popover-foreground border shadow-md rounded-md font-medium">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  );
+};
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   connectionMode,
@@ -94,7 +144,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <span>Welcome to Accounting Command Center</span>
                 </h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Analyze hospitality ledger transactions, automate auditing, and generate AI insights in real-time.
+                  Analyze business ledger transactions, automate auditing, and generate AI insights in real-time.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
@@ -206,7 +256,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="text-sm font-bold text-foreground">Ingestion Control Center</span>
                     <span className="text-[10px] text-muted-foreground leading-normal">
-                      The engine requires your Daily Sales Register, Customer Debitors Ledger, or Godown Stock Register to compile dashboards.
+                      The engine requires your Daily Sales Register, Customer Debitors Ledger, or Stock Inventory Register to compile dashboards.
                     </span>
                   </div>
                 </div>
@@ -216,23 +266,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
                 {/* Expected Specifications Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-muted-foreground">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
-                    <div className="size-1.5 rounded-full bg-primary shrink-0" />
-                    <span className="font-semibold truncate">Daily Sales Register (.xlsx)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
-                    <div className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="font-semibold truncate">Debitors Ledger (.xlsx)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-background/20">
-                    <div className="size-1.5 rounded-full bg-blue-500 shrink-0" />
-                    <span className="font-semibold truncate">Godown Stock (.xlsx)</span>
-                  </div>
+                  <TruncatedTooltipCell text="Daily Sales Register" dotColorClass="bg-primary" />
+                  <TruncatedTooltipCell text="Debitors Ledger" dotColorClass="bg-emerald-500" />
+                  <TruncatedTooltipCell text="Inventory Stock" dotColorClass="bg-blue-500" />
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-2.5 mt-1 pt-1">
                   <div className="w-full sm:flex-1">
-                    <UploadModal hasSyncedBefore={hasSyncedBefore} connectionMode={connectionMode} disabled={isSyncingDrive || connectionMode !== 'live' && connectionMode !== 'static'} onFilesReady={onFilesReady} className="w-full" />
+                    <UploadModal 
+                      hasSyncedBefore={hasSyncedBefore} 
+                      connectionMode={connectionMode} 
+                      disabled={isSyncingDrive || connectionMode !== 'live' && connectionMode !== 'static'} 
+                      onFilesReady={onFilesReady} 
+                      className="w-full h-9" 
+                      showTextOnMobile={true} 
+                    />
                   </div>
                   
                   {connectionMode === 'live' && (

@@ -61,7 +61,7 @@ const envSchema = z.object({
   ),
 
   // Business display name (used in AI prompts, Telegram messages, and reports)
-  BUSINESS_NAME: z.string().optional().default('Hotel Gaurav'),
+  BUSINESS_NAME: z.string().optional().default('Unified Accounting'),
 }).transform((data) => {
   const defaults: Record<string, string> = {
     openai: 'gpt-4o-mini',

@@ -1,0 +1,2 @@
+ALTER TABLE "branches" ADD CONSTRAINT "branches_entity_id_slug_unique" UNIQUE("entity_id","slug");
+ALTER TABLE "chart_of_accounts" ADD CONSTRAINT "coa_entity_id_code_unique" UNIQUE("entity_id","account_code");

@@ -88,7 +88,7 @@ export async function loadReport(reportType: 'sales' | 'debitors' | 'daily-sales
           ...t,
           date: new Date(t.date)
         }));
-        return buildDailySalesArray(rawTxs);
+        return buildDailySalesArray(rawTxs, salesReport.departments);
       }
       return null;
     }

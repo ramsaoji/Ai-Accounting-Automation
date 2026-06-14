@@ -72,6 +72,30 @@ export const reportCache = new Map<string, any>();
 const HIGH_SEVERITY = new Set(['high', 'critical']);
 const serverStartTime = Date.now();
 
+async function getBusinessMetadataForBranch(branchId: string | null) {
+  const defaultMeta = {
+    businessName: config.BUSINESS_NAME,
+    industryProfile: 'HOSPITALITY',
+    currency: 'INR',
+    timezone: 'Asia/Kolkata'
+  };
+  if (!branchId) return defaultMeta;
+  try {
+    const branch = await db.select().from(schema.branches).where(eq(schema.branches.id, branchId)).limit(1).then(r => r[0]);
+    if (!branch) return defaultMeta;
+    const biz = await db.select().from(schema.businessEntities).where(eq(schema.businessEntities.id, branch.entityId)).limit(1).then(r => r[0]);
+    if (!biz) return defaultMeta;
+    return {
+      businessName: biz.name,
+      industryProfile: biz.industryProfile || 'HOSPITALITY',
+      currency: biz.baseCurrency || 'INR',
+      timezone: biz.baseTimezone || 'Asia/Kolkata'
+    };
+  } catch (e) {
+    return defaultMeta;
+  }
+}
+
 export async function buildSalesReport(activeFile: any): Promise<any> {
   if (config.NODE_ENV !== 'development') {
     const cached = reportCache.get(activeFile.id);
@@ -79,6 +103,9 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
       return cached;
     }
   }
+
+  // Resolve business metadata
+  const businessMetadata = await getBusinessMetadataForBranch(activeFile.branchId);
 
   // 2. Query transactions, errors and pre-saved alerts concurrently
   const [dbTxs, dbErrors, dbAlerts] = await Promise.all([
@@ -98,6 +125,55 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
     vendor: t.vendor
   }));
 
+  // Load Chart of Accounts for the business entity
+  let entityId: string | null = null;
+  if (activeFile.branchId) {
+    const branch = await db.select().from(schema.branches).where(eq(schema.branches.id, activeFile.branchId)).limit(1).then(r => r[0]);
+    if (branch) {
+      entityId = branch.entityId;
+    }
+  }
+
+  const coaList = entityId
+    ? await db.select().from(schema.chartOfAccounts).where(eq(schema.chartOfAccounts.entityId, entityId))
+    : [];
+
+  const coaMap = new Map<string, typeof coaList[0]>();
+  for (const coa of coaList) {
+    coaMap.set(coa.id, coa);
+  }
+
+  const recoveryCoa = coaList.find(c =>
+    c.accountType === 'REVENUE' &&
+    (
+      c.accountName.toLowerCase().includes('recover') ||
+      c.accountName.toLowerCase().includes('jama') ||
+      c.accountName.toLowerCase().includes('collected')
+    )
+  ) || coaList.find(c => c.accountCode === '4003');
+
+  const creditExtendedCoa = coaList.find(c =>
+    (c.accountType === 'OPEX' || c.accountType === 'EXPENSE') &&
+    (
+      c.accountName.toLowerCase().includes('extended') ||
+      c.accountName.toLowerCase().includes('given') ||
+      c.accountName.toLowerCase().includes('udhari')
+    )
+  ) || coaList.find(c => c.accountCode === '5002');
+
+  const revenueCoas = coaList.filter(c => c.accountType === 'REVENUE' && c.id !== recoveryCoa?.id);
+  const rev1 = revenueCoas[0];
+  const rev2 = revenueCoas[1];
+
+  // Derive fallbacks from transaction categories to prevent hardcoded liquor/food associations
+  const creditCategories = Array.from(new Set(
+    dbTxs
+      .filter(t => t.type === 'credit' && !t.category?.toLowerCase().includes('recovery') && !t.category?.toLowerCase().includes('jama') && !t.category?.toLowerCase().includes('recover'))
+      .map(t => t.category)
+  ));
+  const fallbackRev1Name = creditCategories[0];
+  const fallbackRev2Name = creditCategories[1];
+
   // 4. Map monthly summaries dynamically from row-level entries
   const monthlyMap = new Map<string, any>();
   for (const t of dbTxs) {
@@ -114,28 +190,92 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
         outflows: 0,
         net: 0,
         status: 'Surplus',
+        departments: {} as Record<string, number>
       });
     }
     const m = monthlyMap.get(sheet)!;
     const amt = Number(t.amount);
-    if (t.category.toLowerCase().includes('liquor') || t.category.toLowerCase().includes('wine')) {
+
+    const coa = t.coaId ? coaMap.get(t.coaId) : null;
+    const catName = coa ? coa.accountName : (t.type === 'credit' ? 'General Inflows' : 'General Outflows');
+    m.departments[catName] = (m.departments[catName] || 0) + amt;
+
+    if (t.type === 'credit') {
+      m.inflows += amt;
+    } else {
+      m.outflows += amt;
+    }
+
+    // Dynamic aliasing for backward compatibility
+    const coaCode = coa?.accountCode || '';
+    const categoryLower = (t.category || '').toLowerCase();
+
+    // Reconcile recovery
+    const isRecovery =
+      (recoveryCoa && (coa?.id === recoveryCoa.id || coaCode === recoveryCoa.accountCode)) ||
+      categoryLower.includes('recover') ||
+      categoryLower.includes('jama');
+
+    // Reconcile primary/secondary revenue based on COA or dynamic category ordering
+    let isPrimaryRev = false;
+    let isSecondaryRev = false;
+
+    if (coa) {
+      if (rev1 && coa.id === rev1.id) {
+        isPrimaryRev = true;
+      } else if (rev2 && coa.id === rev2.id) {
+        isSecondaryRev = true;
+      }
+    } else {
+      if (rev1 && categoryLower.includes(rev1.accountName.toLowerCase())) {
+        isPrimaryRev = true;
+      } else if (rev2 && categoryLower.includes(rev2.accountName.toLowerCase())) {
+        isSecondaryRev = true;
+      } else if (fallbackRev1Name && categoryLower === fallbackRev1Name.toLowerCase()) {
+        isPrimaryRev = true;
+      } else if (fallbackRev2Name && categoryLower === fallbackRev2Name.toLowerCase()) {
+        isSecondaryRev = true;
+      }
+    }
+
+    const isCreditExtended =
+      (creditExtendedCoa && (coa?.id === creditExtendedCoa.id || coaCode === creditExtendedCoa.accountCode)) ||
+      categoryLower.includes('extended') ||
+      categoryLower.includes('given') ||
+      categoryLower.includes('udhari');
+
+    if (isPrimaryRev) {
       m.liquor += amt;
-    } else if (t.category.toLowerCase().includes('food')) {
+    } else if (isSecondaryRev) {
       m.food += amt;
-    } else if (t.category.toLowerCase().includes('recovery') || t.category.toLowerCase().includes('jama')) {
+    } else if (isRecovery) {
       m.creditRecovery += amt;
-    } else if (t.type === 'debit' && t.category.toLowerCase().includes('expense')) {
-      m.expenses += amt;
-    } else if (t.type === 'debit' && t.category.toLowerCase().includes('extended')) {
+    } else if (isCreditExtended) {
       m.creditExtended += amt;
+    } else {
+      if (t.type === 'credit') {
+        m.liquor += amt;
+      } else {
+        m.expenses += amt;
+      }
     }
   }
 
+
   const months = Array.from(monthlyMap.values()).map(m => {
-    m.inflows = m.liquor + m.food + m.creditRecovery;
-    m.outflows = m.expenses + m.creditExtended;
     m.net = m.inflows - m.outflows;
     m.status = m.net >= 0 ? 'Surplus' : 'Deficit';
+
+    m.dynamicDepartments = Object.entries(m.departments).map(([name, value]) => {
+      const coa = coaList.find(c => c.accountName === name);
+      return {
+        name,
+        value,
+        colorHex: coa?.colorHex || 'var(--primary)',
+        accountType: coa?.accountType || (name.includes('Inflow') || name.includes('Revenue') || name.includes('Sales') ? 'REVENUE' : 'OPEX')
+      };
+    });
+
     return m;
   });
 
@@ -221,11 +361,19 @@ export async function buildSalesReport(activeFile: any): Promise<any> {
     fileName: activeFile.fileName,
     fileType: activeFile.fileType,
     runTimestamp: activeFile.runTimestamp.toISOString(),
+    businessMetadata,
     totalTransactions: activeFile.totalRows,
     totalMonths: months.length,
     masterTotals,
     benchmarks,
     months,
+    departments: coaList.map(coa => ({
+      id: coa.id,
+      code: coa.accountCode,
+      name: coa.accountName,
+      type: coa.accountType,
+      colorHex: coa.colorHex
+    })),
     transactions: txs,
     alerts: dbAlerts.map(a => ({
       ruleId: a.ruleId,
@@ -255,6 +403,9 @@ export async function buildDebitorsReport(activeFile: any): Promise<any> {
       return cached;
     }
   }
+
+  // Resolve business metadata
+  const businessMetadata = await getBusinessMetadataForBranch(activeFile.branchId);
 
   // 2. Query debtor snapshots, transactions, errors and pre-saved alerts concurrently
   const [dbParty, dbErrors, dbTxs, dbAlerts] = await Promise.all([
@@ -310,6 +461,7 @@ export async function buildDebitorsReport(activeFile: any): Promise<any> {
     fileName: activeFile.fileName,
     fileType: activeFile.fileType,
     runTimestamp: activeFile.runTimestamp.toISOString(),
+    businessMetadata,
     isDebitorsList: true,
     totalTransactions: activeFile.totalRows,
     aggregates,
@@ -348,17 +500,16 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
     }
   }
 
-  const isCounter = activeFiles[0]?.fileType === 'counter_stock';
+  // Resolve business metadata
+  const businessMetadata = await getBusinessMetadataForBranch(activeFiles[0]?.branchId);
 
   const [dbStockItems, dbErrors, dbAlerts] = await Promise.all([
-    isCounter
-      ? db.select().from(schema.counterStockItems).where(inArray(schema.counterStockItems.fileId, fileIds))
-      : db.select().from(schema.godownStockItems).where(inArray(schema.godownStockItems.fileId, fileIds)),
+    db.select().from(schema.stockItems).where(inArray(schema.stockItems.fileId, fileIds)),
     db.select().from(schema.parsingErrors).where(inArray(schema.parsingErrors.fileId, fileIds)),
     db.select().from(schema.auditAlerts).where(inArray(schema.auditAlerts.fileId, fileIds)),
   ]);
 
-  const locations: ('godown' | 'counter')[] = ['godown', 'counter'];
+  const locations = Array.from(new Set(dbStockItems.map(item => item.location).filter(Boolean)));
   let latestItems: any[] = [];
 
   for (const loc of locations) {
@@ -385,6 +536,8 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
   let totalStockOutCount = 0;
   let activeItemsCount = 0;
 
+  const isHospitality = businessMetadata.industryProfile === 'HOSPITALITY';
+
   // Location-specific totals
   let godownClosingValue = 0, godownSellingValue = 0, godownItemsCount = 0, godownVolumeLiters = 0, godownStockInCount = 0, godownStockOutCount = 0;
   let counterClosingValue = 0, counterSellingValue = 0, counterItemsCount = 0, counterVolumeLiters = 0, counterStockInCount = 0, counterStockOutCount = 0;
@@ -399,19 +552,6 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
     stockOutCount: number;
   }>();
 
-  const categories = ['Liquor', 'Strong Beer', 'Mild Beer', 'Wine'];
-  for (const cat of categories) {
-    categoryMap.set(cat, {
-      category: cat,
-      closingValue: 0,
-      sellingValue: 0,
-      itemsCount: 0,
-      totalVolumeLiters: 0,
-      stockInCount: 0,
-      stockOutCount: 0
-    });
-  }
-
   for (const item of latestItems) {
     const stockIn = Number(item.stockIn);
     const stockOut = Number(item.stockOut);
@@ -421,7 +561,7 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
 
     const totalCostVal = item.totalCostValue ? Number(item.totalCostValue) : (closingStock * costPrice);
     const totalSellVal = item.totalSellValue ? Number(item.totalSellValue) : (closingStock * sellingPrice);
-    const volumeLiters = (closingStock * item.bottleSizeMl) / 1000;
+    const volumeLiters = (isHospitality && item.bottleSizeMl) ? (closingStock * item.bottleSizeMl) / 1000 : 0;
 
     // Combined
     totalClosingValue += totalCostVal;
@@ -443,7 +583,7 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
       if (closingStock > 0) {
         godownItemsCount++;
       }
-    } else {
+    } else if (item.location === 'counter') {
       counterClosingValue += totalCostVal;
       counterSellingValue += totalSellVal;
       counterVolumeLiters += volumeLiters;
@@ -453,6 +593,7 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
         counterItemsCount++;
       }
     }
+
 
     const cat = item.category || 'General';
     if (!categoryMap.has(cat)) {
@@ -526,15 +667,16 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
       if (gOut <= 0) continue;
 
       const normName = normalize(gItem.itemName);
-      const cItem = counterItems.find(c => normalize(c.itemName) === normName && c.bottleSizeMl === gItem.bottleSizeMl);
+      const cItem = counterItems.find(c => normalize(c.itemName) === normName && (c.bottleSizeMl === gItem.bottleSizeMl || c.specification === gItem.specification));
       const cIn = cItem ? Number(cItem.stockIn || 0) : 0;
 
       if (gOut !== cIn) {
         const rawDate = new Date(dateStr);
         const formattedDate = rawDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const isLoose = gItem.bottleSizeMl === 0;
-        const sizeText = isLoose ? 'Loose' : `${gItem.bottleSizeMl}ml`;
-        const unitText = isLoose ? 'ml' : 'units';
+        const isLoose = isHospitality && gItem.bottleSizeMl === 0 && !gItem.specification;
+        const sizeText = (isHospitality && gItem.bottleSizeMl) ? `${gItem.bottleSizeMl}ml` : (gItem.specification || 'Standard');
+        const unitText = gItem.unitOfMeasure || 'units';
+
         transitDiscrepancyAlerts.push({
           ruleId: 'RULE_STOCK_RECON',
           ruleName: 'Transit Discrepancy Alert',
@@ -599,7 +741,7 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
     sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : null,
     totalCostValue: item.totalCostValue ? Number(item.totalCostValue) : null,
     totalSellValue: item.totalSellValue ? Number(item.totalSellValue) : null,
-    packaging: (item.metadata as any)?.packaging || 'bottle',
+    packaging: (item.metadata as any)?.packaging || item.unitOfMeasure || 'units',
     location: item.location
   }));
 
@@ -630,6 +772,7 @@ export async function buildGodownStockReport(activeFileOrFiles: any | any[]): Pr
     fileName: fileNameStr,
     fileType: activeFiles[0]?.fileType,
     runTimestamp: latestRunTimestamp.toISOString(),
+    businessMetadata,
     isGodownStockList: true,
     totalItems: latestItems.length,
     aggregates,
@@ -659,9 +802,7 @@ export async function reEvaluateAlertsForFile(
 ): Promise<void> {
   let evaluatedAlerts: any[] = [];
   if (fileType === 'godown_stock' || fileType === 'counter_stock') {
-    const dbStockItems = fileType === 'counter_stock'
-      ? await db.select().from(schema.counterStockItems).where(eq(schema.counterStockItems.fileId, fileId))
-      : await db.select().from(schema.godownStockItems).where(eq(schema.godownStockItems.fileId, fileId));
+    const dbStockItems = await db.select().from(schema.stockItems).where(eq(schema.stockItems.fileId, fileId));
     const mappedStockItems = dbStockItems.map(item => ({
       ...item,
       openingStock: Number(item.openingStock),
@@ -758,7 +899,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         totalInflows: salesReport.masterTotals.totalInflows,
         netCashflow: salesReport.masterTotals.netCashflow,
         sparkline: salesReport.months.map((m: any) => m.net),
-        intelligence: salesReport.intelligence || []
+        intelligence: salesReport.intelligence || [],
+        businessMetadata: salesReport.businessMetadata
       };
     }
 
@@ -774,7 +916,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         collectionSuccessRate: debitorsReport.aggregates.collectionSuccessRate,
         activeDebitorsCount: debitorsReport.aggregates.activeDebitorsCount,
         sparkline: debitorsReport.topDebitors.slice(0, 15).map((d: any) => d.pending),
-        intelligence: debitorsReport.intelligence || []
+        intelligence: debitorsReport.intelligence || [],
+        businessMetadata: debitorsReport.businessMetadata
       };
     }
 
@@ -790,7 +933,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         totalSellingValue: godownStockReport.aggregates.totalSellingValue,
         activeItemsCount: godownStockReport.aggregates.totalItemsCount,
         sparkline: godownStockReport.historicalTrends.slice(-15).map((t: any) => t.totalCostValue),
-        intelligence: godownStockReport.intelligence || []
+        intelligence: godownStockReport.intelligence || [],
+        businessMetadata: godownStockReport.businessMetadata
       };
     }
 
@@ -806,7 +950,8 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
         totalSellingValue: counterStockReport.aggregates.totalSellingValue,
         activeItemsCount: counterStockReport.aggregates.totalItemsCount,
         sparkline: counterStockReport.historicalTrends.slice(-15).map((t: any) => t.totalCostValue),
-        intelligence: counterStockReport.intelligence || []
+        intelligence: counterStockReport.intelligence || [],
+        businessMetadata: counterStockReport.businessMetadata
       };
     }
 
@@ -1085,7 +1230,8 @@ export async function handleFileUpload(request: FastifyRequest, reply: FastifyRe
       return;
     }
 
-    const summary = await orchestratorService.processFileBuffer(buffer, fileName);
+    const { entityId } = (request.query || {}) as { entityId?: string };
+    const summary = await orchestratorService.processFileBuffer(buffer, fileName, entityId);
     reply.code(200).send(summary);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

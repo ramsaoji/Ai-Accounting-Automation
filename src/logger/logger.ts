@@ -45,6 +45,22 @@ if (isDevelopment) {
 export const logger = pino(
   {
     level: isDevelopment ? 'debug' : 'info',
+    redact: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'password',
+      'token',
+      'apiKey',
+      '*.password',
+      '*.token',
+      '*.amount',
+      '*.pending',
+      '*.debit',
+      '*.credit',
+      '*.particulars',
+      '*.itemName',
+      '*.partyName'
+    ],
   },
   pino.multistream(streams)
 );

@@ -398,11 +398,15 @@ export class OrchestratorService {
             'Auditing and generating unified Master Summary report'
           );
 
+          const { branchId, entityId } = await this.resolveBranchAndEntity(parseResult, fileType);
+
           // 2. Rules Engine: Run modular business validations
           const alerts = await rulesEngine.evaluate(allTransactions, {
             fileType,
             fileName,
-            godownStockItems: allGodownStockItems
+            godownStockItems: allGodownStockItems,
+            branchId,
+            entityId
           });
 
           const debitorsLimit = options?.debitorsLimit ?? 10;
@@ -492,12 +496,59 @@ export class OrchestratorService {
                 const bm = summaryObj.benchmarks || {};
                 const alertsCount = summaryObj.alerts?.length || 0;
 
+                let categoryLines = '';
+                try {
+                  const deptSums: Record<string, number> = {};
+                  let totalRevenue = 0;
+                  if (summaryObj.months) {
+                    for (const m of summaryObj.months) {
+                      if (m.dynamicDepartments) {
+                        for (const dept of m.dynamicDepartments) {
+                          if (dept.accountType === 'REVENUE' && !dept.name.includes('Recovery') && !dept.name.includes('Inflow')) {
+                            deptSums[dept.name] = (deptSums[dept.name] || 0) + dept.value;
+                            totalRevenue += dept.value;
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  function getCategoryEmoji(catName: string): string {
+                    const lower = catName.toLowerCase();
+                    if (lower.includes('hair') || lower.includes('styling') || lower.includes('salon')) return '✂️';
+                    if (lower.includes('spa') || lower.includes('massage') || lower.includes('therapy') || lower.includes('facial')) return '💆';
+                    if (lower.includes('product') || lower.includes('retail') || lower.includes('item')) return '🛍️';
+                    if (lower.includes('liquor') || lower.includes('wine') || lower.includes('beer') || lower.includes('bar')) return '🍷';
+                    if (lower.includes('food') || lower.includes('restaurant') || lower.includes('dine')) return '🍲';
+                    return '📈';
+                  }
+
+                  const sortedDepts = Object.entries(deptSums).sort((a, b) => b[1] - a[1]);
+                  for (const [name, val] of sortedDepts.slice(0, 3)) {
+                    const pct = totalRevenue > 0 ? ((val / totalRevenue) * 100).toFixed(0) : '0';
+                    const emoji = getCategoryEmoji(name);
+                    categoryLines += `• ${emoji} *${name}*: ₹${Math.round(val).toLocaleString()} (${pct}% of sales)\n`;
+                  }
+                } catch (catErr) {
+                  // ignore
+                }
+
+                if (!categoryLines) {
+                  const bizMeta = summaryObj.businessMetadata || {};
+                  const isHospitality = bizMeta.industryProfile === 'HOSPITALITY';
+                  const rev1 = isHospitality ? 'Liquor Sales' : 'Primary Revenue';
+                  const rev2 = isHospitality ? 'Food Sales' : 'Secondary Revenue';
+                  const emoji1 = isHospitality ? '🍷' : '📈';
+                  const emoji2 = isHospitality ? '🍲' : '📈';
+                  categoryLines = `• ${emoji1} *${rev1}*: ₹${Math.round(mt.liquorSales || 0).toLocaleString()} (${bm.liquorPercentage || 0}% of sales)\n` +
+                    `• ${emoji2} *${rev2}*: ₹${Math.round(mt.foodSales || 0).toLocaleString()} (${bm.foodPercentage || 0}% of sales)\n`;
+                }
+
                 let summaryText = `🔄 *Google Drive Ingestion Sync Complete* ✅\n` +
                   `📁 *File Ingested*: \`${summaryObj.fileName}\`\n` +
                   `📅 *Sync Time*: \`${summaryObj.runTimestamp || summaryObj.timestamp || 'N/A'}\`\n\n` +
                   `📊 *Daily Sales & Cashflow Summary:*\n` +
-                  `• 🍷 *Liquor Sales*: ₹${Math.round(mt.liquorSales || 0).toLocaleString()} (${bm.liquorPercentage || 0}% of sales)\n` +
-                  `• 🍲 *Food Sales*: ₹${Math.round(mt.foodSales || 0).toLocaleString()} (${bm.foodPercentage || 0}% of sales)\n` +
+                  categoryLines +
                   `• 💵 *Net Cashflow*: *₹${Math.round(mt.netCashflow || 0).toLocaleString()}* (${mt.surplusStatus || 'N/A'})\n` +
                   `• 🔄 *Credit Recovery Rate*: ${bm.creditRecoveryRate || 0}%\n` +
                   `• 🌟 *Best Month*: ${bm.bestRevenueMonth} (₹${Math.round(bm.bestRevenueValue || 0).toLocaleString()})\n`;
@@ -607,12 +658,12 @@ export class OrchestratorService {
    * Process an uploaded file buffer dynamically through the parsing, rules auditing, AI summary compilation,
    * Neon DB updating, and local file storage pipeline.
    */
-  async processFileBuffer(buffer: Buffer, fileName: string): Promise<unknown> {
+  async processFileBuffer(buffer: Buffer, fileName: string, entityId?: string): Promise<unknown> {
     const startTime = Date.now();
-    logger.info(`Orchestrator ingesting file buffer for "${fileName}"`);
+    logger.info({ fileName, entityId }, 'Orchestrator ingesting file buffer');
 
     // 1. Parse the Excel sheet rows
-    const parseResult = await excelParser.parseBuffer(buffer, fileName);
+    const parseResult = await excelParser.parseBuffer(buffer, fileName, entityId);
     const allTransactions = parseResult.sheets.flatMap(s => s.transactions);
     const allErrors = parseResult.sheets.flatMap(s => s.errors);
     const allGodownStockItems = parseResult.sheets.flatMap(s => s.godownStockItems || []);
@@ -636,11 +687,15 @@ export class OrchestratorService {
       'Auditing and generating upload summary report'
     );
 
+    const resolvedContext = await this.resolveBranchAndEntity(parseResult, fileType);
+
     // 2. Rules Engine
     const alerts = await rulesEngine.evaluate(allTransactions, {
       fileType,
       fileName,
-      godownStockItems: allGodownStockItems
+      godownStockItems: allGodownStockItems,
+      branchId: resolvedContext.branchId,
+      entityId: resolvedContext.entityId
     });
 
     // 3. AI Service
@@ -696,6 +751,25 @@ export class OrchestratorService {
     return summaryObj;
   }
 
+  private async resolveBranchAndEntity(parseResult: any, fileType: string): Promise<{ branchId: string | null; entityId: string | null }> {
+    const entityId = parseResult.entityId || null;
+    let branchId: string | null = null;
+    if (entityId) {
+      const entityBranches = await db.select().from(schema.branches)
+        .where(eq(schema.branches.entityId, entityId));
+      if (entityBranches.length > 0) {
+        if (fileType === 'godown_stock' || fileType === 'counter_stock') {
+          const godownBranch = entityBranches.find(b => b.slug.includes('godown') || b.slug.includes('warehouse') || b.slug.includes('depot'));
+          branchId = godownBranch ? godownBranch.id : entityBranches[0].id;
+        } else {
+          const mainBranch = entityBranches.find(b => b.slug.includes('main') || b.slug.includes('sales'));
+          branchId = mainBranch ? mainBranch.id : entityBranches[0].id;
+        }
+      }
+    }
+    return { branchId, entityId };
+  }
+
   /**
    * Decoupled relational database persistence helper.
    * Maps dynamic spreadsheet transactions/snapshots directly to strictly-typed normalized SQL tables,
@@ -718,6 +792,9 @@ export class OrchestratorService {
     const isGodownStock = !isCounter && (cleanFileName.toUpperCase().includes('STOCK') || parseResult.isGodownStockList);
     const fileType = isDebtors ? 'debitors' : isCounter ? 'counter_stock' : isGodownStock ? 'godown_stock' : 'sales';
     const summaryObj = JSON.parse(reports.jsonSummary);
+
+    // Resolve branchId using helper
+    const { branchId } = await this.resolveBranchAndEntity(parseResult, fileType);
 
     await db.transaction(async (tx) => {
       // 1. CASCADE DELETE previous active version of this file
@@ -744,6 +821,8 @@ export class OrchestratorService {
           isLatest: true,
           status: 'success',
           contentHash: contentHash || null,
+          branchId,
+          templateId: parseResult.templateId || null
         })
         .returning();
 
@@ -761,6 +840,8 @@ export class OrchestratorService {
             type: t.type || 'credit',
             vendor: t.vendor || 'Counter',
             particulars: t.description || null,
+            branchId,
+            coaId: t.coaId || null,
             metadata: {}
           }));
           await tx.insert(schema.transactions).values(chunk);
@@ -779,7 +860,9 @@ export class OrchestratorService {
             itemCode: s.itemCode || null,
             itemName: s.itemName,
             category: s.category || 'General',
-            bottleSizeMl: s.bottleSizeMl,
+            bottleSizeMl: s.bottleSizeMl || 0,
+            unitOfMeasure: s.unitOfMeasure || 'units',
+            specification: s.specification || null,
             openingStock: String(s.openingStock || 0),
             stockIn: String(s.stockIn || 0),
             stockOut: String(s.stockOut || 0),
@@ -792,13 +875,10 @@ export class OrchestratorService {
             totalCostValue: s.totalCostValue !== null && s.totalCostValue !== undefined ? String(s.totalCostValue) : null,
             totalSellValue: s.totalSellValue !== null && s.totalSellValue !== undefined ? String(s.totalSellValue) : null,
             location: s.location || (fileType === 'counter_stock' ? 'counter' : 'godown'),
+            branchId,
             metadata: s.metadata || {}
           }));
-          if (fileType === 'counter_stock') {
-            await tx.insert(schema.counterStockItems).values(chunk);
-          } else {
-            await tx.insert(schema.godownStockItems).values(chunk);
-          }
+          await tx.insert(schema.stockItems).values(chunk);
         }
       }
 
@@ -814,6 +894,7 @@ export class OrchestratorService {
             debit: String(d.debit || 0),
             credit: String(d.credit || 0),
             pending: String(d.pending || 0),
+            branchId,
             metadata: {}
           }));
           await tx.insert(schema.partyBalances).values(chunk);
@@ -830,6 +911,7 @@ export class OrchestratorService {
             ruleName: a.ruleName,
             severity: a.severity,
             message: a.message,
+            branchId,
           }));
           await tx.insert(schema.auditAlerts).values(chunk);
         }
@@ -844,6 +926,7 @@ export class OrchestratorService {
             rowNumber: e.row,
             invoiceNumber: e.invoiceNumber || null,
             errorMessage: e.error,
+            branchId,
           }));
           await tx.insert(schema.parsingErrors).values(chunk);
         }

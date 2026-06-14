@@ -27,6 +27,54 @@ import * as schema from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 
 /**
+ * Dynamic PII scrubber and restorer to replace names, phone numbers, and email addresses with codes,
+ * preventing data leakage to external LLMs, and restoring them back on the returned AI response.
+ */
+export function buildPiiScrubber(names: string[]) {
+  const nameToCode = new Map<string, string>();
+  const codeToName = new Map<string, string>();
+
+  // Filter unique names, sort by length descending to prevent substring matching issues
+  const uniqueNames = Array.from(new Set(names))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  uniqueNames.forEach((name, idx) => {
+    const code = `Customer_${String.fromCharCode(65 + (idx % 26))}${idx >= 26 ? Math.floor(idx / 26) : ''}`;
+    nameToCode.set(name, code);
+    codeToName.set(code, name);
+  });
+
+  const scrub = (text: string): string => {
+    if (!text) return text;
+    // Scrub phone numbers
+    let scrubbed = text.replace(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '[PHONE]');
+    // Scrub emails
+    scrubbed = scrubbed.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
+    
+    // Replace names
+    for (const [name, code] of nameToCode.entries()) {
+      const escaped = name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+      scrubbed = scrubbed.replace(regex, code);
+    }
+    return scrubbed;
+  };
+
+  const restore = (text: string): string => {
+    if (!text) return text;
+    let restored = text;
+    for (const [code, name] of codeToName.entries()) {
+      const regex = new RegExp(code, 'g');
+      restored = restored.replace(regex, name);
+    }
+    return restored;
+  };
+
+  return { scrub, restore };
+}
+
+/**
  * Calculates a SHA-256 hash representing the content of the spreadsheet entries.
  */
 export function calculateTransactionsHash(transactions: any[], errors: any[], alerts: any[]): string {
@@ -103,7 +151,28 @@ export class AiService {
    */
   async generateFinancialSummary(data: PromptInputData): Promise<GeneratedReports> {
     const { transactions, alerts, parsingErrors, fileName, runTimestamp } = data;
-    const businessName = config.BUSINESS_NAME;
+    
+    let businessName = config.BUSINESS_NAME;
+    let industryProfile = 'HOSPITALITY';
+    let coaList: any[] = [];
+    try {
+      if (fileName) {
+        const fileRecord = await db.select().from(schema.files).where(eq(schema.files.fileName, fileName)).limit(1).then(r => r[0]);
+        if (fileRecord?.branchId) {
+          const branch = await db.select().from(schema.branches).where(eq(schema.branches.id, fileRecord.branchId)).limit(1).then(r => r[0]);
+          if (branch) {
+            const biz = await db.select().from(schema.businessEntities).where(eq(schema.businessEntities.id, branch.entityId)).limit(1).then(r => r[0]);
+            if (biz) {
+              businessName = biz.name;
+              industryProfile = biz.industryProfile;
+            }
+            coaList = await db.select().from(schema.chartOfAccounts).where(eq(schema.chartOfAccounts.entityId, branch.entityId));
+          }
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, 'Failed to resolve dynamic business profile in generateFinancialSummary');
+    }
 
     const calculatedHash = calculateTransactionsHash(transactions, parsingErrors, alerts);
     let cachedWeeklyChecklist = '';
@@ -217,17 +286,19 @@ Inventory cumulative totals for the snapshot date:
         .sort((a, b) => Number(b.totalCostValue || 0) - Number(a.totalCostValue || 0))
         .slice(0, 10);
 
+      const isHospitality = industryProfile === 'HOSPITALITY';
+
       const godownSummaryText = topGodown.map((item, idx) => {
-        const isLoose = item.bottleSizeMl === 0;
-        const sizeText = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
-        const unitText = isLoose ? 'ml' : 'units';
+        const isLoose = isHospitality && item.bottleSizeMl === 0;
+        const sizeText = (isHospitality && item.bottleSizeMl) ? `${item.bottleSizeMl}ml` : (item.specification || 'Standard');
+        const unitText = isLoose ? 'ml' : (item.unitOfMeasure || 'units');
         return `${idx + 1}. [Godown] ${item.itemName} (${sizeText}): Closing: ${item.closingStock} ${unitText} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
       }).join('\n');
 
       const counterSummaryText = topCounter.map((item, idx) => {
-        const isLoose = item.bottleSizeMl === 0;
-        const sizeText = isLoose ? 'Loose' : `${item.bottleSizeMl}ml`;
-        const unitText = isLoose ? 'ml' : 'units';
+        const isLoose = isHospitality && item.bottleSizeMl === 0;
+        const sizeText = (isHospitality && item.bottleSizeMl) ? `${item.bottleSizeMl}ml` : (item.specification || 'Standard');
+        const unitText = isLoose ? 'ml' : (item.unitOfMeasure || 'units');
         return `${idx + 1}. [Counter] ${item.itemName} (${sizeText}): Closing: ${item.closingStock} ${unitText} (Opening: ${item.openingStock}, In: ${item.stockIn}, Out: ${item.stockOut}) | Cost: ₹${item.costPrice ?? 'N/A'}`;
       }).join('\n');
 
@@ -235,7 +306,7 @@ Inventory cumulative totals for the snapshot date:
 
       if (!aiGenerated) {
         try {
-          const unifiedPrompt = buildGodownStockPrompt(businessName, statsText, stockSummaryText);
+          const unifiedPrompt = buildGodownStockPrompt(businessName, statsText, stockSummaryText, industryProfile);
           const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
 
           const parsed = parseAiResponse(responseText);
@@ -247,8 +318,9 @@ Inventory cumulative totals for the snapshot date:
         } catch (error) {
           logger.error({ error }, 'AI inventory recommendations generation failed. Using data-driven fallback.');
           aiWeeklyChecklist = [
-            `Audit items in category "${categories[0] || 'Liquor'}" showing low movement.`,
+            `Audit items in category "${categories[0] || 'Primary'}" showing low movement.`,
             `Cross-reference opening stock values with previous closing figures to ensure zero drift.`,
+
             `Initiate a recount of items with closing stock under 5 units.`
           ].join('\n');
           aiProjections = [
@@ -371,10 +443,17 @@ Master Debitor Accounts Cumulative Totals:
 
       if (!aiGenerated) {
         try {
-          const unifiedPrompt = buildDebitorsPrompt(businessName, masterStatsText, debtorsSummaryText);
+          const allDebitorNames = (data.debitors || []).map(d => d.name).concat(topDebitorsLimitList.map(d => d.name));
+          const scrubber = buildPiiScrubber(allDebitorNames);
+
+          const scrubbedStatsText = scrubber.scrub(masterStatsText);
+          const scrubbedSummaryText = scrubber.scrub(debtorsSummaryText);
+
+          const unifiedPrompt = buildDebitorsPrompt(businessName, scrubbedStatsText, scrubbedSummaryText, industryProfile);
           const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
           
-          const parsed = parseAiResponse(responseText);
+          const restoredResponse = scrubber.restore(responseText);
+          const parsed = parseAiResponse(restoredResponse);
           aiWeeklyChecklist = parsed.checklist;
           aiProjections = parsed.projections;
           aiIntelligence = parsed.intelligence;
@@ -562,7 +641,7 @@ Master Debitor Accounts Cumulative Totals:
 
     // Call report helper functions to generate SVG visual lines and tabular cashflows
     const generatedSvgChart = generateSalesSvgChart(sortedSheets, maxInflowOutflow);
-    const trendElements = buildSalesTrendElements(sortedSheets, maxAbsNet);
+    const trendElements = buildSalesTrendElements(sortedSheets, maxAbsNet, coaList);
 
     const {
       htmlTrendRows,
@@ -580,6 +659,21 @@ Master Debitor Accounts Cumulative Totals:
       masterCreditExtended,
       jsonMonths
     } = trendElements;
+
+    const recoveryCoa = coaList.find(c =>
+      c.accountType === 'REVENUE' &&
+      (
+        c.accountName.toLowerCase().includes('recover') ||
+        c.accountName.toLowerCase().includes('jama') ||
+        c.accountName.toLowerCase().includes('collected')
+      )
+    ) || coaList.find(c => c.accountCode === '4003');
+
+    const revenueCoas = coaList.filter(c => c.accountType === 'REVENUE' && c.id !== recoveryCoa?.id);
+    const rev1 = revenueCoas[0];
+    const rev2 = revenueCoas[1];
+    const rev1Name = rev1 ? rev1.accountName : undefined;
+    const rev2Name = rev2 ? rev2.accountName : undefined;
 
     const masterIncome = masterLiquor + masterFood + masterRecovery;
     const masterOutflow = masterExpenses + masterCreditExtended;
@@ -619,32 +713,69 @@ Master Debitor Accounts Cumulative Totals:
         logger.info({ sheetCount: sortedSheets.length }, 'Invoking AI to generate Strategic Projections & Action Checklist...');
         
         const monthlySummaryText = sortedSheets.map((s: any) => {
-          const liq = s.transactions.filter((t: Transaction) => t.category === 'Liquor Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-          const food = s.transactions.filter((t: Transaction) => t.category === 'Food Revenue').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-          const rec = s.transactions.filter((t: Transaction) => t.category === 'Credit Recovery').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-          const exp = s.transactions.filter((t: Transaction) => t.category === 'Operational Expense').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-          const cred = s.transactions.filter((t: Transaction) => t.category === 'Credit Extended').reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-          const inc = liq + food + rec;
-          const out = exp + cred;
+          const catSums: Record<string, number> = {};
+          let inc = 0;
+          let out = 0;
+          
+          for (const t of s.transactions) {
+            const amt = t.amount || 0;
+            const coa = coaList.find(c => c.id === t.coaId);
+            const catName = coa ? coa.accountName : t.category;
+            catSums[catName] = (catSums[catName] || 0) + amt;
+
+            if (t.type === 'credit') inc += amt;
+            else out += amt;
+          }
+
           const net = inc - out;
-          return `- ${s.sheetName}: Sales: ₹${Math.round(inc).toLocaleString()} (Liquor: ₹${Math.round(liq).toLocaleString()}, Food: ₹${Math.round(food).toLocaleString()}), Expenses: ₹${Math.round(exp).toLocaleString()}, Credit Extended: ₹${Math.round(cred).toLocaleString()}, Net: ₹${Math.round(net).toLocaleString()}`;
+          const catListStr = Object.entries(catSums)
+            .map(([name, sum]) => `${name}: ₹${Math.round(sum).toLocaleString()}`)
+            .join(', ');
+          
+          return `- ${s.sheetName}: Sales Inflows: ₹${Math.round(inc).toLocaleString()} (${catListStr}), Outflows: ₹${Math.round(out).toLocaleString()}, Net: ₹${Math.round(net).toLocaleString()}`;
         }).join('\n');
+
+        const masterCategoryTotals: Record<string, number> = {};
+        let masterInflows = 0;
+        let masterOutflows = 0;
+        for (const t of transactions) {
+          const amt = t.amount || 0;
+          const coa = coaList.find(c => c.id === t.coaId);
+          const catName = coa ? coa.accountName : t.category;
+          masterCategoryTotals[catName] = (masterCategoryTotals[catName] || 0) + amt;
+          
+          if (t.type === 'credit') {
+            masterInflows += amt;
+          } else {
+            masterOutflows += amt;
+          }
+        }
+        const masterNetCalculated = masterInflows - masterOutflows;
+
+        let dynamicCategoryStats = '';
+        for (const [catName, sum] of Object.entries(masterCategoryTotals)) {
+          dynamicCategoryStats += `- Total ${catName}: ₹${Math.round(sum).toLocaleString()}\n`;
+        }
 
         const masterStatsText = `
 Master Cumulative Totals (All Months):
-- Total Liquor Revenue: ₹${Math.round(masterLiquor).toLocaleString()}
-- Total Food Revenue: ₹${Math.round(masterFood).toLocaleString()}
-- Total Credit Extended (Udhari Given): ₹${Math.round(masterCreditExtended).toLocaleString()}
-- Total Credit Recovered (Udhari Jama): ₹${Math.round(masterRecovery).toLocaleString()}
-- Overall Cumulative Net Surplus: ₹${Math.round(masterNet).toLocaleString()}
-- Liquor/Food Sales Ratio: ${liquorPercentage}% Liquor / ${foodPercentage}% Food
+${dynamicCategoryStats}- Overall Cumulative Net Inflows: ₹${Math.round(masterInflows).toLocaleString()}
+- Overall Cumulative Net Outflows: ₹${Math.round(masterOutflows).toLocaleString()}
+- Overall Cumulative Net Cashflow: ₹${Math.round(masterNetCalculated).toLocaleString()} (${masterNetCalculated >= 0 ? 'Surplus' : 'Deficit'})
 - Outstanding Credit Gap: ₹${Math.round(creditOutstandingGap).toLocaleString()} (Recovery Rate: ${creditRecoveryRate}%)
         `;
 
-        const unifiedPrompt = buildSalesPrompt(businessName, masterStatsText, monthlySummaryText);
+        const allVendorNames = data.transactions.map(t => t.vendor);
+        const scrubber = buildPiiScrubber(allVendorNames);
+
+        const scrubbedStatsText = scrubber.scrub(masterStatsText);
+        const scrubbedMonthlyText = scrubber.scrub(monthlySummaryText);
+
+        const unifiedPrompt = buildSalesPrompt(businessName, scrubbedStatsText, scrubbedMonthlyText, industryProfile);
         const responseText = await this.provider.generateText(unifiedPrompt, { temperature: 0.15 });
 
-        const parsed = parseAiResponse(responseText);
+        const restoredResponse = scrubber.restore(responseText);
+        const parsed = parseAiResponse(restoredResponse);
         aiWeeklyChecklist = parsed.checklist;
         aiProjections = parsed.projections;
         aiIntelligence = parsed.intelligence;
@@ -667,7 +798,10 @@ Master Cumulative Totals (All Months):
           bestRevenueMonth,
           bestRevenueValue,
           peakExpenseMonth,
-          peakExpenseValue
+          peakExpenseValue,
+          industryProfile,
+          rev1Name,
+          rev2Name
         });
         aiWeeklyChecklist = fallback.checklist;
         aiProjections = fallback.projections;
@@ -760,6 +894,53 @@ Master Cumulative Totals (All Months):
       return `> [!WARNING]\n> **${first.ruleName}${countLabel}**:\n${examples}`;
     }).join('\n\n');
 
+    // Resolve dynamic emojis and titles
+    const isHospitality = industryProfile === 'HOSPITALITY';
+    const revRatioLabel = isHospitality ? '🍺 Restaurant Menu Ratio' : '📈 Revenue Category Ratio';
+    const rev1Label = rev1 ? rev1.accountName : (isHospitality ? 'Liquor Sales' : 'Primary Revenue');
+    const rev2Label = rev2 ? rev2.accountName : (isHospitality ? 'Food Sales' : 'Secondary Revenue');
+    const splitRatioText = `**${liquorPercentage}% ${rev1Label}** vs. **${foodPercentage}% ${rev2Label}**`;
+
+    // Map transaction categories dynamically
+    const mCategoryTotals: Record<string, number> = {};
+    for (const t of transactions) {
+      const amt = Number(t.amount || 0);
+      const coa = coaList.find(c => c.id === t.coaId || c.code === t.coaId || c.accountCode === t.coaId);
+      const catName = coa ? coa.accountName : t.category;
+      mCategoryTotals[catName] = (mCategoryTotals[catName] || 0) + amt;
+    }
+
+    function getCategoryEmoji(catName: string): string {
+      const lower = catName.toLowerCase();
+      if (lower.includes('hair') || lower.includes('styling') || lower.includes('salon')) return '✂️';
+      if (lower.includes('spa') || lower.includes('massage') || lower.includes('therapy') || lower.includes('facial')) return '💆';
+      if (lower.includes('product') || lower.includes('retail') || lower.includes('item')) return '🛍️';
+      if (lower.includes('liquor') || lower.includes('wine') || lower.includes('beer') || lower.includes('bar')) return '🍸';
+      if (lower.includes('food') || lower.includes('restaurant') || lower.includes('dine')) return '🍽️';
+      return '📈';
+    }
+
+    const revenueRows: string[] = [];
+    if (revenueCoas.length > 0) {
+      for (const coa of revenueCoas) {
+        const amt = mCategoryTotals[coa.accountName] || 0;
+        const emoji = getCategoryEmoji(coa.accountName);
+        revenueRows.push(`| **${emoji} ${coa.accountName}** | **₹${Math.round(amt).toLocaleString()}** | — | Combined ${coa.accountName.toLowerCase()} revenue |`);
+      }
+    } else {
+      revenueRows.push(
+        `| **🍸 Liquor Sales** | **₹${Math.round(masterLiquor).toLocaleString()}** | — | Combined bar counter revenue |`,
+        `| **🍽️ Food Sales** | **₹${Math.round(masterFood).toLocaleString()}** | — | Combined restaurant food revenue |`
+      );
+    }
+
+    const revenueHeaders = revenueCoas.length > 0 
+      ? revenueCoas.map(c => c.accountName)
+      : ['Liquor Sales', 'Food Sales'];
+
+    const mdTrendHeaders = `| Month / Year | ` + revenueHeaders.map(h => `${h}`).join(' | ') + ` | Credit Extended | Expenses | Net Cashflow | Status |`;
+    const mdTrendSubHeaders = `| :--- | ` + revenueHeaders.map(() => ':---:').join(' | ') + ` | :---: | :---: | :---: | :---: |`;
+
     const markdownReport = `# 📋 ${businessName} Daily Sales Register — Master Performance Summary\n\n` +
       `> [!NOTE]\n` +
       `> **Source File**: \`${fileName}\`  \n` +
@@ -772,24 +953,23 @@ Master Cumulative Totals (All Months):
       `> * **🥇 Best Sales Month**: **${bestRevenueMonth}** (Total Revenue: **₹${Math.round(bestRevenueValue).toLocaleString()}**)\n` +
       `> * **💰 Best Cash Surplus Month**: **${bestProfitMonth}** (Net Surplus: **₹${Math.round(bestProfitValue).toLocaleString()}**)\n` +
       `> * **🛠️ Peak Expense Month**: **${peakExpenseMonth}** (Supplier Costs: **₹${Math.round(peakExpenseValue).toLocaleString()}**)\n` +
-      `> * **🍺 Restaurant Menu Ratio**: **${liquorPercentage}% Bar Counter Sales** vs. **${foodPercentage}% Food Sales**\n` +
+      `> * **${revRatioLabel}**: ${splitRatioText}\n` +
       `> * **💳 Credit Recovery Efficiency**: **${creditRecoveryRate}%** of extended customer credit successfully collected! \n` +
       `>   * _Outstanding Customer Balance_: **₹${Math.round(creditOutstandingGap).toLocaleString()}** (currently unrecovered)\n\n` +
       `---\n\n` +
       `## 📊 Combined Performance Overview (All Months)\n\n` +
       `| Category | Combined Inflows | Combined Outflows | Description & Master Bookkeeping Notes |\n` +
       `| :--- | :---: | :---: | :--- |\n` +
-      `| **🍸 Liquor Sales** | **₹${Math.round(masterLiquor).toLocaleString()}** | — | Combined bar counter revenue |\n` +
-      `| **🍽️ Food Sales** | **₹${Math.round(masterFood).toLocaleString()}** | — | Combined restaurant food revenue |\n` +
+      revenueRows.join('\n') + `\n` +
       `| **📥 Credit Recovered (Udhari Jama)** | **₹${Math.round(masterRecovery).toLocaleString()}** | — | Total customer outstanding dues collected |\n` +
       `| **🛠️ Daily Expenses** | — | **₹${Math.round(masterExpenses).toLocaleString()}** | Total daily supplier, wage & inventory outflows |\n` +
-      `| **📤 Credit Extended (Udhari Given)** | — | **₹${Math.round(masterCreditExtended).toLocaleString()}** | Total food & drink served to customers on credit |\n` +
+      `| **📤 Credit Extended (Udhari Given)** | — | **₹${Math.round(masterCreditExtended).toLocaleString()}** | Total services and products served to customers on credit |\n` +
       `| **📊 MASTER TOTALS** | **₹${Math.round(masterIncome).toLocaleString()}** | **₹${Math.round(masterOutflow).toLocaleString()}** | Total financial volume combined |\n` +
       `| **⚖️ NET POSITION** | **₹${Math.round(masterNet).toLocaleString()}** | **[${masterStatus.toUpperCase()}]** | **Overall Cumulative Cash Surplus** |\n\n` +
       `---\n\n` +
       `## 📅 Month-by-Month Trend Analysis\n\n` +
-      `| Month / Year | Liquor Sales | Food Sales | Credit Extended | Expenses | Net Cashflow | Status |\n` +
-      `| :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n` +
+      `${mdTrendHeaders}\n` +
+      `${mdTrendSubHeaders}\n` +
       `${monthlyTrendRows.join('\n')}\n\n` +
       `---\n\n` +
       `## 🔮 Dynamic 3-Month Projections (AI Predictive Forecasting)\n\n` +

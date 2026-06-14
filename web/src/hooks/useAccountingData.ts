@@ -94,7 +94,8 @@ export function useAccountingData() {
             transactions: [],
             errors: [],
             intelligence: result.sales!.intelligence ?? [],
-            aiGenerated: false
+            aiGenerated: false,
+            businessMetadata: (result.sales as any).businessMetadata
           } as any;
         });
         lastSalesTimestamp.current = result.sales.runTimestamp;
@@ -125,7 +126,8 @@ export function useAccountingData() {
             transactions: [],
             errors: [],
             intelligence: result.debitors!.intelligence ?? [],
-            aiGenerated: false
+            aiGenerated: false,
+            businessMetadata: (result.debitors as any).businessMetadata
           } as any;
         });
         lastDebitorsTimestamp.current = result.debitors.runTimestamp;
@@ -155,7 +157,8 @@ export function useAccountingData() {
             items: [],
             errors: [],
             intelligence: result.godownStock!.intelligence ?? [],
-            aiGenerated: false
+            aiGenerated: false,
+            businessMetadata: (result.godownStock as any).businessMetadata
           } as any;
         });
         lastGodownStockTimestamp.current = result.godownStock.runTimestamp;
@@ -185,7 +188,8 @@ export function useAccountingData() {
             items: [],
             errors: [],
             intelligence: result.counterStock!.intelligence ?? [],
-            aiGenerated: false
+            aiGenerated: false,
+            businessMetadata: (result.counterStock as any).businessMetadata
           } as any;
         });
         lastCounterStockTimestamp.current = result.counterStock.runTimestamp;

@@ -13,6 +13,8 @@
     "dev": "tsx watch src/index.ts",
     "reset-drizzle": "tsx src/scripts/reset-drizzle.ts",
     "db:migrate": "tsx src/scripts/migrate.ts",
+    "db:seed": "tsx src/db/seeds/seed-runner.ts",
+    "onboard-tenant": "tsx src/scripts/add-tenant.ts",
     "db-studio": "drizzle-kit studio"
   },
   "dependencies": {

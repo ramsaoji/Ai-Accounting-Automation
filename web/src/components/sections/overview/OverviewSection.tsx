@@ -688,9 +688,17 @@ const SalesExceptionsPanel: React.FC<SalesExceptionsPanelProps> = ({ alerts, bus
 
 interface PeriodComparisonPanelProps {
   months: MonthlySummary[];
+  industryProfile?: string;
+  departments?: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+    colorHex: string | null;
+  }[];
 }
 
-const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months }) => {
+const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months, industryProfile, departments }) => {
   const availableMonths = useMemo(() => {
     if (!months) return [];
     return months.filter(m => m.sheetName && (m.inflows !== undefined || m.outflows !== undefined));
@@ -738,9 +746,20 @@ const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months })
       return { abs, pct };
     };
 
-    const getMetricData = (name: string, key: keyof MonthlySummary, isNegativeOutflow = false) => {
-      const baseVal = Number(baseMonth[key] || 0);
-      const compareVal = Number(compareMonth[key] || 0);
+    const getMetricData = (
+      name: string,
+      keyOrExtractor: keyof MonthlySummary | ((m: MonthlySummary) => number),
+      isNegativeOutflow = false
+    ) => {
+      const getValue = (m: MonthlySummary) => {
+        if (typeof keyOrExtractor === 'function') {
+          return keyOrExtractor(m);
+        }
+        return Number(m[keyOrExtractor] || 0);
+      };
+
+      const baseVal = getValue(baseMonth);
+      const compareVal = getValue(compareMonth);
       const { abs, pct } = calculateVariance(baseVal, compareVal);
       const positiveGood = !isNegativeOutflow;
 
@@ -754,15 +773,44 @@ const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months })
       };
     };
 
+    const isHospitality = industryProfile === 'HOSPITALITY';
+    const revenueDepts = departments?.filter(
+      (d: any) =>
+        d.type === 'REVENUE' &&
+        !d.name.toLowerCase().includes('recovery') &&
+        !d.name.toLowerCase().includes('jama') &&
+        !d.name.toLowerCase().includes('recover')
+    ) || [];
+
+    const dept1 = revenueDepts[0];
+    const dept2 = revenueDepts[1];
+
+    const label1 = dept1 ? `${dept1.name} Performance` : (isHospitality ? 'Liquor Revenue Split' : 'Primary Revenue Split');
+    const label2 = dept2 ? `${dept2.name} Performance` : (isHospitality ? 'Food Revenue Split' : 'Secondary Revenue Split');
+
+    const extractor1 = (m: MonthlySummary) => {
+      if (m.departments && dept1) {
+        return m.departments[dept1.name] || 0;
+      }
+      return m.liquor || 0;
+    };
+
+    const extractor2 = (m: MonthlySummary) => {
+      if (m.departments && dept2) {
+        return m.departments[dept2.name] || 0;
+      }
+      return m.food || 0;
+    };
+
     return [
       getMetricData('Total Inflows (Revenue)', 'inflows'),
-      getMetricData('Liquor Revenue Split', 'liquor'),
-      getMetricData('Food Revenue Split', 'food'),
+      getMetricData(label1, extractor1),
+      getMetricData(label2, extractor2),
       getMetricData('Operational Expenses', 'expenses', true),
       getMetricData('Credit Extended (Udhari)', 'creditExtended', true),
       getMetricData('Net Position (Surplus)', 'net'),
     ];
-  }, [baseMonth, compareMonth]);
+  }, [baseMonth, compareMonth, industryProfile, departments]);
 
   if (availableMonths.length < 2) {
     return null;
@@ -914,8 +962,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
   }, [summary.months]);
 
   const businessName = useMemo(() => {
+    if (summary.businessMetadata?.businessName) {
+      return summary.businessMetadata.businessName;
+    }
     return deriveBusinessName(summary.fileName);
-  }, [summary.fileName]);
+  }, [summary.fileName, summary.businessMetadata?.businessName]);
 
   const triggerReminderCopy = (debtor: DebitorSummary) => {
     const text = `Dear ${debtor.name},\n\nThis is a friendly reminder from ${businessName} accounts management. Your pending account balance of ₹${debtor.pending.toLocaleString('en-IN')} (total credit purchases: ₹${debtor.debit.toLocaleString('en-IN')}, cleared: ₹${debtor.credit.toLocaleString('en-IN')}) is currently due.\n\nPlease settle this amount at your earliest convenience via UPI, cash, or card.\n\nThank you!`;
@@ -967,6 +1018,49 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
       }
     });
 
+    // Dynamic split computations based on Chart of Accounts
+    const revenueDepts = summary.departments?.filter(
+      d =>
+        d.type === 'REVENUE' &&
+        !d.name.toLowerCase().includes('recovery') &&
+        !d.name.toLowerCase().includes('jama') &&
+        !d.name.toLowerCase().includes('recover')
+    ) || [];
+    const deptTotals = revenueDepts.map(dept => {
+      const totalVal = filteredMonths.reduce((sum, m) => {
+        return sum + (m.departments ? (m.departments[dept.name] || 0) : (dept.code === '4001' ? m.liquor : dept.code === '4002' ? m.food : 0));
+      }, 0);
+      return { dept, totalVal };
+    }).sort((a, b) => b.totalVal - a.totalVal);
+
+    let splitTitle = "Revenue Split";
+    let splitValue = "0.0% / 0.0%";
+    let splitTooltip = "Ratio of revenue categories.";
+    let splitDesc = "Revenue distribution.";
+
+    if (deptTotals.length >= 2) {
+      const top1 = deptTotals[0];
+      const top2 = deptTotals[1];
+      const combined = top1.totalVal + top2.totalVal;
+      const top1Pct = combined > 0 ? ((top1.totalVal / combined) * 100).toFixed(1) : "0.0";
+      const top2Pct = combined > 0 ? ((top2.totalVal / combined) * 100).toFixed(1) : "0.0";
+
+      const name1 = top1.dept.name.replace(/\s*(sales|revenue)\s*/gi, '').trim();
+      const name2 = top2.dept.name.replace(/\s*(sales|revenue)\s*/gi, '').trim();
+
+      splitTitle = `${name1} vs ${name2} Split`;
+      splitValue = `${top1Pct}% / ${top2Pct}%`;
+      splitTooltip = `Proportional ratio of ${name1.toLowerCase()} compared to ${name2.toLowerCase()} sales.`;
+      splitDesc = `Ratio of ${name1.toLowerCase()} vs. ${name2.toLowerCase()}.`;
+    } else if (deptTotals.length === 1) {
+      const top1 = deptTotals[0];
+      const name1 = top1.dept.name.replace(/\s*(sales|revenue)\s*/gi, '').trim();
+      splitTitle = `${name1} Share`;
+      splitValue = "100.0%";
+      splitTooltip = `Proportional share of ${name1.toLowerCase()} sales.`;
+      splitDesc = `Revenue is driven entirely by ${name1.toLowerCase()}.`;
+    }
+
     return {
       masterLiquor,
       masterFood,
@@ -978,7 +1072,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
       creditOutstandingGap,
       creditRecoveryRate,
       bestProfitMonth,
-      bestProfitValue
+      bestProfitValue,
+      splitTitle,
+      splitValue,
+      splitTooltip,
+      splitDesc
     };
   }, [filteredMonths, isDebitors]);
 
@@ -1232,6 +1330,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
         dynamicDebitorTotals={dynamicDebitorTotals}
         dynamicSalesTotals={dynamicSalesTotals}
         dynamicStockTotals={dynamicStockTotals}
+        industryProfile={summary.businessMetadata?.industryProfile}
       />
 
       {/* Tab-switched Recharts Graphic Panel */}
@@ -1322,6 +1421,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
       {!isDebitors && !isStock && summary.months && (
         <PeriodComparisonPanel
           months={summary.months}
+          industryProfile={summary.businessMetadata?.industryProfile}
+          departments={summary.departments}
         />
       )}
 

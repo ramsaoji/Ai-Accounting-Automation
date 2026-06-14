@@ -1,6 +1,6 @@
 # 🏛️ AI Accounting Automation Service — Architecture Guide
 
-> **Last Updated**: June 7, 2026
+> **Last Updated**: June 14, 2026
 
 This guide provides an in-depth breakdown of the structural blueprint, design patterns, and processing flows implemented in the service.
 
@@ -15,10 +15,8 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     │
     ▼
 [TRANSFORM] Facade Parser Engine (excel.parser.ts)
-    │   ├── Specialized Sales Register Sub-Parser
-    │   ├── Specialized Outstanding Debitors Sub-Parser
-    │   ├── Specialized Counter Stock Register Sub-Parser
-    │   └── Specialized Godown Stock Register Sub-Parser
+    │   ├── Dynamic Database-Driven Template Parser (parsers/dynamic.parser.ts)
+    │   └── Specialized Hospitality Sub-Parsers (parsers/hotel-gaurav/)
     │
     ▼
 [AUDIT] Business Rules Engine (rules.engine.ts)
@@ -29,8 +27,8 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
     │   └── Swappable LLM Provider Factory Method
     │
     ▼
-[LOAD] Relational Database Persistence (Neon / PostgreSQL)
-        ├── Normalized tables: files, transactions, party_balances, godown_stock_items, counter_stock_items
+[EXTRACT/LOAD] Relational Database Persistence (Neon / PostgreSQL)
+        ├── Normalized tables: files, transactions, party_balances, stock_items
         ├── Configuration tables: system_settings, audit_policies, history_retention_settings
         ├── Exception tracking: audit_alerts, parsing_errors
         └── Telegram Bot Notifications & Dispatch Queue
@@ -54,11 +52,9 @@ The system implements a **stateless, pipe-and-filter ETL (Extract, Transform, Lo
 * **Role:** Type-safe row-by-row data extraction.
 * **Pattern:** **Facade Design Pattern**.
 * **Decoupled Engine:**
-  * `excel.parser.ts`: Lightweight interface selector. Performs sheet signature detections (tab names and column layouts checks) and dynamically routes execution to specialized sub-parsers.
-  * `parsers/sales.parser.ts`: Tailored sales register parser.
-  * `parsers/debitors.parser.ts`: Tailored customer outstanding balance parser.
-  * `parsers/counter.parser.ts`: Tailored counter inventory register parser.
-  * `parsers/godown.parser.ts`: Tailored godown inventory register parser.
+  * `excel.parser.ts`: Lightweight interface selector. Fetches client configuration and either routes to specialized hospitality sub-parsers or runs dynamic template parsing.
+  * `parsers/dynamic.parser.ts`: Matches Excel columns dynamically to database template configurations.
+  * `parsers/hotel-gaurav/`: Contains custom hardcoded parsing pipelines for Hotel Gaurav's spreadsheets (sales, debitors, counter, and godown stock registers).
   * `excel.mapper.ts`: Synonym header translator. Resolves variants (e.g. `Amount` vs `Invoiced Amount`) dynamically.
 * **Safety Patch:** Implements an in-memory monkey patch to safely intercept ExcelJS name validation bugs regarding Microsoft Excel protected tab names (e.g. `History`).
 
@@ -111,13 +107,12 @@ The relational schema strictly maps parsed ledger transactions, outstanding bala
 
 1. **`files`**: Ingestion runs tracking workbook metadata, content hash signatures, AI summaries, and execution statuses.
 2. **`transactions`**: Unified sales counter registers, payroll entries, and operational payment logs.
-3. **`godown_stock_items`**: Relational rows mapping godown inventory snapshots, bottle size, quantities, cost/sell prices, valuations, and snapshot dates.
-4. **`counter_stock_items`**: Relational rows mapping counter bar inventory snapshots, sales movement, valuations, and snapshot dates.
-5. **`party_balances`**: Outstanding balance records for debtors (Udhari) and creditors/suppliers.
-6. **`audit_alerts`**: Rules engine exceptions and warning records.
-7. **`parsing_errors`**: Structural anomalies and validation failures flagged during parsing.
-8. **`security_config`**: Password Argon2 hashes (app and upload tokens).
-9. **`sync_metadata`**: Google Drive file tracking logs (modification times and filenames).
-10. **`system_settings`**: Key-value settings to toggle features (e.g. `web_chat_enabled`, `telegram_chat_enabled`).
-11. **`audit_policies`**: Dynamic compliance parameters for rules (e.g., `ruleHighExpenseCeiling`, `ruleOutstandingCreditCap`).
-12. **`history_retention_settings`**: Workspace-specific historical snapshot retention configuration (days).
+3. **`stock_items`**: Relational rows mapping inventory snapshots (quantities, prices, valuations, snapshot dates, and dynamic location tags like 'godown' or 'counter').
+4. **`party_balances`**: Outstanding balance records for debtors (Udhari) and creditors/suppliers.
+5. **`audit_alerts`**: Rules engine exceptions and warning records.
+6. **`parsing_errors`**: Structural anomalies and validation failures flagged during parsing.
+7. **`security_config`**: Password Argon2 hashes (app and upload tokens).
+8. **`sync_metadata`**: Google Drive file tracking logs (modification times and filenames).
+9. **`system_settings`**: Key-value settings to toggle features (e.g. `web_chat_enabled`, `telegram_chat_enabled`).
+10. **`audit_policies`**: Dynamic compliance parameters for rules (e.g., `ruleHighExpenseCeiling`, `ruleOutstandingCreditCap`).
+11. **`history_retention_settings`**: Workspace-specific historical snapshot retention configuration (days).

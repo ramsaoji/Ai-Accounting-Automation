@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
-import { ExcelParsingResult, ParsingError, Transaction, DebitorSummary } from '../../types/accounting.types.js';
-import { extractStringValue } from '../excel.mapper.js';
-import { logger } from '../../logger/logger.js';
+import { ExcelParsingResult, ParsingError, Transaction, DebitorSummary } from '../../../types/accounting.types.js';
+import { extractStringValue } from '../../excel.mapper.js';
+import { logger } from '../../../logger/logger.js';
 
 export function parseDebitorsWorkbook(workbook: ExcelJS.Workbook, fileName: string): ExcelParsingResult {
   logger.info({ fileName }, 'Routing to specialized Debitors List Workbook parser');
@@ -75,21 +75,21 @@ export function parseDebitorsWorkbook(workbook: ExcelJS.Workbook, fileName: stri
       errors.push({
         row: totalRowIndex,
         invoiceNumber: 'ERR-TOTAL-DEBIT',
-        error: `Debitors Breakup Total Mismatch: Sheet Total Debit ₹${totalRowDebit.toLocaleString()} does not match sum of accounts ₹${breakupSumDebit.toLocaleString()}`
+        error: `Debitors Breakup Total Mismatch: Sheet Total Debit Î“Ã©â•£${totalRowDebit.toLocaleString()} does not match sum of accounts Î“Ã©â•£${breakupSumDebit.toLocaleString()}`
       });
     }
     if (Math.abs(breakupSumCredit - totalRowCredit) > 1.0) {
       errors.push({
         row: totalRowIndex,
         invoiceNumber: 'ERR-TOTAL-CREDIT',
-        error: `Debitors Breakup Total Mismatch: Sheet Total Credit ₹${totalRowCredit.toLocaleString()} does not match sum of accounts ₹${breakupSumCredit.toLocaleString()}`
+        error: `Debitors Breakup Total Mismatch: Sheet Total Credit Î“Ã©â•£${totalRowCredit.toLocaleString()} does not match sum of accounts Î“Ã©â•£${breakupSumCredit.toLocaleString()}`
       });
     }
     if (Math.abs(breakupSumPending - totalRowPending) > 1.0) {
       errors.push({
         row: totalRowIndex,
         invoiceNumber: 'ERR-TOTAL-PENDING',
-        error: `Debitors Breakup Total Mismatch: Sheet Total Pending ₹${totalRowPending.toLocaleString()} does not match sum of accounts ₹${breakupSumPending.toLocaleString()}`
+        error: `Debitors Breakup Total Mismatch: Sheet Total Pending Î“Ã©â•£${totalRowPending.toLocaleString()} does not match sum of accounts Î“Ã©â•£${breakupSumPending.toLocaleString()}`
       });
     }
   }

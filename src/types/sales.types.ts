@@ -17,6 +17,8 @@ export const TransactionSchema = z.object({
   amount: z.coerce.number().positive('Amount must be positive'),
   type: TransactionTypeSchema,
   vendor: z.string().min(1, 'Vendor is required').trim(),
+  branchId: z.string().uuid().optional(),
+  coaId: z.string().uuid().optional(),
 });
 
 export type Transaction = z.infer<typeof TransactionSchema>;

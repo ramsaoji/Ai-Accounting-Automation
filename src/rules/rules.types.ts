@@ -15,6 +15,8 @@ export interface RuleContext {
   fileType?: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
   fileName?: string;
   godownStockItems?: GodownStockItem[];
+  branchId?: string | null;
+  entityId?: string | null;
 }
 
 export interface Rule {

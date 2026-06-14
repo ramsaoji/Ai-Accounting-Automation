@@ -1,6 +1,4 @@
-# AI Accounting Automation Service 📊💼
-
-> **Last Updated**: June 7, 2026
+# AI Accounting Automation Service 📊> **Last Updated**: June 14, 2026
 
 A production-ready, database-backed financial audit orchestrator and background worker built with **Node.js**, **TypeScript**, and **Drizzle ORM**. This service automatically syncs with Google Drive or accepts manual uploads of Excel financial ledgers via the Web UI, parses and aggregates transaction records, runs an extensible anomaly-detection rules engine, generates high-quality executive summaries using **swappable AI LLM Providers**, persists everything relationally to a PostgreSQL database, and dispatches real-time executive briefs to Telegram!
 
@@ -65,10 +63,12 @@ ai-accounting-automation/
 │   │   ├── excel.mapper.ts       # Dynamic column finder & row converter
 │   │   ├── excel.parser.ts       # Main parser selector facade
 │   │   └── parsers/
-│   │       ├── sales.parser.ts    # Daily sales register parser
-│   │       ├── debitors.parser.ts # Customer outstanding udhari parser
-│   │       ├── counter.parser.ts  # Counter stock inventory parser
-│   │       └── godown.parser.ts   # Godown stock inventory parser
+│   │       ├── dynamic.parser.ts  # Dynamic database-driven template parser
+│   │       └── hotel-gaurav/      # Hotel Gaurav custom hardcoded parsers
+│   │           ├── sales.parser.ts
+│   │           ├── debitors.parser.ts
+│   │           ├── counter.parser.ts
+│   │           └── godown.parser.ts
 │   ├── rules/
 │   │   ├── rules.types.ts        # Modular Rules Engine interfaces
 │   │   ├── rules.engine.ts       # Concrete Rule implementations (Spikes, Duplicates)
@@ -80,7 +80,7 @@ ai-accounting-automation/
 │   │       ├── negative-or-zero.rule.ts
 │   │       ├── off-hours-transaction.rule.ts
 │   │       ├── suspicious-spike.rule.ts
-│   │       ├── godown-stock-alerts.rule.ts     # Godown stock and margin alerts rule
+│   │       ├── stock-alerts.rule.ts            # Godown and counter stock margin alerts rule
 │   │       └── outstanding-credit-cap.rule.ts  # Customer credit limit rule
 │   ├── ai/
 │   │   ├── providers/
@@ -114,13 +114,15 @@ ai-accounting-automation/
 │   ├── logger/
 │   │   └── logger.ts             # Pino logger configurations
 │   ├── scripts/
+│   │   ├── add-tenant.ts         # Production onboarding script for new business entities
+│   │   ├── migrate.ts            # Production migration runner
 │   │   └── reset-drizzle.ts      # Developer tool: wipes database schemas and reapplies migrations
 │   ├── utils/
 │   │   ├── cron.ts               # Cron expression humanization utility
 │   │   ├── file.ts               # Local file resolution helpers
 │   │   └── accounting.ts         # In-memory daily sales aggregation utilities
 │   └── index.ts                  # App entrypoint (initializes DB, scheduler, Telegram bot, and Fastify server)
-│── Dockerfile                    # Multi-stage, low footprint production container
+├── Dockerfile                    # Multi-stage, low footprint production container
 ├── .dockerignore                 # Container build context filtering rules
 ├── .env.example                  # Template listing all environmental configs
 ├── tsconfig.json                 # Type-check configurations
@@ -156,7 +158,13 @@ To clear database tables and reapply clean schema migrations:
 npm run reset-drizzle
 ```
 
-### 5. Interactive API Documentation
+### 5. Onboard a New Tenant (Optional)
+To configure and register a fresh business entity and Custom Chart of Accounts (e.g. Zenith Salon & Spa) inside your database:
+```bash
+npm run onboard-tenant
+```
+
+### 6. Interactive API Documentation
 Once the server is running locally, access the dynamic OpenAPI/Swagger documentation interface at:
 `http://localhost:8080/documentation`
 

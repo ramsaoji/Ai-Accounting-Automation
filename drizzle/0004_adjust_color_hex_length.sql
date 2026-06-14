@@ -1,0 +1,1 @@
+ALTER TABLE "chart_of_accounts" ALTER COLUMN "color_hex" SET DATA TYPE varchar(50);

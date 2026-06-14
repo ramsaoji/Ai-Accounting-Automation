@@ -45,12 +45,25 @@ export interface MonthlySummary {
   outflows: number;
   net: number;
   status: 'Surplus' | 'Deficit';
+  departments?: Record<string, number>;
+  dynamicDepartments?: {
+    name: string;
+    value: number;
+    colorHex: string;
+    accountType: string;
+  }[];
 }
 
 export interface MasterSummary {
   fileName: string;
   fileType?: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock';
   runTimestamp: string;
+  businessMetadata?: {
+    businessName: string;
+    industryProfile: 'HOSPITALITY' | 'SERVICES' | 'RETAIL' | 'TRADING';
+    currency: string;
+    timezone: string;
+  };
   isDebitorsList?: boolean;
   isGodownStockList?: boolean;
   totalTransactions: number;
@@ -113,6 +126,13 @@ export interface MasterSummary {
   };
   topDebitors?: DebitorSummary[];
   months?: MonthlySummary[];
+  departments?: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+    colorHex: string | null;
+  }[];
   transactions?: Transaction[];
   items?: any[];
   historicalTrends?: any[];

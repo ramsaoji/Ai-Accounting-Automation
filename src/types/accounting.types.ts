@@ -35,4 +35,6 @@ export interface ExcelParsingResult {
   isDebitorsList?: boolean;
   isGodownStockList?: boolean;
   isCounterStockList?: boolean;
+  templateId?: string;
+  entityId?: string;
 }

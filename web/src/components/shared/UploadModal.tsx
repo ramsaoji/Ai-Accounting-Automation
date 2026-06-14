@@ -28,6 +28,7 @@ interface UploadModalProps {
   className?: string;
   connectionMode?: 'live' | 'static' | 'empty';
   hasSyncedBefore?: boolean;
+  showTextOnMobile?: boolean;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
@@ -35,7 +36,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   disabled,
   className,
   connectionMode,
-  hasSyncedBefore
+  hasSyncedBefore,
+  showTextOnMobile
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -122,7 +124,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             className={`gap-2 cursor-pointer border-primary/30 hover:border-primary/60 hover:bg-primary/5 disabled:opacity-50 ${className || ''}`}
           >
             <UploadCloud className="size-4 text-primary" />
-            <span className="hidden sm:inline">Upload Ledger</span>
+            <span className={showTextOnMobile ? "" : "hidden sm:inline"}>Upload Ledger</span>
           </Button>
         }
       />
@@ -210,7 +212,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <DialogHeader>
               <DialogTitle className="text-sm font-bold">Upload Accounting Spreadsheet(s)</DialogTitle>
               <DialogDescription className="text-xs">
-                Ingest daily sales registers, outstanding debtors lists, or godown stock ledgers. Select your files below and click Upload to begin.
+                Ingest daily sales registers, outstanding debtors lists, or inventory stock ledgers. Select your files below and click Upload to begin.
               </DialogDescription>
             </DialogHeader>
 
@@ -246,7 +248,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                             </button>
                           } />
                           <TooltipContent className="block max-w-[240px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                            Upload a Daily Sales Register spreadsheet, a Customer Debitors Outstanding ledger, or a Godown Stock Register spreadsheet.
+                            Upload a Daily Sales Register spreadsheet, a Customer Debitors Outstanding ledger, or an Inventory Stock Register spreadsheet.
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>

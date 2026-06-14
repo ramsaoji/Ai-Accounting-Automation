@@ -1,9 +1,9 @@
 import ExcelJS from 'exceljs';
-import { SheetParsingResult, ParsingError, Transaction } from '../../types/accounting.types.js';
-import { buildHeaderMap, mapRowToTransaction, extractStringValue } from '../excel.mapper.js';
-import { logger } from '../../logger/logger.js';
-import { config } from '../../config/config.js';
-import { getHistoryRetentionDays } from '../../db/db.client.js';
+import { SheetParsingResult, ParsingError, Transaction } from '../../../types/accounting.types.js';
+import { buildHeaderMap, mapRowToTransaction, extractStringValue } from '../../excel.mapper.js';
+import { logger } from '../../../logger/logger.js';
+import { config } from '../../../config/config.js';
+import { getHistoryRetentionDays } from '../../../db/db.client.js';
 
 export async function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileName: string): Promise<SheetParsingResult> {
   logger.info({ sheetName: worksheet.name, totalRows: worksheet.rowCount }, `Specialized parsing for ${config.BUSINESS_NAME} Daily Sales Register`);
@@ -53,35 +53,35 @@ export async function parseHotelGauravSheet(worksheet: ExcelJS.Worksheet, fileNa
         errors.push({
           row: r,
           invoiceNumber: `ERR-TOTAL-LIQ`,
-          error: `Spreadsheet Total Mismatch: Sheet Liquor total ₹${sheetTotalLiquor.toLocaleString()} does not match sum of entries ₹${sumLiquor.toLocaleString()}`
+          error: `Spreadsheet Total Mismatch: Sheet Liquor total Î“Ã©â•£${sheetTotalLiquor.toLocaleString()} does not match sum of entries Î“Ã©â•£${sumLiquor.toLocaleString()}`
         });
       }
       if (Math.abs(sumFood - sheetTotalFood) > 1.0) {
         errors.push({
           row: r,
           invoiceNumber: `ERR-TOTAL-FOOD`,
-          error: `Spreadsheet Total Mismatch: Sheet Food total ₹${sheetTotalFood.toLocaleString()} does not match sum of entries ₹${sumFood.toLocaleString()}`
+          error: `Spreadsheet Total Mismatch: Sheet Food total Î“Ã©â•£${sheetTotalFood.toLocaleString()} does not match sum of entries Î“Ã©â•£${sumFood.toLocaleString()}`
         });
       }
       if (Math.abs(sumUdhariJama - sheetTotalUdhariJama) > 1.0) {
         errors.push({
           row: r,
           invoiceNumber: `ERR-TOTAL-REC`,
-          error: `Spreadsheet Total Mismatch: Sheet Credit Recovery total ₹${sheetTotalUdhariJama.toLocaleString()} does not match sum of entries ₹${sumUdhariJama.toLocaleString()}`
+          error: `Spreadsheet Total Mismatch: Sheet Credit Recovery total Î“Ã©â•£${sheetTotalUdhariJama.toLocaleString()} does not match sum of entries Î“Ã©â•£${sumUdhariJama.toLocaleString()}`
         });
       }
       if (Math.abs(sumUdhariGiven - sheetTotalUdhariGiven) > 1.0) {
         errors.push({
           row: r,
           invoiceNumber: `ERR-TOTAL-EXT`,
-          error: `Spreadsheet Total Mismatch: Sheet Credit Extended total ₹${sheetTotalUdhariGiven.toLocaleString()} does not match sum of entries ₹${sumUdhariGiven.toLocaleString()}`
+          error: `Spreadsheet Total Mismatch: Sheet Credit Extended total Î“Ã©â•£${sheetTotalUdhariGiven.toLocaleString()} does not match sum of entries Î“Ã©â•£${sumUdhariGiven.toLocaleString()}`
         });
       }
       if (Math.abs(sumExpenses - sheetTotalExpenses) > 1.0) {
         errors.push({
           row: r,
           invoiceNumber: `ERR-TOTAL-EXP`,
-          error: `Spreadsheet Total Mismatch: Sheet Expenses total ₹${sheetTotalExpenses.toLocaleString()} does not match sum of entries ₹${sumExpenses.toLocaleString()}`
+          error: `Spreadsheet Total Mismatch: Sheet Expenses total Î“Ã©â•£${sheetTotalExpenses.toLocaleString()} does not match sum of entries Î“Ã©â•£${sumExpenses.toLocaleString()}`
         });
       }
       continue;

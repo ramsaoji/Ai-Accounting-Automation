@@ -18,6 +18,13 @@ interface MonthlySalesLedgerTableProps {
   salesSortBy: string;
   salesSortOrder: 'asc' | 'desc';
   onSalesSort: (column: string) => void;
+  departments?: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+    colorHex: string | null;
+  }[];
 }
 
 export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = ({
@@ -27,7 +34,23 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
   salesSortBy,
   salesSortOrder,
   onSalesSort,
+  departments,
 }) => {
+  const revenueDepts = React.useMemo(() => {
+    if (departments && departments.length > 0) {
+      return departments.filter(
+        (d) =>
+          d.type === 'REVENUE' &&
+          !d.name.toLowerCase().includes('recovery') &&
+          !d.name.toLowerCase().includes('jama') &&
+          !d.name.toLowerCase().includes('recover')
+      );
+    }
+    return [
+      { id: 'liq', code: '4001', name: 'Primary Revenue', type: 'REVENUE', colorHex: 'var(--chart-2)' },
+      { id: 'food', code: '4002', name: 'Secondary Revenue', type: 'REVENUE', colorHex: 'var(--primary)' }
+    ];
+  }, [departments]);
   const formatINR = (val: number) => {
     return '₹' + Math.round(val).toLocaleString('en-IN');
   };
@@ -60,34 +83,23 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
               </Tooltip>
               {renderSortIcon('sheetName')}
             </TableHead>
-            <TableHead 
-              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
-              onClick={() => onSalesSort('liquor')}
-            >
-              <Tooltip>
-                <TooltipTrigger render={
-                  <span className="cursor-help underline underline-offset-2 decoration-dotted">Liquor Sales</span>
-                } />
-                <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                  Consolidated monthly inflows generated from alcohol/liquor purchases.
-                </TooltipContent>
-              </Tooltip>
-              {renderSortIcon('liquor')}
-            </TableHead>
-            <TableHead 
-              className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
-              onClick={() => onSalesSort('food')}
-            >
-              <Tooltip>
-                <TooltipTrigger render={
-                  <span className="cursor-help underline underline-offset-2 decoration-dotted">Food Sales</span>
-                } />
-                <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
-                  Consolidated monthly inflows generated from restaurant food menu sales.
-                </TooltipContent>
-              </Tooltip>
-              {renderSortIcon('food')}
-            </TableHead>
+            {revenueDepts.map((dept) => (
+              <TableHead 
+                key={dept.id}
+                className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
+                onClick={() => onSalesSort(dept.name)}
+              >
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="cursor-help underline underline-offset-2 decoration-dotted">{dept.name}</span>
+                  } />
+                  <TooltipContent className="block max-w-[220px] p-2 text-[0.72rem] leading-normal border bg-popover text-popover-foreground shadow-md rounded-lg normal-case font-medium">
+                    Consolidated monthly inflows generated from {dept.name.toLowerCase()}.
+                  </TooltipContent>
+                </Tooltip>
+                {renderSortIcon(dept.name)}
+              </TableHead>
+            ))}
             <TableHead 
               className="text-right h-10 cursor-pointer hover:bg-muted/20 select-none transition-colors"
               onClick={() => onSalesSort('expenses')}
@@ -185,12 +197,20 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
               onClick={() => onRowClick?.(month.sheetName)}
               className="hover:bg-muted/30 transition-colors h-11 border-b cursor-pointer select-none"
             >
-              <TableCell className="pl-6 font-semibold text-foreground flex items-center gap-2">
-                <FolderOpen className="size-4 text-muted-foreground shrink-0" />
-                {month.sheetName}
+              <TableCell className="pl-6 font-semibold text-foreground">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="size-4 text-muted-foreground shrink-0" />
+                  <span>{month.sheetName}</span>
+                </div>
               </TableCell>
-              <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(month.liquor)}</TableCell>
-              <TableCell className="text-right font-mono font-semibold text-muted-foreground">{formatINR(month.food)}</TableCell>
+              {revenueDepts.map((dept) => {
+                const value = month.departments ? (month.departments[dept.name] || 0) : (dept.id === 'liq' ? month.liquor : month.food);
+                return (
+                  <TableCell key={dept.id} className="text-right font-mono font-semibold text-muted-foreground">
+                    {formatINR(value)}
+                  </TableCell>
+                );
+              })}
               <TableCell className="text-right font-mono font-semibold text-destructive">{formatINR(month.expenses)}</TableCell>
               <TableCell className="text-right font-mono font-semibold text-warning">{formatINR(month.creditExtended)}</TableCell>
               <TableCell className="text-right font-mono font-semibold text-success">{formatINR(month.creditRecovery)}</TableCell>

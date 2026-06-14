@@ -70,7 +70,7 @@ export function useManualUpload({ onSuccess, isSyncingDriveRef }: UseManualUploa
             ? {
                 ...prev,
                 percent: Math.round(overallStart + weight * 0.7),
-                statusText: `AI auditor indexing ${file.name}...`,
+                statusText: `Processing ${file.name}...`,
               }
             : prev
         );

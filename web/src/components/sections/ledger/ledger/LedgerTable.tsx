@@ -26,6 +26,13 @@ interface LedgerTableProps {
   stockSortBy: string;
   stockSortOrder: 'asc' | 'desc';
   onStockSort: (column: string) => void;
+  departments?: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+    colorHex: string | null;
+  }[];
 }
 
 export const LedgerTable: React.FC<LedgerTableProps> = ({
@@ -48,6 +55,7 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
   stockSortBy,
   stockSortOrder,
   onStockSort,
+  departments,
 }) => {
   if (totalItems === 0) {
     return (
@@ -101,6 +109,7 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
       salesSortBy={salesSortBy}
       salesSortOrder={salesSortOrder}
       onSalesSort={onSalesSort}
+      departments={departments}
     />
   );
 };

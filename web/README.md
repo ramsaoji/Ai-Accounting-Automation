@@ -1,6 +1,6 @@
 # AI Accounting Automation — Financial Command Center Dashboard
 
-> **Last Updated**: June 7, 2026
+> **Last Updated**: June 14, 2026
 
 A high-fidelity, production-grade executive dashboard for real-time accounting verification, anomaly auditing, and business intelligence insights from financial registers. Connects live to the Node.js backend API which reads directly from a PostgreSQL (Neon) database.
 

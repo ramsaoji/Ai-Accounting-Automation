@@ -1,0 +1,1 @@
+ALTER TABLE "stock_items" ADD COLUMN "bottle_size_ml" integer DEFAULT 0 NOT NULL;
