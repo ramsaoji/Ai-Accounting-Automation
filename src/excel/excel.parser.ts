@@ -5,6 +5,7 @@ import { db } from '../db/db.client.js';
 import * as schema from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { parseDynamicWorkbook, ParserConfigSchema } from './parsers/dynamic.parser.js';
+import fs from 'fs';
 
 // =========================================================================
 // 🚀 RUNTIME MONKEY PATCH: Bypass ExcelJS "History" tab name protection bug
@@ -31,10 +32,12 @@ try {
 
 export class ExcelParser {
   /**
-   * Parses an Excel file buffer, matching against database-defined template configurations.
+   * Parses an Excel file buffer or path, matching against database-defined template configurations.
    */
-  async parseBuffer(buffer: Buffer, fileName: string, entityId?: string): Promise<ExcelParsingResult> {
-    logger.info({ fileName, sizeBytes: buffer.length, entityId }, 'Parsing Excel buffer');
+  async parseBuffer(buffer: Buffer | string, fileName: string, entityId?: string): Promise<ExcelParsingResult> {
+    const isPath = typeof buffer === 'string';
+    const sizeBytes = isPath ? (await fs.promises.stat(buffer)).size : buffer.length;
+    logger.info({ fileName, sizeBytes, entityId, isPath }, 'Parsing Excel resource');
 
     // Resolve active business entity context
     let activeEntity: typeof schema.businessEntities.$inferSelect | undefined;
@@ -68,20 +71,27 @@ export class ExcelParser {
         logger.error({ err: dbErr }, 'Error fetching Hotel Gaurav daily sales template context');
       }
 
+      // Convert path to buffer for custom sub-parsers if needed
+      const fileBuffer = isPath ? await fs.promises.readFile(buffer) : buffer;
+
       if (isCounterStockFile) {
         const { parseCounterStockWorkbookStreaming } = await import('./parsers/hotel-gaurav/counter.parser.js');
-        const result = await parseCounterStockWorkbookStreaming(buffer, fileName);
+        const result = await parseCounterStockWorkbookStreaming(fileBuffer, fileName);
         return { ...result, entityId: activeEntity?.id };
       }
 
       if (isGodownStockFile) {
         const { parseGodownStockWorkbookStreaming } = await import('./parsers/hotel-gaurav/godown.parser.js');
-        const result = await parseGodownStockWorkbookStreaming(buffer, fileName);
+        const result = await parseGodownStockWorkbookStreaming(fileBuffer, fileName);
         return { ...result, entityId: activeEntity?.id };
       }
 
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buffer as any);
+      if (isPath) {
+        await workbook.xlsx.readFile(buffer);
+      } else {
+        await workbook.xlsx.load(buffer as any);
+      }
 
       const hasEntryList = workbook.worksheets.some(s => s.name.toLowerCase().replace(/\s/g, '') === 'entrylist');
       const hasBreakup = workbook.worksheets.some(s => s.name.toLowerCase().replace(/\s/g, '') === 'breakup');
@@ -131,7 +141,11 @@ export class ExcelParser {
     }
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
+    if (isPath) {
+      await workbook.xlsx.readFile(buffer);
+    } else {
+      await workbook.xlsx.load(buffer as any);
+    }
 
     // 1. Dynamic DB Template Ingestion (Multi-Tenant SaaS)
     try {

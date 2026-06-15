@@ -19,8 +19,9 @@ import {
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { fetchTransactions, fetchSystemSettings } from '@/services/api';
+import { RawTransactionsTable } from './ledger/RawTransactionsTable';
+import { LedgerDrawer } from './ledger/LedgerDrawer';
 import {
   Pagination,
   PaginationContent,
@@ -98,8 +99,6 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   const [txSelectedMonths, setTxSelectedMonths] = useState<string[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [drawerLoading, setDrawerLoading] = useState(false);
-  const [drawerSearch, setDrawerSearch] = useState('');
-  const [drawerFlowFilter, setDrawerFlowFilter] = useState<'all' | 'credit' | 'debit'>('all');
 
   // Reset selected months when tab changes
   useEffect(() => {
@@ -389,8 +388,6 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
 
   // Row drilldown click handlers
   const handleMonthClick = async (monthName: string) => {
-    setDrawerSearch('');
-    setDrawerFlowFilter('all');
     setDrawerTitle(`${monthName} Ledger Entries`);
     setDrawerDescription(`Raw accounting logs compiled for the ${monthName} statement sheet.`);
     setDrawerTransactions([]);
@@ -412,8 +409,6 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   };
 
   const handleDebtorClick = async (debtorName: string) => {
-    setDrawerSearch('');
-    setDrawerFlowFilter('all');
     setDrawerTitle(`${debtorName} Transaction History`);
     setDrawerDescription(`Audit log of all credit extended and cash payments cleared for ${debtorName}.`);
     setDrawerTransactions([]);
@@ -435,41 +430,6 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
   };
 
   const onRowClick = isDebitors ? handleDebtorClick : handleMonthClick;
-
-  const filteredDrawerTransactions = useMemo(() => {
-    return drawerTransactions.filter((tx) => {
-      const query = drawerSearch.toLowerCase().trim();
-      if (!query && drawerFlowFilter === 'all') return true;
-      
-      const matchesSearch = 
-        tx.category.toLowerCase().includes(query) ||
-        tx.particulars.toLowerCase().includes(query) ||
-        (tx.vendor && tx.vendor.toLowerCase().includes(query)) ||
-        tx.date.includes(query);
-      
-      const matchesFlow = drawerFlowFilter === 'all' ? true : tx.type === drawerFlowFilter;
-      
-      return matchesSearch && matchesFlow;
-    });
-  }, [drawerTransactions, drawerSearch, drawerFlowFilter]);
-
-  const drawerStats = useMemo(() => {
-    let inflow = 0;
-    let outflow = 0;
-    filteredDrawerTransactions.forEach((tx) => {
-      if (tx.type === 'credit') {
-        inflow += tx.amount;
-      } else {
-        outflow += tx.amount;
-      }
-    });
-    return {
-      inflow,
-      outflow,
-      net: inflow - outflow,
-      count: filteredDrawerTransactions.length,
-    };
-  }, [filteredDrawerTransactions]);
 
   // Pagination Logic
   const totalItems = isDebitors
@@ -830,112 +790,14 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
                 departments={summary.departments}
               />
             ) : (              /* Raw Transactions Explorer Tab */
-              txLoading ? (
-                <Table className="min-w-[700px] sm:min-w-full">
-                  <TableHeader className="bg-muted/15 select-none">
-                    <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
-                      <TableHead className="pl-6 h-10">Date</TableHead>
-                      <TableHead className="h-10">Invoice</TableHead>
-                      <TableHead className="h-10">Category</TableHead>
-                      <TableHead className="h-10">Party / Vendor</TableHead>
-                      <TableHead className="h-10">Description</TableHead>
-                      <TableHead className="text-center h-10">Type</TableHead>
-                      <TableHead className="text-right pr-6 h-10">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="text-xs">
-                    {Array.from({ length: txLimit }).map((_, idx) => (
-                      <TableRow key={idx} className="border-b h-11 animate-pulse">
-                        <TableCell className="pl-6"><div className="h-4 w-16 bg-muted rounded"></div></TableCell>
-                        <TableCell><div className="h-4 w-12 bg-muted rounded"></div></TableCell>
-                        <TableCell><div className="h-4 w-24 bg-muted rounded"></div></TableCell>
-                        <TableCell><div className="h-4 w-32 bg-muted rounded"></div></TableCell>
-                        <TableCell><div className="h-4 w-40 bg-muted rounded"></div></TableCell>
-                        <TableCell className="text-center"><div className="mx-auto h-5 w-16 bg-muted rounded-full"></div></TableCell>
-                        <TableCell className="text-right pr-6"><div className="ml-auto h-4 w-16 bg-muted rounded ml-auto"></div></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : txList.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center select-none min-h-[300px] w-full">
-                  <Search className="size-10 text-muted-foreground/45 animate-pulse shrink-0" />
-                  <span className="text-sm font-bold text-foreground">No matching transactions found</span>
-                  <span className="text-xs text-muted-foreground max-w-xs leading-normal">
-                    Try adjusting your search query or clear the filter.
-                  </span>
-                </div>
-              ) : (
-                <Table className="min-w-[700px] sm:min-w-full">
-                  <TableHeader className="bg-muted/15 select-none">
-                    <TableRow className="text-[0.68rem] font-bold text-muted-foreground uppercase border-b hover:bg-transparent">
-                      <TableHead 
-                        className="pl-6 h-10 cursor-pointer hover:bg-muted/20 transition-colors select-none"
-                        onClick={() => handleSort('date')}
-                      >
-                        Date {renderSortIcon('date')}
-                      </TableHead>
-                      <TableHead 
-                        className="h-10 cursor-pointer hover:bg-muted/20 transition-colors select-none"
-                        onClick={() => handleSort('invoice')}
-                      >
-                        Invoice {renderSortIcon('invoice')}
-                      </TableHead>
-                      <TableHead 
-                        className="h-10 cursor-pointer hover:bg-muted/20 transition-colors select-none"
-                        onClick={() => handleSort('category')}
-                      >
-                        Category {renderSortIcon('category')}
-                      </TableHead>
-                      <TableHead 
-                        className="h-10 cursor-pointer hover:bg-muted/20 transition-colors select-none"
-                        onClick={() => handleSort('vendor')}
-                      >
-                        Party / Vendor {renderSortIcon('vendor')}
-                      </TableHead>
-                      <TableHead className="h-10">Description</TableHead>
-                      <TableHead className="text-center h-10">Type</TableHead>
-                      <TableHead 
-                        className="text-right pr-6 h-10 cursor-pointer hover:bg-muted/20 transition-colors select-none"
-                        onClick={() => handleSort('amount')}
-                      >
-                        Amount {renderSortIcon('amount')}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="text-xs">
-                    {txList.map((tx, idx) => {
-                      const isCredit = tx.type === 'credit';
-                      return (
-                        <TableRow key={idx} className="hover:bg-muted/20 border-b h-11">
-                          <TableCell className="pl-6 font-mono text-muted-foreground">
-                            {tx.date}
-                          </TableCell>
-                          <TableCell className="font-mono text-foreground">{tx.invoice || '—'}</TableCell>
-                          <TableCell className="font-semibold text-foreground">{tx.category}</TableCell>
-                          <TableCell className="text-foreground font-semibold">{tx.vendor || '—'}</TableCell>
-                          <TableCell className="max-w-[200px] truncate text-muted-foreground" title={tx.particulars}>
-                            {tx.particulars || '—'}
-                          </TableCell>
-                          <TableCell className="text-center select-none">
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold border rounded-full px-2.5 py-0.5 uppercase tracking-wide ${
-                              isCredit 
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25' 
-                                : 'bg-destructive/10 text-destructive border-destructive/25'
-                            }`}>
-                              <span className={`size-1.5 rounded-full shrink-0 ${isCredit ? 'bg-emerald-500' : 'bg-destructive'}`} />
-                              {isCredit ? 'Inflow' : 'Outflow'}
-                            </span>
-                          </TableCell>
-                          <TableCell className={`text-right font-mono font-bold pr-6 ${isCredit ? 'text-success' : 'text-destructive'}`}>
-                            {formatINR(tx.amount)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )
+              <RawTransactionsTable
+                txLoading={txLoading}
+                txList={txList}
+                txLimit={txLimit}
+                handleSort={handleSort}
+                renderSortIcon={renderSortIcon}
+                formatINR={formatINR}
+              />
             )}
           </div>
         </div>
@@ -981,247 +843,15 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       </Card>
 
       {/* Side Drawer Drilldown overlay */}
-      {/* Side Drawer Drilldown overlay */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent className="sm:max-w-2xl! w-full h-full flex flex-col p-6 bg-background/95 backdrop-blur-md border-l border-border/80 shadow-2xl overflow-hidden">
-          <SheetHeader className="pb-4 border-b border-border/60 shrink-0">
-            <SheetTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-              <Calendar className="size-5 text-primary" />
-              {drawerTitle}
-            </SheetTitle>
-            <SheetDescription className="text-xs text-muted-foreground mt-1">
-              {drawerDescription}
-            </SheetDescription>
-          </SheetHeader>
-
-          {/* KPI Summary Cards - Responsive grid */}
-          {!drawerLoading && drawerTransactions.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 mb-1 shrink-0">
-              {/* Total Inflow Card */}
-              <div className="p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 flex flex-col justify-between select-none">
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="text-[0.62rem] font-bold uppercase tracking-wider">Total Inflow</span>
-                  <TrendingUp className="size-3.5 text-emerald-500 shrink-0" />
-                </div>
-                <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1.5 leading-none">
-                  {formatINR(drawerStats.inflow)}
-                </span>
-              </div>
-
-              {/* Total Outflow Card */}
-              <div className="p-3 rounded-xl bg-destructive/5 dark:bg-destructive/10 border border-destructive/15 dark:border-destructive/20 flex flex-col justify-between select-none">
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="text-[0.62rem] font-bold uppercase tracking-wider">Total Outflow</span>
-                  <TrendingDown className="size-3.5 text-destructive shrink-0" />
-                </div>
-                <span className="text-sm font-extrabold text-destructive font-mono mt-1.5 leading-none">
-                  {formatINR(drawerStats.outflow)}
-                </span>
-              </div>
-
-              {/* Net Flow Card - spans 2 columns on mobile, 1 column on desktop */}
-              <div className={`col-span-2 sm:col-span-1 p-3 rounded-xl border flex flex-col justify-between select-none ${
-                drawerStats.net >= 0 
-                  ? 'bg-primary/5 border-primary/20' 
-                  : 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/15 dark:border-amber-500/20'
-              }`}>
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="text-[0.62rem] font-bold uppercase tracking-wider">Net Cashflow</span>
-                  <Activity className={`size-3.5 shrink-0 ${drawerStats.net >= 0 ? 'text-primary' : 'text-amber-500'}`} />
-                </div>
-                <span className={`text-sm font-extrabold font-mono mt-1.5 leading-none ${
-                  drawerStats.net >= 0 
-                    ? 'text-primary' 
-                    : 'text-amber-600 dark:text-amber-400'
-                }`}>
-                  {drawerStats.net >= 0 ? '+' : ''}{formatINR(drawerStats.net)}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Interactive Search & Filter Bar - Responsive side-by-side or stacked layout */}
-          {!drawerLoading && drawerTransactions.length > 0 && (
-            <div className="flex flex-col sm:flex-row gap-3 mt-4 mb-1 shrink-0 sm:items-center">
-              <div className="relative w-full sm:flex-grow">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search category, particulars, or date..."
-                  value={drawerSearch}
-                  onChange={(e) => setDrawerSearch(e.target.value)}
-                  className="pl-9.5 h-9 text-xs bg-muted/20 border-border/80 focus-visible:ring-primary/50 w-full"
-                  id="drawer-search-input"
-                />
-                {drawerSearch && (
-                  <button 
-                    onClick={() => setDrawerSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-                    id="clear-drawer-search-btn"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                )}
-              </div>
-              
-              <div className="flex bg-muted/40 p-0.5 rounded-lg border border-border/60 text-xs shrink-0 select-none w-full sm:w-auto justify-between sm:justify-start gap-1">
-                <button
-                  onClick={() => setDrawerFlowFilter('all')}
-                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer text-center ${
-                    drawerFlowFilter === 'all' 
-                      ? 'bg-background shadow-xs text-foreground font-extrabold border border-border/10' 
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  id="filter-flow-all-btn"
-                >
-                  All ({drawerTransactions.length})
-                </button>
-                <button
-                  onClick={() => setDrawerFlowFilter('credit')}
-                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer text-center ${
-                    drawerFlowFilter === 'credit' 
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold border border-emerald-500/20' 
-                      : 'text-muted-foreground hover:text-emerald-500'
-                  }`}
-                  id="filter-flow-inflow-btn"
-                >
-                  Inflow
-                </button>
-                <button
-                  onClick={() => setDrawerFlowFilter('debit')}
-                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer text-center ${
-                    drawerFlowFilter === 'debit' 
-                      ? 'bg-destructive/10 text-destructive font-extrabold border border-destructive/20' 
-                      : 'text-muted-foreground hover:text-destructive'
-                  }`}
-                  id="filter-flow-outflow-btn"
-                >
-                  Outflow
-                </button>
-              </div>
-            </div>
-          )}
-          
-          <div className="flex-1 overflow-y-auto mt-4 pr-1">
-            {drawerLoading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 6 }).map((_, idx) => (
-                  <div key={idx} className="flex items-center justify-between border-b border-border/40 pb-4 animate-pulse">
-                    <div className="space-y-2">
-                      <div className="h-4 w-24 bg-muted rounded"></div>
-                      <div className="h-3.5 w-36 bg-muted rounded"></div>
-                    </div>
-                    <div className="text-right space-y-2">
-                      <div className="h-4 w-16 bg-muted rounded ml-auto"></div>
-                      <div className="h-3 w-12 bg-muted rounded ml-auto"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : drawerTransactions.length === 0 ? (
-              <div className="text-center py-20 text-xs text-muted-foreground">
-                No transaction lines found for this record.
-              </div>
-            ) : filteredDrawerTransactions.length === 0 ? (
-              <div className="text-center py-20 text-xs text-muted-foreground flex flex-col items-center justify-center gap-2 bg-muted/5 border border-dashed rounded-lg border-border/80">
-                <Search className="size-8 text-muted-foreground/35 animate-pulse" />
-                <span className="font-bold text-foreground">No matching transactions found</span>
-                <span className="text-[10px] max-w-xs text-muted-foreground">
-                  Try adjusting your search terms or flow filters.
-                </span>
-              </div>
-            ) : (
-              <>
-                {/* 1. Spacious table representation - Hidden on mobile, visible on desktop */}
-                <div className="hidden sm:block border rounded-lg overflow-hidden bg-muted/5 shadow-xs border-border/80 mb-4">
-                  <Table>
-                    <TableHeader className="bg-muted/15 select-none">
-                      <TableRow className="text-[0.62rem] font-bold text-muted-foreground uppercase h-9.5 border-b hover:bg-transparent">
-                        <TableHead className="pl-4 w-[110px]">Date</TableHead>
-                        <TableHead className="w-[160px]">Category</TableHead>
-                        <TableHead className="w-auto">Particulars</TableHead>
-                        <TableHead className="text-center w-[90px]">Flow</TableHead>
-                        <TableHead className="text-right pr-4 w-[130px]">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="text-[0.7rem]">
-                      {filteredDrawerTransactions.map((tx, idx) => {
-                        const isCredit = tx.type === 'credit';
-                        return (
-                          <TableRow key={idx} className="hover:bg-muted/20 border-b h-10 transition-colors">
-                            <TableCell className="pl-4 font-mono text-muted-foreground">
-                              {tx.date}
-                            </TableCell>
-                            <TableCell className="font-semibold text-foreground">{tx.category}</TableCell>
-                            <TableCell className="text-muted-foreground truncate max-w-[200px]" title={tx.particulars}>
-                              {tx.particulars || '—'}
-                            </TableCell>
-                            <TableCell className="text-center select-none">
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold border rounded-full px-2.5 py-0.5 uppercase tracking-wide ${
-                                isCredit 
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25' 
-                                  : 'bg-destructive/10 text-destructive border-destructive/25'
-                              }`}>
-                                <span className={`size-1.5 rounded-full shrink-0 ${isCredit ? 'bg-emerald-500' : 'bg-destructive'}`} />
-                                {isCredit ? 'Inflow' : 'Outflow'}
-                              </span>
-                            </TableCell>
-                            <TableCell className={`text-right font-mono font-bold pr-4 ${isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                              {isCredit ? '+' : '-'}{formatINR(tx.amount)}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* 2. Responsive list representation - Visible on mobile, hidden on desktop */}
-                <div className="block sm:hidden space-y-2.5 pb-4">
-                  {filteredDrawerTransactions.map((tx, idx) => {
-                    const isCredit = tx.type === 'credit';
-                    return (
-                      <div 
-                        key={idx} 
-                        className="p-3 rounded-xl bg-muted/10 border border-border/50 hover:bg-muted/20 transition-all flex items-center justify-between gap-4"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Flow Status Icon Indicator */}
-                          <div className={`size-8 rounded-full flex items-center justify-center shrink-0 border ${
-                            isCredit 
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/10' 
-                              : 'bg-destructive/10 text-destructive border-destructive/10'
-                          }`}>
-                            {isCredit ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
-                          </div>
-                          
-                          <div className="min-w-0">
-                            <span className="text-[11px] font-bold text-foreground block truncate">{tx.category}</span>
-                            <span className="text-[10px] text-muted-foreground block truncate mt-0.5" title={tx.particulars}>
-                              {tx.particulars || '—'}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <div className="text-right shrink-0">
-                          <span className={`text-[12px] font-mono font-extrabold block ${
-                            isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
-                          }`}>
-                            {isCredit ? '+' : '-'}{formatINR(tx.amount)}
-                          </span>
-                          <span className="text-[9px] text-muted-foreground block mt-0.5 font-mono tracking-wider">
-                            {tx.date}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <LedgerDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        title={drawerTitle}
+        description={drawerDescription}
+        loading={drawerLoading}
+        transactions={drawerTransactions}
+        formatINR={formatINR}
+      />
     </div>
   );
 };

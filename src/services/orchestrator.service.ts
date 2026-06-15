@@ -26,7 +26,7 @@ export interface SyncMetadata {
 
 interface FileToProcess {
   name: string;
-  buffer: Buffer;
+  buffer: Buffer | string;
   path?: string;
   modifiedTime?: string;
 }
@@ -283,13 +283,16 @@ export class OrchestratorService {
       const fallbackDir = process.cwd();
       const filesToProcess: FileToProcess[] = [];
 
+      // Load sync metadata
+      const metadata = await getSyncMetadata();
+
       if (options?.specificFile) {
         const resolvedPath = await resolveTargetFile(options.specificFile, fallbackDir);
         logger.info({ resolvedPath }, 'SPECIFIC FILE TARGET DETECTED. Operating in targeted file run mode.');
         filesToProcess.push({
           name: path.basename(resolvedPath),
           path: resolvedPath,
-          buffer: await fs.promises.readFile(resolvedPath),
+          buffer: resolvedPath,
         });
       } else {
         if (isMockDrive) {
@@ -303,21 +306,39 @@ export class OrchestratorService {
           return 0;
         }
 
-        logger.info(`Loaded ${driveFiles.length} file(s) from Google Drive for batch processing.`);
+        logger.info(`Loaded ${driveFiles.length} file(s) metadata from Google Drive.`);
 
-        for (const fileInfo of driveFiles) {
-          logger.info({ fileId: fileInfo.id, fileName: fileInfo.name }, 'Downloading target Excel sheet from Google Drive');
-          const buffer = await driveService.downloadFile(fileInfo.id, fileInfo.name);
+        // Filter to only new/changed files BEFORE downloading!
+        const driveFilesToDownload = driveFiles.filter(f => {
+          const mtimeStr = f.modifiedTime || f.createdTime || '';
+          const lastMtime = metadata.files[f.name];
+          return !lastMtime || lastMtime !== mtimeStr;
+        });
+
+        if (driveFilesToDownload.length === 0) {
+          logger.info('All spreadsheets are already synced and up-to-date. Skipping pipeline execution.');
+          return 0;
+        }
+
+        logger.info(`Downloading ${driveFilesToDownload.length} new or modified file(s) from Google Drive...`);
+
+        const tempDir = path.join(process.cwd(), 'temp_uploads');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        for (const fileInfo of driveFilesToDownload) {
+          const tempPath = path.join(tempDir, `drive-${Date.now()}-${fileInfo.name}`);
+          logger.info({ fileId: fileInfo.id, fileName: fileInfo.name, tempPath }, 'Streaming target Excel sheet from Google Drive');
+          await driveService.downloadFileToPath(fileInfo.id, tempPath);
           filesToProcess.push({
             name: fileInfo.name,
-            buffer,
+            buffer: tempPath,
             modifiedTime: fileInfo.modifiedTime || fileInfo.createdTime || new Date().toISOString(),
           });
         }
       }
 
-      // Load sync metadata and filter to only new/changed files
-      const metadata = await getSyncMetadata();
       const filesToIngest = filesToProcess.filter(fileItem => {
         if (!fileItem.modifiedTime) return true; // targeted/CLI mode — always process
         const lastMtime = metadata.files[fileItem.name];
@@ -604,6 +625,15 @@ export class OrchestratorService {
               logger.error({ tgError }, 'Failed to dispatch file crash notification to Telegram');
             }
           }
+        } finally {
+          if (typeof buffer === 'string' && fs.existsSync(buffer)) {
+            try {
+              await fs.promises.unlink(buffer);
+              logger.info({ tempPath: buffer }, 'Cleaned up temporary Drive sync file');
+            } catch (unlinkErr) {
+              logger.error({ err: unlinkErr, tempPath: buffer }, 'Failed to delete temporary Drive sync file');
+            }
+          }
         }
       }
 
@@ -658,9 +688,9 @@ export class OrchestratorService {
    * Process an uploaded file buffer dynamically through the parsing, rules auditing, AI summary compilation,
    * Neon DB updating, and local file storage pipeline.
    */
-  async processFileBuffer(buffer: Buffer, fileName: string, entityId?: string): Promise<unknown> {
+  async processFileBuffer(buffer: Buffer | string, fileName: string, entityId?: string): Promise<unknown> {
     const startTime = Date.now();
-    logger.info({ fileName, entityId }, 'Orchestrator ingesting file buffer');
+    logger.info({ fileName, entityId, isPath: typeof buffer === 'string' }, 'Orchestrator ingesting file resource');
 
     // 1. Parse the Excel sheet rows
     const parseResult = await excelParser.parseBuffer(buffer, fileName, entityId);

@@ -3,6 +3,8 @@ import { getDriveClient } from './drive.client.js';
 import { config } from '../config/config.js';
 import { logger } from '../logger/logger.js';
 
+import fs from 'fs';
+
 export interface DriveFileInfo {
   id: string;
   name: string;
@@ -93,5 +95,42 @@ export class DriveService {
       throw new Error(`Google Drive download failed for file ID ${fileId}: ${(error as Error).message}`);
     }
   }
+
+  /**
+   * Downloads a file from Google Drive by its file ID directly to a file path.
+   */
+  async downloadFileToPath(fileId: string, destPath: string): Promise<void> {
+    try {
+      logger.info({ fileId, destPath }, 'Downloading file stream from Google Drive to path');
+
+      const drive = this.getDrive();
+      const response = await drive.files.get(
+        {
+          fileId,
+          alt: 'media',
+        },
+        {
+          responseType: 'stream',
+        }
+      );
+
+      const writeStream = fs.createWriteStream(destPath);
+      await new Promise<void>((resolve, reject) => {
+        response.data.on('error', (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
+        writeStream.on('error', reject);
+        writeStream.on('finish', resolve);
+        response.data.pipe(writeStream);
+      });
+
+      logger.info({ destPath }, 'Successfully downloaded Excel stream to path');
+    } catch (error) {
+      logger.error({ error, fileId }, 'Failed to download file stream from Google Drive');
+      throw new Error(`Google Drive stream download failed for file ID ${fileId}: ${(error as Error).message}`);
+    }
+  }
 }
 export const driveService = new DriveService();
+

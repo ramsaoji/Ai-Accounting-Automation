@@ -1175,6 +1175,7 @@ export async function triggerPipeline(request: FastifyRequest, reply: FastifyRep
 export async function handleFileUpload(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   logger.info('File upload request received');
 
+  let tempFilePath: string | undefined;
   try {
     const creds = await (await import('./security.controller.js')).getSecurityCredentials();
     const targetUploadPassword = creds.uploadPassword;
@@ -1190,10 +1191,50 @@ export async function handleFileUpload(request: FastifyRequest, reply: FastifyRe
         return;
       }
       fileName = parts.filename;
-      buffer = await parts.toBuffer();
       sessionToken = parts.fields && parts.fields.sessionToken
         ? (parts.fields.sessionToken as { value: string }).value
         : undefined;
+
+      if (fileName) {
+        if (!fileName.toLowerCase().endsWith('.xlsx')) {
+          logger.warn({ fileName }, 'Rejected upload: file is not a valid .xlsx spreadsheet');
+          reply.code(400).send(Errors.badRequest('Invalid file type: only Excel (.xlsx) spreadsheets are accepted'));
+          return;
+        }
+
+        if (targetUploadPassword) {
+          let payload: TokenPayload | null = null;
+          if (sessionToken) {
+            try {
+              payload = request.server.jwt.verify<TokenPayload>(sessionToken);
+            } catch {
+              payload = null;
+            }
+          }
+          if (!payload || !payload.uploadAuthorized) {
+            logger.warn({ fileName }, 'Unauthorized upload attempt: invalid or expired session token');
+            reply.code(401).send(Errors.unauthorized('Invalid or expired upload session'));
+            return;
+          }
+        }
+
+        const tempDir = path.join(process.cwd(), 'temp_uploads');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        tempFilePath = path.join(tempDir, `upload-${Date.now()}-${fileName}`);
+        const writeStream = fs.createWriteStream(tempFilePath);
+        await new Promise<void>((resolve, reject) => {
+          parts.file.on('error', (err) => {
+            writeStream.destroy();
+            reject(err);
+          });
+          writeStream.on('error', reject);
+          writeStream.on('finish', resolve);
+          parts.file.pipe(writeStream);
+        });
+      }
     } else {
       const body = request.body as { fileName?: string; fileData?: string; sessionToken?: string } | undefined;
       sessionToken = body?.sessionToken;
@@ -1201,42 +1242,51 @@ export async function handleFileUpload(request: FastifyRequest, reply: FastifyRe
       if (body?.fileData) {
         buffer = Buffer.from(body.fileData, 'base64');
       }
-    }
 
-    if (fileName && !fileName.toLowerCase().endsWith('.xlsx')) {
-      logger.warn({ fileName }, 'Rejected upload: file is not a valid .xlsx spreadsheet');
-      reply.code(400).send(Errors.badRequest('Invalid file type: only Excel (.xlsx) spreadsheets are accepted'));
-      return;
-    }
-
-    if (targetUploadPassword) {
-      let payload: TokenPayload | null = null;
-      if (sessionToken) {
-        try {
-          payload = request.server.jwt.verify<TokenPayload>(sessionToken);
-        } catch {
-          payload = null;
-        }
-      }
-      if (!payload || !payload.uploadAuthorized) {
-        logger.warn({ fileName: fileName || 'unknown' }, 'Unauthorized upload attempt: invalid or expired session token');
-        reply.code(401).send(Errors.unauthorized('Invalid or expired upload session'));
+      if (fileName && !fileName.toLowerCase().endsWith('.xlsx')) {
+        logger.warn({ fileName }, 'Rejected upload: file is not a valid .xlsx spreadsheet');
+        reply.code(400).send(Errors.badRequest('Invalid file type: only Excel (.xlsx) spreadsheets are accepted'));
         return;
       }
+
+      if (targetUploadPassword) {
+        let payload: TokenPayload | null = null;
+        if (sessionToken) {
+          try {
+            payload = request.server.jwt.verify<TokenPayload>(sessionToken);
+          } catch {
+            payload = null;
+          }
+        }
+        if (!payload || !payload.uploadAuthorized) {
+          logger.warn({ fileName: fileName || 'unknown' }, 'Unauthorized upload attempt: invalid or expired session token');
+          reply.code(401).send(Errors.unauthorized('Invalid or expired upload session'));
+          return;
+        }
+      }
     }
 
-    if (!fileName || !buffer) {
+    if (!fileName || (!tempFilePath && !buffer)) {
       reply.code(400).send(Errors.badRequest('fileName and file data are required'));
       return;
     }
 
     const { entityId } = (request.query || {}) as { entityId?: string };
-    const summary = await orchestratorService.processFileBuffer(buffer, fileName, entityId);
+    const summary = await orchestratorService.processFileBuffer(tempFilePath || buffer!, fileName, entityId);
     reply.code(200).send(summary);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err: message }, 'Error handling file upload');
     reply.code(500).send(Errors.internalError('Failed to process spreadsheet file'));
+  } finally {
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        await fs.promises.unlink(tempFilePath);
+        logger.info({ tempFilePath }, 'Cleaned up temporary upload file');
+      } catch (unlinkErr) {
+        logger.error({ err: unlinkErr, tempFilePath }, 'Failed to delete temporary upload file');
+      }
+    }
   }
 }
 
