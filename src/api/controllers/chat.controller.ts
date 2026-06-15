@@ -20,6 +20,7 @@ export const chatSchema = z.object({
       text: z.string().max(2000),
     })
   ).optional(),
+  entityId: z.string().uuid().optional(),
 });
 
 type ChatBody = z.infer<typeof chatSchema>;
@@ -33,7 +34,7 @@ export async function handleAdvisorChat(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const { message, workspace, history } = request.body;
+    const { message, workspace, history, entityId } = request.body;
 
     const webChatEnabled = (await getSystemSetting('web_chat_enabled', 'true')) === 'true';
     const providerName = await getSystemSetting('ai_provider', config.AI_PROVIDER);
@@ -51,8 +52,11 @@ export async function handleAdvisorChat(
 
     let summaryJson: unknown = null;
 
+    // Retrieve active entity id from body or fallback query parameter
+    const resolvedEntityId = entityId || (request.query as { entityId?: string })?.entityId;
+
     try {
-      summaryJson = await getReconstructedReport(reportType);
+      summaryJson = await getReconstructedReport(reportType, resolvedEntityId);
     } catch (dbErr: unknown) {
       const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
       logger.error({ err: msg }, 'Failed to fetch chat context from Neon DB');

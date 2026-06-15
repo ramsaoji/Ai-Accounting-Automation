@@ -11,7 +11,13 @@ import { TokenPayload } from './security.controller.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { Errors } from '../errors.js';
 
-async function evaluateDbTransactions(dbTxs: any[], fileType: 'sales' | 'debitors' | 'godown_stock', fileName: string): Promise<any[]> {
+async function evaluateDbTransactions(
+  dbTxs: any[],
+  fileType: 'sales' | 'debitors' | 'godown_stock',
+  fileName: string,
+  branchId?: string | null,
+  entityId?: string | null
+): Promise<any[]> {
   const transactionsForAudit = dbTxs.map(t => ({
     date: new Date(t.date),
     invoiceNumber: t.invoiceNumber || '',
@@ -22,7 +28,7 @@ async function evaluateDbTransactions(dbTxs: any[], fileType: 'sales' | 'debitor
     vendor: t.vendor,
     sheetName: t.sheetName
   }));
-  return await rulesEngine.evaluate(transactionsForAudit, { fileType, fileName });
+  return await rulesEngine.evaluate(transactionsForAudit, { fileType, fileName, branchId, entityId });
 }
 
 function getMonthYearLabel(dateVal: any, sheetName: string): string {
@@ -71,6 +77,36 @@ function getSheetDate(sheetName: string): Date | null {
 export const reportCache = new Map<string, any>();
 const HIGH_SEVERITY = new Set(['high', 'critical']);
 const serverStartTime = Date.now();
+
+export async function resolveEntityId(request: FastifyRequest): Promise<string> {
+  const query = request.query as { entityId?: string } | undefined;
+  let entityId = query?.entityId;
+  if (!entityId && request.body && typeof request.body === 'object') {
+    entityId = (request.body as any).entityId;
+  }
+  if (!entityId) {
+    const [firstEntity] = await db.select().from(schema.businessEntities).limit(1);
+    if (!firstEntity) {
+      throw new Error('No business entity found in database');
+    }
+    entityId = firstEntity.id;
+  }
+  return entityId;
+}
+
+export async function getBranchIdsForEntity(entityId: string): Promise<string[]> {
+  const branchesList = await db
+    .select({ id: schema.branches.id })
+    .from(schema.branches)
+    .where(eq(schema.branches.entityId, entityId));
+  return branchesList.map(b => b.id);
+}
+
+export async function resolveEntityBranchIds(request: FastifyRequest): Promise<{ entityId: string; branchIds: string[] }> {
+  const resolvedId = await resolveEntityId(request);
+  const branchIds = await getBranchIdsForEntity(resolvedId);
+  return { entityId: resolvedId, branchIds };
+}
 
 async function getBusinessMetadataForBranch(branchId: string | null) {
   const defaultMeta = {
@@ -800,6 +836,14 @@ export async function reEvaluateAlertsForFile(
   fileType: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock',
   fileName: string
 ): Promise<void> {
+  const [fileRecord] = await db.select().from(schema.files).where(eq(schema.files.id, fileId)).limit(1);
+  const branchId = fileRecord?.branchId;
+  let entityId: string | null = null;
+  if (branchId) {
+    const branch = await db.select().from(schema.branches).where(eq(schema.branches.id, branchId)).limit(1).then(r => r[0]);
+    entityId = branch?.entityId || null;
+  }
+
   let evaluatedAlerts: any[] = [];
   if (fileType === 'godown_stock' || fileType === 'counter_stock') {
     const dbStockItems = await db.select().from(schema.stockItems).where(eq(schema.stockItems.fileId, fileId));
@@ -817,10 +861,10 @@ export async function reEvaluateAlertsForFile(
       totalCostValue: item.totalCostValue ? Number(item.totalCostValue) : null,
       totalSellValue: item.totalSellValue ? Number(item.totalSellValue) : null,
     }));
-    evaluatedAlerts = await rulesEngine.evaluate([], { fileType, fileName, godownStockItems: mappedStockItems as any });
+    evaluatedAlerts = await rulesEngine.evaluate([], { fileType, fileName, godownStockItems: mappedStockItems as any, branchId, entityId });
   } else {
     const dbTxs = await db.select().from(schema.transactions).where(eq(schema.transactions.fileId, fileId));
-    evaluatedAlerts = await evaluateDbTransactions(dbTxs, fileType, fileName);
+    evaluatedAlerts = await evaluateDbTransactions(dbTxs, fileType, fileName, branchId, entityId);
   }
 
   await db.transaction(async (tx) => {
@@ -853,11 +897,18 @@ export async function reEvaluateAlertsForFile(
  */
 export async function getPortalSummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
+    const { branchIds } = await resolveEntityBranchIds(request);
+
+    if (branchIds.length === 0) {
+      reply.code(200).send({});
+      return;
+    }
+
     const [latestSalesFile, latestDebitorsFile, latestGodownStockFiles, latestCounterStockFiles] = await Promise.all([
-      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'sales'), eq(schema.files.isLatest, true))).limit(1).then(r => r[0]),
-      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'debitors'), eq(schema.files.isLatest, true))).limit(1).then(r => r[0]),
-      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'godown_stock'), eq(schema.files.isLatest, true))),
-      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'counter_stock'), eq(schema.files.isLatest, true)))
+      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'sales'), eq(schema.files.isLatest, true), inArray(schema.files.branchId, branchIds))).limit(1).then(r => r[0]),
+      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'debitors'), eq(schema.files.isLatest, true), inArray(schema.files.branchId, branchIds))).limit(1).then(r => r[0]),
+      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'godown_stock'), eq(schema.files.isLatest, true), inArray(schema.files.branchId, branchIds))),
+      db.select().from(schema.files).where(and(eq(schema.files.fileType, 'counter_stock'), eq(schema.files.isLatest, true), inArray(schema.files.branchId, branchIds)))
     ]);
 
     const salesKey = latestSalesFile ? `${latestSalesFile.id}-${latestSalesFile.runTimestamp.getTime()}` : 'no-sales';
@@ -970,6 +1021,12 @@ export async function getPortalSummary(request: FastifyRequest, reply: FastifyRe
  */
 export async function getSalesReport(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
+    const { branchIds } = await resolveEntityBranchIds(request);
+    if (branchIds.length === 0) {
+      reply.code(404).send(Errors.notFound('Sales summary dataset (no branches for entity)'));
+      return;
+    }
+
     // 1. Fetch the active Sales register run record
     const [activeFile] = await db
       .select()
@@ -977,7 +1034,8 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
       .where(
         and(
           eq(schema.files.fileType, 'sales'),
-          eq(schema.files.isLatest, true)
+          eq(schema.files.isLatest, true),
+          inArray(schema.files.branchId, branchIds)
         )
       )
       .limit(1);
@@ -1012,6 +1070,12 @@ export async function getSalesReport(request: FastifyRequest, reply: FastifyRepl
  */
 export async function getDebitorsReport(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
+    const { branchIds } = await resolveEntityBranchIds(request);
+    if (branchIds.length === 0) {
+      reply.code(404).send(Errors.notFound('Debitors summary dataset (no branches for entity)'));
+      return;
+    }
+
     // 1. Fetch the active Debitors run record
     const [activeFile] = await db
       .select()
@@ -1019,7 +1083,8 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
       .where(
         and(
           eq(schema.files.fileType, 'debitors'),
-          eq(schema.files.isLatest, true)
+          eq(schema.files.isLatest, true),
+          inArray(schema.files.branchId, branchIds)
         )
       )
       .limit(1);
@@ -1053,13 +1118,20 @@ export async function getDebitorsReport(request: FastifyRequest, reply: FastifyR
  */
 export async function getGodownStockReport(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
+    const { branchIds } = await resolveEntityBranchIds(request);
+    if (branchIds.length === 0) {
+      reply.code(404).send(Errors.notFound('Godown Stock summary dataset (no branches for entity)'));
+      return;
+    }
+
     const activeFiles = await db
       .select()
       .from(schema.files)
       .where(
         and(
           eq(schema.files.fileType, 'godown_stock'),
-          eq(schema.files.isLatest, true)
+          eq(schema.files.isLatest, true),
+          inArray(schema.files.branchId, branchIds)
         )
       );
 
@@ -1093,13 +1165,20 @@ export async function getGodownStockReport(request: FastifyRequest, reply: Fasti
  */
 export async function getCounterStockReport(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
+    const { branchIds } = await resolveEntityBranchIds(request);
+    if (branchIds.length === 0) {
+      reply.code(404).send(Errors.notFound('Counter Stock summary dataset (no branches for entity)'));
+      return;
+    }
+
     const activeFiles = await db
       .select()
       .from(schema.files)
       .where(
         and(
           eq(schema.files.fileType, 'counter_stock'),
-          eq(schema.files.isLatest, true)
+          eq(schema.files.isLatest, true),
+          inArray(schema.files.branchId, branchIds)
         )
       );
 
@@ -1307,9 +1386,21 @@ export async function getSyncStatus(request: FastifyRequest, reply: FastifyReply
  * Programmatically reconstructs the complete structured MasterSummary object from relational database tables.
  * This is used to share context with the AI advisor chat and Telegram Bot without duplicating query aggregation logic.
  */
-export async function getReconstructedReport(reportType: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock'): Promise<any | null> {
+export async function getReconstructedReport(
+  reportType: 'sales' | 'debitors' | 'godown_stock' | 'counter_stock',
+  entityId?: string
+): Promise<any | null> {
   if (!db) return null;
   try {
+    if (!entityId) {
+      const [firstEntity] = await db.select().from(schema.businessEntities).limit(1);
+      if (!firstEntity) return null;
+      entityId = firstEntity.id;
+    }
+
+    const branchIds = await getBranchIdsForEntity(entityId);
+    if (branchIds.length === 0) return null;
+
     if (reportType === 'godown_stock') {
       const activeFiles = await db
         .select()
@@ -1317,7 +1408,8 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors' | 
         .where(
           and(
             eq(schema.files.fileType, 'godown_stock'),
-            eq(schema.files.isLatest, true)
+            eq(schema.files.isLatest, true),
+            inArray(schema.files.branchId, branchIds)
           )
         );
       if (activeFiles.length === 0) return null;
@@ -1331,7 +1423,8 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors' | 
         .where(
           and(
             eq(schema.files.fileType, 'counter_stock'),
-            eq(schema.files.isLatest, true)
+            eq(schema.files.isLatest, true),
+            inArray(schema.files.branchId, branchIds)
           )
         );
       if (activeFiles.length === 0) return null;
@@ -1344,7 +1437,8 @@ export async function getReconstructedReport(reportType: 'sales' | 'debitors' | 
       .where(
         and(
           eq(schema.files.fileType, reportType),
-          eq(schema.files.isLatest, true)
+          eq(schema.files.isLatest, true),
+          inArray(schema.files.branchId, branchIds)
         )
       )
       .limit(1);
@@ -1399,6 +1493,20 @@ export async function getTransactionsList(request: FastifyRequest, reply: Fastif
     const sortOrder = query.sortOrder || 'desc';
     const txType = query.type || '';
 
+    const { branchIds } = await resolveEntityBranchIds(request);
+    if (branchIds.length === 0) {
+      reply.code(200).send({
+        transactions: [],
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          totalPages: 0
+        }
+      });
+      return;
+    }
+
     // 1. Fetch the active run record for the fileType
     const [activeFile] = await db
       .select()
@@ -1406,7 +1514,8 @@ export async function getTransactionsList(request: FastifyRequest, reply: Fastif
       .where(
         and(
           eq(schema.files.fileType, fileType),
-          eq(schema.files.isLatest, true)
+          eq(schema.files.isLatest, true),
+          inArray(schema.files.branchId, branchIds)
         )
       )
       .limit(1);

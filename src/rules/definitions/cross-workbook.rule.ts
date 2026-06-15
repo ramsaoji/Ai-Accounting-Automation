@@ -4,7 +4,7 @@ import { Transaction } from '../../types/accounting.types.js';
 import { Rule, RuleAlert, RuleContext } from '../rules.types.js';
 import { db } from '../../db/db.client.js';
 import * as schema from '../../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { config } from '../../config/config.js';
 
 interface ReconciliationSummary {
@@ -39,16 +39,38 @@ export class CrossWorkbookReconciliationRule implements Rule {
     if (fileType === 'sales') {
       let summary: ReconciliationSummary | null = null;
       try {
-        const [activeFile] = await db
-          .select()
-          .from(schema.files)
-          .where(
-            and(
-              eq(schema.files.fileType, 'debitors'),
-              eq(schema.files.isLatest, true)
+        let activeFile: any = null;
+        if (context?.entityId) {
+          const branchesList = await db
+            .select({ id: schema.branches.id })
+            .from(schema.branches)
+            .where(eq(schema.branches.entityId, context.entityId));
+          const branchIds = branchesList.map(b => b.id);
+          if (branchIds.length > 0) {
+            [activeFile] = await db
+              .select()
+              .from(schema.files)
+              .where(
+                and(
+                  eq(schema.files.fileType, 'debitors'),
+                  eq(schema.files.isLatest, true),
+                  inArray(schema.files.branchId, branchIds)
+                )
+              )
+              .limit(1);
+          }
+        } else {
+          [activeFile] = await db
+            .select()
+            .from(schema.files)
+            .where(
+              and(
+                eq(schema.files.fileType, 'debitors'),
+                eq(schema.files.isLatest, true)
+              )
             )
-          )
-          .limit(1);
+            .limit(1);
+        }
 
         if (activeFile) {
           const [result] = await db
@@ -121,16 +143,38 @@ export class CrossWorkbookReconciliationRule implements Rule {
     } else if (fileType === 'debitors') {
       let summary: ReconciliationSummary | null = null;
       try {
-        const [activeFile] = await db
-          .select()
-          .from(schema.files)
-          .where(
-            and(
-              eq(schema.files.fileType, 'sales'),
-              eq(schema.files.isLatest, true)
+        let activeFile: any = null;
+        if (context?.entityId) {
+          const branchesList = await db
+            .select({ id: schema.branches.id })
+            .from(schema.branches)
+            .where(eq(schema.branches.entityId, context.entityId));
+          const branchIds = branchesList.map(b => b.id);
+          if (branchIds.length > 0) {
+            [activeFile] = await db
+              .select()
+              .from(schema.files)
+              .where(
+                and(
+                  eq(schema.files.fileType, 'sales'),
+                  eq(schema.files.isLatest, true),
+                  inArray(schema.files.branchId, branchIds)
+                )
+              )
+              .limit(1);
+          }
+        } else {
+          [activeFile] = await db
+            .select()
+            .from(schema.files)
+            .where(
+              and(
+                eq(schema.files.fileType, 'sales'),
+                eq(schema.files.isLatest, true)
+              )
             )
-          )
-          .limit(1);
+            .limit(1);
+        }
 
         if (activeFile) {
           const [result] = await db

@@ -9,7 +9,8 @@ import {
   setHistoryRetentionDays 
 } from '../../db/db.client.js';
 import * as schema from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
+import { resolveEntityBranchIds } from './report.controller.js';
 import { config } from '../../config/config.js';
 import { z } from 'zod';
 
@@ -158,20 +159,24 @@ export async function updateSettings(
     }
 
     if (thresholdsChanged) {
-      const [activeFile] = await db
-        .select()
-        .from(schema.files)
-        .where(
-          and(
-            eq(schema.files.fileType, fileType),
-            eq(schema.files.isLatest, true)
+      const { branchIds } = await resolveEntityBranchIds(request);
+      if (branchIds.length > 0) {
+        const [activeFile] = await db
+          .select()
+          .from(schema.files)
+          .where(
+            and(
+              eq(schema.files.fileType, fileType),
+              eq(schema.files.isLatest, true),
+              inArray(schema.files.branchId, branchIds)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (activeFile) {
-        const { reEvaluateAlertsForFile } = await import('./report.controller.js');
-        await reEvaluateAlertsForFile(activeFile.id, fileType as 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', activeFile.fileName);
+        if (activeFile) {
+          const { reEvaluateAlertsForFile } = await import('./report.controller.js');
+          await reEvaluateAlertsForFile(activeFile.id, fileType as 'sales' | 'debitors' | 'godown_stock' | 'counter_stock', activeFile.fileName);
+        }
       }
     }
 
