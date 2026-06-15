@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import type { MasterSummary, DebitorSummary, Transaction, MonthlySummary } from '@/types';
 import { deriveBusinessName } from '@/utils/business';
@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   LineChart as LineIcon,
   Info,
-  TrendingUp,
 } from 'lucide-react';
 
 const OverviewCharts = React.lazy(() => import('./OverviewCharts'));

@@ -10,15 +10,10 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  X,
-  TrendingUp,
-  TrendingDown,
-  Activity,
-  Calendar
+  X
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { fetchTransactions, fetchSystemSettings } from '@/services/api';
 import { RawTransactionsTable } from './ledger/RawTransactionsTable';
 import { LedgerDrawer } from './ledger/LedgerDrawer';
