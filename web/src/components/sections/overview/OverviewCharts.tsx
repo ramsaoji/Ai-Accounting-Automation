@@ -46,9 +46,25 @@ export const OverviewCharts: React.FC<OverviewChartsProps> = ({
           flattened[`dept_${key}`] = val;
         });
       }
+      if (summary.departments) {
+        summary.departments.forEach(dept => {
+          const key = `dept_${dept.name}`;
+          if (flattened[key] === undefined) {
+            const isLiquorDept = dept.code === '4001' || dept.id === 'liq';
+            const isFoodDept = dept.code === '4002' || dept.id === 'food';
+            if (isLiquorDept) {
+              flattened[key] = m.liquor || 0;
+            } else if (isFoodDept) {
+              flattened[key] = m.food || 0;
+            } else {
+              flattened[key] = 0;
+            }
+          }
+        });
+      }
       return flattened;
     });
-  }, [summary.months]);
+  }, [summary.months, summary.departments]);
 
   return (
     <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>

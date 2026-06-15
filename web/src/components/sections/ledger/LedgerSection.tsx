@@ -299,12 +299,22 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({
       if (salesSortBy === 'sheetName') {
         valA = parseSheetNameToValue(a.sheetName);
         valB = parseSheetNameToValue(b.sheetName);
-      } else if (a.departments && a.departments[salesSortBy] !== undefined) {
-        valA = a.departments[salesSortBy];
-        valB = b.departments ? b.departments[salesSortBy] : 0;
       } else {
-        valA = a[salesSortBy as keyof MonthlySummary];
-        valB = b[salesSortBy as keyof MonthlySummary];
+        const dept = summary.departments?.find(d => d.name === salesSortBy);
+        const isLiquorDept = dept ? (dept.code === '4001' || dept.id === 'liq') : (salesSortBy === 'Primary Revenue' || salesSortBy === 'Liquor' || salesSortBy === 'Liquor Sales');
+        const isFoodDept = dept ? (dept.code === '4002' || dept.id === 'food') : (salesSortBy === 'Secondary Revenue' || salesSortBy === 'Food' || salesSortBy === 'Food Sales');
+
+        const getDeptVal = (m: MonthlySummary) => {
+          if (m.departments && (salesSortBy in m.departments)) {
+            return m.departments[salesSortBy] || 0;
+          }
+          if (isLiquorDept) return m.liquor || 0;
+          if (isFoodDept) return m.food || 0;
+          return Number(m[salesSortBy as keyof MonthlySummary] || 0);
+        };
+
+        valA = getDeptVal(a);
+        valB = getDeptVal(b);
       }
 
       if (typeof valA === 'string' && typeof valB === 'string') {

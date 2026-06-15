@@ -204,7 +204,9 @@ export const MonthlySalesLedgerTable: React.FC<MonthlySalesLedgerTableProps> = (
                 </div>
               </TableCell>
               {revenueDepts.map((dept) => {
-                const value = month.departments ? (month.departments[dept.name] || 0) : (dept.id === 'liq' ? month.liquor : month.food);
+                const value = (month.departments && (dept.name in month.departments))
+                  ? (month.departments[dept.name] || 0)
+                  : (dept.id === 'liq' || dept.code === '4001' ? month.liquor : month.food);
                 return (
                   <TableCell key={dept.id} className="text-right font-mono font-semibold text-muted-foreground">
                     {formatINR(value)}

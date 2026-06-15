@@ -789,14 +789,14 @@ const PeriodComparisonPanel: React.FC<PeriodComparisonPanelProps> = ({ months, i
     const label2 = dept2 ? `${dept2.name} Performance` : (isHospitality ? 'Food Revenue Split' : 'Secondary Revenue Split');
 
     const extractor1 = (m: MonthlySummary) => {
-      if (m.departments && dept1) {
+      if (m.departments && dept1 && (dept1.name in m.departments)) {
         return m.departments[dept1.name] || 0;
       }
       return m.liquor || 0;
     };
 
     const extractor2 = (m: MonthlySummary) => {
-      if (m.departments && dept2) {
+      if (m.departments && dept2 && (dept2.name in m.departments)) {
         return m.departments[dept2.name] || 0;
       }
       return m.food || 0;
@@ -1028,7 +1028,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ summary, conne
     ) || [];
     const deptTotals = revenueDepts.map(dept => {
       const totalVal = filteredMonths.reduce((sum, m) => {
-        return sum + (m.departments ? (m.departments[dept.name] || 0) : (dept.code === '4001' ? m.liquor : dept.code === '4002' ? m.food : 0));
+        return sum + ((m.departments && (dept.name in m.departments))
+          ? (m.departments[dept.name] || 0)
+          : (dept.code === '4001' || dept.id === 'liq' ? m.liquor : dept.code === '4002' || dept.id === 'food' ? m.food : 0));
       }, 0);
       return { dept, totalVal };
     }).sort((a, b) => b.totalVal - a.totalVal);
